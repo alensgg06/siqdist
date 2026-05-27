@@ -1,0 +1,1199 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0f172a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SIQDIST">
+<title>SIQDIST — Sistem Qurban Digital</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  :root{
+    --bg:#f1f5f9;--white:#fff;--slate900:#0f172a;--slate800:#1e293b;
+    --slate700:#334155;--slate500:#64748b;--slate400:#94a3b8;--slate200:#e2e8f0;--slate100:#f1f5f9;
+    --blue600:#2563eb;--blue50:#eff6ff;
+    --green600:#16a34a;--green50:#f0fdf4;
+    --red600:#dc2626;--red50:#fef2f2;
+    --amber600:#d97706;--amber50:#fffbeb;
+    --purple600:#7c3aed;--purple50:#f5f3ff;
+    --font:"Segoe UI",system-ui,sans-serif;
+    --nav-h:64px;
+  }
+  html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--slate800)}
+  #root{height:100%}
+  button{font-family:var(--font);cursor:pointer}
+  input,select{font-family:var(--font)}
+  input:focus,select:focus{outline:2px solid var(--blue600);outline-offset:1px}
+  ::-webkit-scrollbar{width:4px;height:4px}
+  ::-webkit-scrollbar-thumb{background:var(--slate200);border-radius:4px}
+
+  /* ── LAYOUT ── */
+  .app{display:flex;height:100%;position:relative;overflow:hidden}
+
+  /* Desktop sidebar */
+  .sidebar{width:256px;background:var(--slate900);display:flex;flex-direction:column;position:fixed;top:0;left:0;height:100%;z-index:200;overflow-y:auto;transition:transform .25s}
+  .main{margin-left:256px;flex:1;height:100%;overflow-y:auto;padding-bottom:0}
+  .page{padding:20px;max-width:900px;margin:0 auto}
+
+  /* Mobile: hide sidebar, show bottom nav */
+  @media(max-width:768px){
+    .sidebar{transform:translateX(-100%)}
+    .sidebar.open{transform:translateX(0)}
+    .sidebar-overlay{display:block}
+    .main{margin-left:0;padding-bottom:var(--nav-h)}
+    .bottom-nav{display:flex}
+  }
+  .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:190}
+  .bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;height:var(--nav-h);background:var(--slate900);border-top:1px solid var(--slate800);z-index:200;align-items:stretch}
+  .bn-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;background:none;border:none;color:var(--slate400);font-size:10px;font-weight:600;padding:8px 4px;transition:all .15s;min-width:0}
+  .bn-item.active{color:var(--purple600)}
+  .bn-item .bn-icon{font-size:20px}
+  .bn-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:56px}
+
+  /* ── SIDEBAR CONTENT ── */
+  .logo-area{padding:18px 16px 12px;border-bottom:1px solid var(--slate800);display:flex;align-items:center;gap:10}
+  .logo-title{font-size:18px;font-weight:900;color:#f8fafc;letter-spacing:1px}
+  .logo-sub{font-size:10px;color:var(--slate500)}
+  .user-badge{margin:12px;padding:10px 12px;border-radius:8px;border:1px solid;display:flex;align-items:center;gap:10}
+  .role-icon{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+  .nav-area{padding:8px;flex:1}
+  .nav-btn{width:100%;background:none;border:none;color:var(--slate400);padding:9px 14px;border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:10;font-size:13px;text-align:left;margin-bottom:2px;transition:all .15s;font-weight:400}
+  .nav-btn.active{background:var(--slate800);color:#f8fafc;font-weight:700}
+  .logout-btn{margin:12px;padding:10px;background:rgba(220,38,38,.13);color:#f87171;border:1px solid rgba(220,38,38,.27);border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;width:calc(100% - 24px)}
+  .menu-toggle{display:none;background:none;border:none;color:#f8fafc;font-size:24px;padding:8px;cursor:pointer}
+  @media(max-width:768px){.menu-toggle{display:block}}
+
+  /* ── MOBILE TOP BAR ── */
+  .topbar{display:none;background:var(--slate900);color:#f8fafc;padding:0 16px;height:52px;align-items:center;gap:12;position:sticky;top:0;z-index:150}
+  @media(max-width:768px){.topbar{display:flex}}
+  .topbar-title{font-weight:800;font-size:16px;flex:1;text-align:center}
+  .topbar-right{width:40px;display:flex;justify-content:flex-end}
+
+  /* ── CARDS & COMMON ── */
+  .card{background:var(--white);border-radius:12px;padding:16px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.07)}
+  .card-title{font-size:14px;font-weight:700;color:var(--slate800);margin:0 0 12px}
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px}
+  .stat-card{background:var(--white);border-radius:12px;padding:14px 16px;box-shadow:0 1px 3px rgba(0,0,0,.07);border-left:4px solid currentColor}
+  .stat-icon{font-size:22px;margin-bottom:4px}
+  .stat-val{font-size:20px;font-weight:800}
+  .stat-lbl{font-size:11px;color:var(--slate400);margin-top:2px}
+  .page-header{display:flex;align-items:center;gap:12px;margin-bottom:18px;padding-bottom:14px;border-bottom:2px solid var(--slate200)}
+  .page-header h2{margin:0;font-size:18px;font-weight:800;color:var(--slate800)}
+  .page-header p{margin:0;color:var(--slate400);font-size:12px}
+  .badge{display:inline-flex;align-items:center;border-radius:4px;padding:2px 8px;font-size:11px;font-weight:600;white-space:nowrap}
+  .btn{border:none;padding:9px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;display:inline-flex;align-items:center;gap:6px;transition:opacity .15s}
+  .btn:active{opacity:.8}
+  .btn-primary{background:var(--blue600);color:#fff}
+  .btn-green{background:var(--green600);color:#fff}
+  .btn-purple{background:var(--purple600);color:#fff}
+  .btn-red{background:var(--red600);color:#fff}
+  .btn-secondary{background:var(--slate100);color:var(--slate700);border:1px solid var(--slate200)}
+  .btn-sm{padding:6px 12px;font-size:12px;border-radius:6px}
+  .btn-icon{background:var(--blue50);color:var(--blue600);border:none;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:14px}
+  .input{padding:9px 12px;border:1px solid var(--slate200);border-radius:8px;font-size:14px;width:100%;font-family:var(--font);background:var(--white)}
+  .input:focus{outline:2px solid var(--blue600)}
+  .select{padding:9px 12px;border:1px solid var(--slate200);border-radius:8px;font-size:14px;font-family:var(--font);background:var(--white)}
+  .form-group{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
+  .form-label{font-size:12px;font-weight:600;color:var(--slate500)}
+  .form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+  .toolbar{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center}
+  .search-box{display:flex;align-items:center;gap:8px;background:var(--white);border:1px solid var(--slate200);border-radius:8px;padding:8px 12px;flex:1;min-width:160px}
+  .search-input{border:none;outline:none;flex:1;font-size:13px;background:transparent;font-family:var(--font)}
+  .progress-bar{height:12px;background:var(--slate200);border-radius:6px;overflow:hidden}
+  .progress-fill{height:100%;background:linear-gradient(90deg,var(--green600),#4ade80);border-radius:6px;transition:width .5s}
+  .empty-state{color:var(--green600);padding:20px;text-align:center;background:var(--green50);border-radius:8px;font-size:14px}
+
+  /* ── TABLE ── */
+  .tbl{width:100%;border-collapse:collapse;font-size:12px}
+  .tbl th{background:#f8fafc;padding:9px 10px;text-align:left;font-weight:700;color:var(--slate500);border-bottom:2px solid var(--slate200);white-space:nowrap}
+  .tbl td{padding:9px 10px;border-bottom:1px solid #f1f5f9;vertical-align:middle}
+  .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+
+  /* ── TOAST ── */
+  .toast{position:fixed;bottom:calc(var(--nav-h) + 12px);left:16px;right:16px;color:#fff;padding:12px 16px;border-radius:10px;font-weight:700;font-size:13px;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,.2);display:none;text-align:center}
+  @media(min-width:769px){.toast{bottom:24px;left:auto;right:24px;width:320px;text-align:left}}
+  .toast.show{display:block}
+
+  /* ── MODAL ── */
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:flex-end;justify-content:center;z-index:9998;display:none}
+  .modal-overlay.show{display:flex}
+  @media(min-width:769px){.modal-overlay{align-items:center}}
+  .modal-box{background:var(--white);border-radius:16px 16px 0 0;padding:24px;width:100%;max-height:90vh;overflow-y:auto}
+  @media(min-width:769px){.modal-box{border-radius:16px;max-width:440px;max-height:80vh}}
+  .modal-title{font-size:16px;font-weight:800;margin-bottom:8px;color:var(--slate800)}
+
+  /* ── LOGIN ── */
+  .login-page{min-height:100vh;background:linear-gradient(135deg,#0f172a,#1e293b,#0f172a);display:flex;align-items:center;justify-content:center;padding:20px}
+  .login-card{background:var(--white);border-radius:20px;padding:32px 28px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+  .login-title{font-size:26px;font-weight:900;color:var(--slate800);letter-spacing:2px;margin:8px 0 4px}
+
+  /* ── TABS ── */
+  .tab-bar{display:flex;gap:4px;background:var(--slate100);border-radius:12px;padding:4px;margin-bottom:16px}
+  .tab-btn{flex:1;padding:8px 6px;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;transition:all .15s;background:transparent;color:var(--slate500)}
+  .tab-btn.active{background:var(--white);color:var(--purple600);box-shadow:0 1px 4px rgba(0,0,0,.1)}
+  .tab-sub{font-size:9px;color:inherit;opacity:.7;display:block;margin-top:1px}
+
+  /* ── SCANNER ── */
+  .scanner-container{position:relative;background:#000;border-radius:12px;overflow:hidden;width:100%;aspect-ratio:1/1;max-width:360px;margin:0 auto}
+  .scanner-video{width:100%;height:100%;object-fit:cover;display:block}
+  .scanner-canvas{position:absolute;top:0;left:0;width:100%;height:100%;display:none}
+  .scan-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+  .scan-frame{width:65%;height:65%;border:3px solid rgba(124,58,237,.9);border-radius:12px;box-shadow:0 0 0 9999px rgba(0,0,0,.45),0 0 20px rgba(124,58,237,.6)}
+  .scan-line{position:absolute;top:17.5%;left:17.5%;width:65%;height:3px;background:linear-gradient(90deg,transparent,var(--purple600),transparent);animation:scanline 1.8s ease-in-out infinite}
+  @keyframes scanline{0%,100%{transform:translateY(0)}50%{transform:translateY(calc(0.65 * 360px - 6px))}}
+  .scanner-status{position:absolute;bottom:0;left:0;right:0;padding:10px;background:rgba(0,0,0,.6);color:#fff;text-align:center;font-size:12px;font-weight:600}
+  .cam-switch-btn{position:absolute;top:10px;right:10px;background:rgba(0,0,0,.5);border:none;color:#fff;border-radius:50%;width:38px;height:38px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+
+  /* ── KUPON CARD PRINT ── */
+  @media print{
+    body>*{display:none!important}
+    #kupon-print-area{display:flex!important;flex-wrap:wrap;gap:8px;padding:8px}
+    #kupon-print-area *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  }
+  @media screen{#kupon-print-area{display:none}}
+
+  /* ── CONFIRM CARD ── */
+  .confirm-card{background:var(--blue50);border:2px solid #0ea5e9;border-radius:12px;padding:16px;margin-bottom:14px}
+  .result-ok{background:var(--green50);border:2px solid var(--green600);border-radius:12px;padding:14px;margin-bottom:12px}
+  .result-warn{background:var(--amber50);border:2px solid var(--amber600);border-radius:12px;padding:14px;margin-bottom:12px}
+  .result-err{background:var(--red50);border:2px solid var(--red600);border-radius:12px;padding:14px;margin-bottom:12px}
+  .result-title{font-weight:800;font-size:16px;margin-bottom:6px}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<div id="kupon-print-area"></div>
+<div class="toast" id="toast"></div>
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal-box" id="modal-box">
+    <div class="modal-title" id="modal-title"></div>
+    <p id="modal-msg" style="color:#64748b;margin-bottom:18px;font-size:14px"></p>
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn btn-secondary" onclick="closeModal()">Batal</button>
+      <button class="btn" id="modal-confirm-btn">Konfirmasi</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ================================================================
+// DATA & CONSTANTS
+// ================================================================
+const KATEGORI = ["fakir","miskin","amil","muallaf","riqab","gharim","fisabilillah","ibnu sabil"];
+const JATAH = {fakir:1.5,miskin:1,amil:1,muallaf:1,riqab:1,gharim:1,fisabilillah:1,"ibnu sabil":1};
+const ROLES = {
+  admin:      {label:"Admin / Koordinator",color:"#dc2626",bg:"#fef2f2",icon:"🛡️"},
+  pendataan:  {label:"Petugas Pendataan",  color:"#2563eb",bg:"#eff6ff",icon:"📋"},
+  distribusi: {label:"Petugas Distribusi", color:"#16a34a",bg:"#f0fdf4",icon:"📦"},
+  viewer:     {label:"Viewer / Pengawas",  color:"#92400e",bg:"#fffbeb",icon:"📊"},
+};
+
+function makeKode(id){
+  const h=Math.abs([...id].reduce((a,c)=>a*31+c.charCodeAt(0),0))%90000+10000;
+  const t=id.replace(/\D/g,"").padStart(3,"0").slice(-3);
+  return "QRB-"+h+"-"+t;
+}
+function genId(p){return p+Date.now().toString(36).toUpperCase()}
+function todayStr(){return new Date().toISOString().split("T")[0]}
+function fmt(n){return new Intl.NumberFormat("id-ID").format(n)}
+function fmtTime(iso){return new Date(iso).toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit",second:"2-digit"})}
+
+// ================================================================
+// STATE
+// ================================================================
+const STATE = {
+  user: null,
+  page: "dashboard",
+  scanMode: "camera", // camera | manual | list
+  camStream: null,
+  camFacing: "environment",
+  scanActive: false,
+  scanAnimFrame: null,
+  confirmPending: null,
+  scanResult: null,
+  scanLog: [],
+  mustahiqSearch: "",
+  mustahiqFilter: "semua",
+  kuponSearch: "",
+  kuponFilterW: "semua",
+  kuponFilterC: "semua",
+  kuponSelected: new Set(),
+  distSearch: "",
+  distFilterW: "semua",
+  nikInput: "",
+  kuponInput: "",
+  previewKupon: null,
+  users: [
+    {id:"U001",username:"admin",password:"admin123",name:"Ahmad Fauzi",role:"admin",wilayah:null},
+    {id:"U002",username:"petugas1",password:"petugas123",name:"Budi Santoso",role:"pendataan",wilayah:"RT 01/RW 02"},
+    {id:"U003",username:"petugas2",password:"petugas123",name:"Siti Rahayu",role:"pendataan",wilayah:"RT 02/RW 02"},
+    {id:"U004",username:"distribusi1",password:"dist123",name:"Hendra Wijaya",role:"distribusi",wilayah:null},
+    {id:"U005",username:"viewer1",password:"viewer123",name:"Kepala RW",role:"viewer",wilayah:null},
+  ],
+  hewan: [
+    {id:"H001",jenis:"Sapi",nomorHewan:"S-001",beratKg:280,estimasiDaging:168,status:"siap",createdAt:"2025-06-01"},
+    {id:"H002",jenis:"Sapi",nomorHewan:"S-002",beratKg:310,estimasiDaging:186,status:"siap",createdAt:"2025-06-01"},
+    {id:"H003",jenis:"Kambing",nomorHewan:"K-001",beratKg:35,estimasiDaging:17.5,status:"siap",createdAt:"2025-06-01"},
+    {id:"H004",jenis:"Kambing",nomorHewan:"K-002",beratKg:32,estimasiDaging:16,status:"siap",createdAt:"2025-06-01"},
+  ],
+  mustahiq: [],
+  distribusi: [],
+};
+
+// Init mustahiq
+(function(){
+  const raw = [
+    {id:"M001",nama:"Pak Suroto",nik:"3201010101010001",alamat:"Jl. Mawar No.5",wilayah:"RT 01/RW 02",kategori:"fakir",jumlahKG:1.5,petugasId:"U002"},
+    {id:"M002",nama:"Bu Aminah",nik:"3201010101010002",alamat:"Jl. Melati No.3",wilayah:"RT 01/RW 02",kategori:"miskin",jumlahKG:1,petugasId:"U002"},
+    {id:"M003",nama:"Pak Darto",nik:"3201010101010003",alamat:"Jl. Kenanga No.8",wilayah:"RT 02/RW 02",kategori:"fakir",jumlahKG:1.5,petugasId:"U003"},
+    {id:"M004",nama:"Bu Sulastri",nik:"3201010101010004",alamat:"Jl. Anggrek No.2",wilayah:"RT 02/RW 02",kategori:"miskin",jumlahKG:1,petugasId:"U003"},
+    {id:"M005",nama:"Pak Wahyudi",nik:"3201010101010005",alamat:"Jl. Dahlia No.7",wilayah:"RT 01/RW 02",kategori:"gharim",jumlahKG:1,petugasId:"U002"},
+  ];
+  STATE.mustahiq = raw.map(m=>({...m,status:"belum",tanggal:todayStr(),distribusiId:null,kuponKode:makeKode(m.id),kuponCetak:false}));
+})();
+
+// ================================================================
+// TOAST & MODAL
+// ================================================================
+let _toastTimer=null;
+function showToast(msg,type){
+  const el=document.getElementById("toast");
+  el.textContent=(type==="error"?"❌ ":type==="warn"?"⚠️ ":"✅ ")+msg;
+  el.style.background=type==="error"?"#dc2626":type==="warn"?"#d97706":"#16a34a";
+  el.classList.add("show");
+  clearTimeout(_toastTimer);
+  _toastTimer=setTimeout(()=>el.classList.remove("show"),3500);
+}
+
+let _modalCb=null;
+function openModal(title,msg,confirmLabel,danger,cb){
+  document.getElementById("modal-title").textContent=title;
+  document.getElementById("modal-msg").textContent=msg;
+  const btn=document.getElementById("modal-confirm-btn");
+  btn.textContent=confirmLabel||"Konfirmasi";
+  btn.style.background=danger?"#dc2626":"#16a34a";
+  btn.style.color="#fff";
+  _modalCb=cb;
+  document.getElementById("modal-overlay").classList.add("show");
+}
+function closeModal(){document.getElementById("modal-overlay").classList.remove("show");_modalCb=null;}
+document.getElementById("modal-confirm-btn").onclick=()=>{if(_modalCb)_modalCb();closeModal();};
+
+// ================================================================
+// QR SVG GENERATOR
+// ================================================================
+function buildQRMatrix(text){
+  const S=25;
+  let seed=Math.abs([...text].reduce((a,c)=>(a*31+c.charCodeAt(0))&0x7fffffff,0));
+  function inFinder(r,c){return(r<7&&c<7)||(r<7&&c>=S-7)||(r>=S-7&&c<7)}
+  function finderBit(r,c){
+    function dot(br,bc){const lr=r-br,lc=c-bc;if(lr===0||lr===6||lc===0||lc===6)return 1;if(lr>=2&&lr<=4&&lc>=2&&lc<=4)return 1;return 0}
+    if(r<7&&c<7)return dot(0,0);if(r<7&&c>=S-7)return dot(0,S-7);if(r>=S-7&&c<7)return dot(S-7,0);return 0;
+  }
+  const m=[];
+  for(let r=0;r<S;r++){const row=[];for(let c=0;c<S;c++){
+    if(inFinder(r,c)){row.push(finderBit(r,c))}
+    else if(r===6||c===6){row.push((r+c)%2===0?1:0)}
+    else{seed=(seed*1664525+1013904223)&0x7fffffff;row.push((seed>>14)&1)}
+  }m.push(row)}
+  return m;
+}
+function qrSVG(text,sz){
+  sz=sz||80;
+  const m=buildQRMatrix(text),cell=sz/25;
+  let rects='';
+  m.forEach((row,r)=>row.forEach((v,c)=>{if(v)rects+=`<rect x="${c*cell}" y="${r*cell}" width="${cell}" height="${cell}"/>` }));
+  return `<svg width="${sz}" height="${sz}" style="display:block;image-rendering:pixelated;border-radius:4px"><rect width="${sz}" height="${sz}" fill="white"/><g fill="#1e293b">${rects}</g></svg>`;
+}
+
+// ================================================================
+// BARCODE SVG
+// ================================================================
+function barcodeSVG(text,w,h){
+  w=w||240;h=h||44;
+  const bw=Math.max((w-12)/(text.length*9.5+4),.8);
+  let bars='',x=6;
+  for(let i=0;i<text.length;i++){
+    const code=text.charCodeAt(i);
+    for(let b=7;b>=0;b--){if((code>>b)&1)bars+=`<rect x="${x}" y="4" width="${Math.max(bw*1.2,.8)}" height="${h-8}"/>`;x+=bw*1.4}
+    x+=bw*.5;
+  }
+  return `<svg width="${w}" height="${h}" style="display:block"><rect width="${w}" height="${h}" fill="white" rx="3"/><g fill="#1e293b">${bars}</g></svg>`;
+}
+
+// ================================================================
+// KUPON HTML
+// ================================================================
+function kuponHTML(m,compact){
+  const used=m.status==="sudah";
+  const W=compact?240:310;
+  const borderCol=used?"#16a34a":"#d97706";
+  const bg=used?"#f0fdf4":"#fffbeb";
+  const watermark=used?`<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:5"><div style="font-size:${compact?26:36}px;font-weight:900;color:rgba(22,163,74,.1);transform:rotate(-30deg);user-select:none">SUDAH DIAMBIL</div></div>`:"";
+  const usedBadge=used?`<div style="background:#16a34a;color:#fff;border-radius:4px;padding:3px 8px;font-size:${compact?9:11}px;font-weight:700;margin-left:auto">✓ TERPAKAI</div>`:"";
+  return `<div style="width:${W}px;font-family:'Segoe UI',sans-serif;border-radius:10px;border:2px solid ${borderCol};background:${bg};box-shadow:0 2px 8px rgba(0,0,0,.12);overflow:hidden;page-break-inside:avoid;position:relative">
+    ${watermark}
+    <div style="background:#1e293b;padding:${compact?"8px 12px":"10px 16px"};display:flex;align-items:center;gap:8px">
+      <span style="font-size:${compact?18:24}px">🕌</span>
+      <div style="flex:1"><div style="color:#f1f5f9;font-weight:800;font-size:${compact?10:12}px">KUPON DAGING QURBAN</div><div style="color:#94a3b8;font-size:${compact?8:10}px">Panitia Qurban — 1446 H / 2025 M</div></div>${usedBadge}
+    </div>
+    <div style="border-top:2px dashed #cbd5e1"></div>
+    <div style="padding:${compact?"10px 12px":"13px 16px"}">
+      <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:10px">
+        <div style="flex-shrink:0;border:1px solid #e2e8f0;border-radius:6px;padding:3px;background:white">${qrSVG(m.kuponKode,compact?66:82)}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:800;font-size:${compact?12:14}px;color:#1e293b;line-height:1.3;margin-bottom:2px">${m.nama}</div>
+          <div style="font-size:${compact?9:10}px;color:#64748b;margin-bottom:1px">NIK: ${m.nik.slice(0,6)}••••${m.nik.slice(-4)}</div>
+          <div style="font-size:${compact?9:10}px;color:#64748b;margin-bottom:1px">${m.alamat}</div>
+          <div style="font-size:${compact?9:10}px;color:#475569;font-weight:600;margin-bottom:5px">${m.wilayah}</div>
+          <div style="display:flex;gap:4px;flex-wrap:wrap">
+            <span style="background:#dbeafe;color:#1d4ed8;border-radius:4px;padding:2px 6px;font-size:${compact?9:10}px;font-weight:600;text-transform:capitalize">${m.kategori}</span>
+            <span style="background:#fef3c7;color:#92400e;border-radius:4px;padding:2px 6px;font-size:${compact?10:12}px;font-weight:800">🥩 ${m.jumlahKG} kg</span>
+          </div>
+        </div>
+      </div>
+      <div style="background:white;border-radius:6px;padding:5px 4px;border:1px solid #e2e8f0;text-align:center;margin-bottom:7px">
+        ${barcodeSVG(m.kuponKode,compact?210:266,compact?32:42)}
+        <div style="font-family:monospace;font-size:${compact?11:13}px;font-weight:700;color:#1e293b;letter-spacing:3px;margin-top:2px">${m.kuponKode}</div>
+      </div>
+      <div style="font-size:${compact?8:9}px;color:#94a3b8;text-align:center;border-top:1px dashed #cbd5e1;padding-top:5px">Tunjukkan kupon ini kepada petugas distribusi • 1 kupon = 1 kali pengambilan</div>
+    </div>
+  </div>`;
+}
+
+// ================================================================
+// DISTRIBUTE ACTION
+// ================================================================
+function doDistribute(m){
+  const rec={id:genId("D"),mustahiqId:m.id,petugasId:STATE.user.id,waktu:new Date().toISOString(),jumlahKG:m.jumlahKG,kuponKode:m.kuponKode,metode:STATE.scanMode,nama:m.nama,wilayah:m.wilayah,nik:m.nik};
+  STATE.distribusi.push(rec);
+  const idx=STATE.mustahiq.findIndex(x=>x.id===m.id);
+  if(idx>=0)STATE.mustahiq[idx]={...STATE.mustahiq[idx],status:"sudah",distribusiId:rec.id};
+  STATE.scanLog.unshift(rec);
+  return rec;
+}
+
+// ================================================================
+// CAMERA SCANNER
+// ================================================================
+let _camActive=false,_animFrame=null,_stream=null;
+
+async function startCamera(){
+  const vid=document.getElementById("scan-video");
+  const canv=document.getElementById("scan-canvas");
+  if(!vid||!canv)return;
+  stopCamera();
+  try{
+    const constraints={video:{facingMode:STATE.camFacing,width:{ideal:1280},height:{ideal:720}}};
+    _stream=await navigator.mediaDevices.getUserMedia(constraints);
+    vid.srcObject=_stream;
+    await vid.play();
+    _camActive=true;
+    document.getElementById("scanner-status").textContent="📷 Arahkan kamera ke kupon...";
+    tickScan(vid,canv);
+  }catch(e){
+    document.getElementById("scanner-status").textContent="❌ Kamera tidak bisa diakses: "+e.message;
+    console.error(e);
+  }
+}
+
+function stopCamera(){
+  _camActive=false;
+  if(_animFrame){cancelAnimationFrame(_animFrame);_animFrame=null}
+  if(_stream){_stream.getTracks().forEach(t=>t.stop());_stream=null}
+}
+
+function tickScan(vid,canv){
+  if(!_camActive)return;
+  if(vid.readyState===vid.HAVE_ENOUGH_DATA){
+    canv.width=vid.videoWidth;canv.height=vid.videoHeight;
+    const ctx=canv.getContext("2d");
+    ctx.drawImage(vid,0,0,canv.width,canv.height);
+    const img=ctx.getImageData(0,0,canv.width,canv.height);
+    if(typeof jsQR!=="undefined"){
+      const code=jsQR(img.data,img.width,img.height,{inversionAttempts:"dontInvert"});
+      if(code&&code.data){
+        handleScannedCode(code.data.trim().toUpperCase());
+        return; // pause briefly then resume
+      }
+    }
+  }
+  _animFrame=requestAnimationFrame(()=>tickScan(vid,canv));
+}
+
+function handleScannedCode(kode){
+  stopCamera();
+  const target=STATE.mustahiq.find(m=>m.kuponKode===kode);
+  if(!target){
+    STATE.scanResult={status:"notfound",kode};
+    renderPage();
+    showToast("Kupon tidak ditemukan: "+kode,"error");
+    setTimeout(()=>{if(_camActive||document.getElementById("scan-video"))startCamera();},2000);
+    return;
+  }
+  if(target.status==="sudah"){
+    STATE.scanResult={status:"used",mustahiq:target};
+    renderPage();
+    showToast(target.nama+" sudah mengambil daging!","warn");
+    setTimeout(()=>startCamera(),2500);
+    return;
+  }
+  STATE.confirmPending=target;
+  STATE.scanResult=null;
+  renderPage();
+}
+
+function switchCamera(){
+  STATE.camFacing=STATE.camFacing==="environment"?"user":"environment";
+  if(_camActive)startCamera();
+}
+
+// ================================================================
+// RENDER ENGINE
+// ================================================================
+function render(){
+  const root=document.getElementById("root");
+  if(!STATE.user){root.innerHTML=renderLogin();return}
+  root.innerHTML=`
+    <div class="app">
+      ${renderSidebar()}
+      <div class="sidebar-overlay" onclick="closeSidebar()"></div>
+      ${renderBottomNav()}
+      <div class="main" id="main-content">
+        <div class="topbar">
+          <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
+          <span class="topbar-title">🕌 SIQDIST</span>
+          <div class="topbar-right"></div>
+        </div>
+        ${renderCurrentPage()}
+      </div>
+    </div>`;
+  afterRender();
+}
+
+function renderPage(){
+  const main=document.getElementById("main-content");
+  if(!main)return render();
+  const topbar=`<div class="topbar"><button class="menu-toggle" onclick="toggleSidebar()">☰</button><span class="topbar-title">🕌 SIQDIST</span><div class="topbar-right"></div></div>`;
+  main.innerHTML=topbar+renderCurrentPage();
+  afterRender();
+}
+
+function afterRender(){
+  // Re-attach camera if on distribusi scanner
+  if(STATE.user&&STATE.page==="distribusi"&&STATE.scanMode==="camera"){
+    const vid=document.getElementById("scan-video");
+    if(vid&&!_camActive)setTimeout(()=>startCamera(),100);
+  } else {
+    stopCamera();
+  }
+}
+
+// ================================================================
+// NAV
+// ================================================================
+function setPage(p){
+  stopCamera();
+  STATE.page=p;
+  STATE.confirmPending=null;
+  STATE.scanResult=null;
+  renderPage();
+  closeSidebar();
+  document.getElementById("main-content").scrollTop=0;
+}
+
+function toggleSidebar(){
+  document.querySelector(".sidebar").classList.toggle("open");
+  document.querySelector(".sidebar-overlay").style.display=
+    document.querySelector(".sidebar").classList.contains("open")?"block":"none";
+}
+function closeSidebar(){
+  document.querySelector(".sidebar")&&document.querySelector(".sidebar").classList.remove("open");
+  const ov=document.querySelector(".sidebar-overlay");
+  if(ov)ov.style.display="none";
+}
+
+// ================================================================
+// SIDEBAR
+// ================================================================
+function renderSidebar(){
+  const r=STATE.user.role,rc=ROLES[r];
+  const pages=getNavPages();
+  const navBtns=pages.map(p=>`<button class="nav-btn${STATE.page===p.key?" active":""}" onclick="setPage('${p.key}')">${p.icon} ${p.label}</button>`).join("");
+  return `<aside class="sidebar">
+    <div class="logo-area"><span style="font-size:26px">🕌</span><div><div class="logo-title">SIQDIST</div><div class="logo-sub">Sistem Qurban Digital</div></div></div>
+    <div class="user-badge" style="border-color:${rc.color};background:${rc.bg}">
+      <div class="role-icon" style="background:${rc.color}">${rc.icon}</div>
+      <div><div style="font-weight:700;font-size:13px;color:#1e293b">${STATE.user.name}</div><div style="font-size:11px;font-weight:600;color:${rc.color}">${rc.label}</div>${STATE.user.wilayah?`<div style="font-size:10px;color:#94a3b8;margin-top:1px">${STATE.user.wilayah}</div>`:""}</div>
+    </div>
+    <div class="nav-area">${navBtns}</div>
+    <button class="logout-btn" onclick="doLogout()">🚪 Keluar</button>
+  </aside>`;
+}
+
+function getNavPages(){
+  const r=STATE.user.role;
+  const all=[
+    {key:"dashboard",icon:"🏠",label:"Dashboard",roles:["admin","pendataan","distribusi","viewer"]},
+    {key:"mustahiq",icon:"👥",label:"Data Mustahiq",roles:["admin","pendataan"]},
+    {key:"kupon",icon:"🎫",label:"Kelola Kupon",roles:["admin","pendataan"]},
+    {key:"distribusi",icon:"📦",label:"Distribusi",roles:["admin","distribusi"]},
+    {key:"hewan",icon:"🐄",label:"Data Hewan",roles:["admin"]},
+    {key:"pengguna",icon:"👤",label:"Pengguna",roles:["admin"]},
+    {key:"laporan",icon:"📊",label:"Laporan",roles:["admin","pendataan","distribusi","viewer"]},
+  ];
+  return all.filter(p=>p.roles.includes(r));
+}
+
+function renderBottomNav(){
+  const pages=getNavPages().slice(0,5);
+  return `<div class="bottom-nav">${pages.map(p=>`<button class="bn-item${STATE.page===p.key?" active":""}" onclick="setPage('${p.key}')"><span class="bn-icon">${p.icon}</span><span class="bn-label">${p.label}</span></button>`).join("")}</div>`;
+}
+
+// ================================================================
+// LOGIN
+// ================================================================
+function renderLogin(){
+  return `<div class="login-page">
+    <div class="login-card">
+      <div style="text-align:center;margin-bottom:20px">
+        <div style="font-size:50px">🕌</div>
+        <div class="login-title">SIQDIST</div>
+        <p style="color:#64748b;font-size:13px;margin:4px 0 0">Sistem Informasi Qurban Digital</p>
+        <p style="color:#94a3b8;font-size:11px;margin:2px 0 0">Pendataan & Distribusi Daging Qurban</p>
+      </div>
+      <div class="form-group"><label class="form-label">Username</label><input class="input" id="li-user" placeholder="Username" onkeydown="if(event.key==='Enter')doLogin()"></div>
+      <div class="form-group"><label class="form-label">Password</label><input class="input" id="li-pass" type="password" placeholder="Password" onkeydown="if(event.key==='Enter')doLogin()"></div>
+      <div id="li-err" style="color:#dc2626;font-size:12px;margin-bottom:8px;display:none">Username atau password salah.</div>
+      <button class="btn btn-primary" style="width:100%;padding:12px;font-size:14px;justify-content:center;border-radius:8px" onclick="doLogin()">Masuk ke Sistem</button>
+      <div style="margin-top:16px;padding:12px;background:#f8fafc;border-radius:8px;font-size:11px;color:#94a3b8;line-height:1.8">
+        <strong>Akun Demo:</strong><br>admin / admin123 &nbsp;|&nbsp; petugas1 / petugas123<br>distribusi1 / dist123 &nbsp;|&nbsp; viewer1 / viewer123
+      </div>
+    </div>
+  </div>`;
+}
+function doLogin(){
+  const u=document.getElementById("li-user").value.trim();
+  const p=document.getElementById("li-pass").value;
+  const found=STATE.users.find(x=>x.username===u&&x.password===p);
+  if(found){STATE.user=found;STATE.page="dashboard";render();}
+  else{const e=document.getElementById("li-err");if(e)e.style.display="block";}
+}
+function doLogout(){stopCamera();STATE.user=null;STATE.page="dashboard";STATE.scanLog=[];render();}
+
+// ================================================================
+// CURRENT PAGE ROUTER
+// ================================================================
+function renderCurrentPage(){
+  switch(STATE.page){
+    case "dashboard":  return renderDashboard();
+    case "mustahiq":   return renderMustahiq();
+    case "kupon":      return renderKupon();
+    case "distribusi": return renderDistribusi();
+    case "hewan":      return renderHewan();
+    case "pengguna":   return renderPengguna();
+    case "laporan":    return renderLaporan();
+    default:           return renderDashboard();
+  }
+}
+
+// ================================================================
+// DASHBOARD
+// ================================================================
+function renderDashboard(){
+  const mustahiq=STATE.mustahiq;
+  const total=mustahiq.length,sudah=mustahiq.filter(m=>m.status==="sudah").length,belum=total-sudah;
+  const dagingDist=mustahiq.filter(m=>m.status==="sudah").reduce((s,m)=>s+m.jumlahKG,0);
+  const dagingBelum=mustahiq.filter(m=>m.status==="belum").reduce((s,m)=>s+m.jumlahKG,0);
+  const kuponCetak=mustahiq.filter(m=>m.kuponCetak).length;
+  const pct=total>0?Math.round(sudah/total*100):0;
+  const myQ=STATE.user.role==="pendataan"?mustahiq.filter(m=>m.wilayah===STATE.user.wilayah&&m.status==="belum"):[];
+
+  return `<div class="page">
+    <div class="page-header"><span style="font-size:24px">🏠</span><div><h2>Dashboard</h2><p>Selamat datang, ${STATE.user.name}</p></div></div>
+    <div class="stat-grid">
+      <div class="stat-card" style="color:#2563eb"><div class="stat-icon">👥</div><div class="stat-val" style="color:#2563eb">${fmt(total)}</div><div class="stat-lbl">Total Mustahiq</div></div>
+      <div class="stat-card" style="color:#16a34a"><div class="stat-icon">✅</div><div class="stat-val" style="color:#16a34a">${fmt(sudah)}</div><div class="stat-lbl">Sudah Distribusi</div></div>
+      <div class="stat-card" style="color:#d97706"><div class="stat-icon">⏳</div><div class="stat-val" style="color:#d97706">${fmt(belum)}</div><div class="stat-lbl">Belum Distribusi</div></div>
+      <div class="stat-card" style="color:#7c3aed"><div class="stat-icon">🎫</div><div class="stat-val" style="color:#7c3aed">${fmt(kuponCetak)}</div><div class="stat-lbl">Kupon Tercetak</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">📊 Progress Distribusi</div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="font-size:13px;color:#64748b">Progress keseluruhan</span><strong style="color:#16a34a">${pct}%</strong></div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+      <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:#94a3b8">
+        <span>Selesai: ${sudah} (${fmt(dagingDist)} kg)</span><span>Sisa: ${belum} (${fmt(dagingBelum)} kg)</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">🐄 Hewan Qurban</div>
+      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>No.</th><th>Jenis</th><th>Berat</th><th>Est. Daging</th></tr></thead><tbody>
+        ${STATE.hewan.map(h=>`<tr><td><strong>${h.nomorHewan}</strong></td><td>${h.jenis==="Sapi"?"🐄":"🐐"} ${h.jenis}</td><td>${h.beratKg} kg</td><td><strong>${h.estimasiDaging} kg</strong></td></tr>`).join("")}
+      </tbody></table></div>
+    </div>
+    ${STATE.user.role==="pendataan"&&myQ.length>0?`<div class="card"><div class="card-title">📋 Antrian Wilayah — ${STATE.user.wilayah}</div>
+      ${myQ.slice(0,5).map(m=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f1f5f9">
+        <div><strong style="font-size:13px">${m.nama}</strong><div style="font-size:11px;color:#94a3b8">${m.alamat}</div></div>
+        <div style="text-align:right"><span style="font-size:12px;font-weight:700">${m.jumlahKG} kg</span><br><span class="badge" style="background:#dbeafe;color:#1d4ed8;font-size:10px">${m.kategori}</span></div>
+      </div>`).join("")}
+    </div>`:""}
+  </div>`;
+}
+
+// ================================================================
+// MUSTAHIQ
+// ================================================================
+let _editMustahiqId=null,_showMustahiqForm=false;
+let _mForm={nama:"",nik:"",alamat:"",wilayah:"",kategori:"fakir",jumlahKG:1};
+
+function renderMustahiq(){
+  const isAdmin=STATE.user.role==="admin";
+  const myMustahiq=STATE.user.role==="pendataan"?STATE.mustahiq.filter(m=>m.wilayah===STATE.user.wilayah):STATE.mustahiq;
+  const filtered=myMustahiq.filter(m=>{
+    const ms=m.nama.toLowerCase().includes(STATE.mustahiqSearch.toLowerCase())||m.nik.includes(STATE.mustahiqSearch);
+    const st=STATE.mustahiqFilter==="semua"||m.status===STATE.mustahiqFilter;
+    return ms&&st;
+  });
+
+  const formHTML=_showMustahiqForm?`<div class="card" style="background:#f8fafc;border:1px solid #e2e8f0">
+    <div class="card-title">${_editMustahiqId?"✏️ Edit":"➕ Tambah"} Mustahiq</div>
+    <div class="form-grid">
+      <div class="form-group"><label class="form-label">Nama Lengkap *</label><input class="input" id="mf-nama" value="${_mForm.nama}" oninput="_mForm.nama=this.value" placeholder="Nama lengkap"></div>
+      <div class="form-group"><label class="form-label">NIK (16 digit) *</label><input class="input" id="mf-nik" value="${_mForm.nik}" oninput="_mForm.nik=this.value.replace(/\\D/g,'').slice(0,16)" placeholder="16 digit NIK" inputmode="numeric"></div>
+      <div class="form-group"><label class="form-label">Alamat *</label><input class="input" id="mf-alamat" value="${_mForm.alamat}" oninput="_mForm.alamat=this.value" placeholder="Alamat lengkap"></div>
+      <div class="form-group"><label class="form-label">Wilayah/RT-RW *</label><input class="input" id="mf-wilayah" value="${_mForm.wilayah}" oninput="_mForm.wilayah=this.value" placeholder="RT 01/RW 02" ${STATE.user.role==="pendataan"?"readonly":""}></div>
+      <div class="form-group"><label class="form-label">Kategori</label><select class="select" style="width:100%" onchange="_mForm.kategori=this.value;_mForm.jumlahKG=JATAH[this.value]||1;document.getElementById('mf-jatah').value=_mForm.jumlahKG">${KATEGORI.map(k=>`<option value="${k}" ${_mForm.kategori===k?"selected":""}>${k.charAt(0).toUpperCase()+k.slice(1)}</option>`).join("")}</select></div>
+      <div class="form-group"><label class="form-label">Jatah Daging (kg)</label><input class="input" id="mf-jatah" type="number" step="0.5" min="0.5" value="${_mForm.jumlahKG}" oninput="_mForm.jumlahKG=parseFloat(this.value)||1" inputmode="decimal"></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:12px">
+      <button class="btn btn-primary btn-sm" onclick="saveMustahiq()">💾 Simpan</button>
+      <button class="btn btn-secondary btn-sm" onclick="_showMustahiqForm=false;_editMustahiqId=null;renderPage()">✖ Batal</button>
+    </div>
+  </div>`:"";
+
+  const rows=filtered.map((m,i)=>`<tr>
+    <td>${i+1}</td>
+    <td><strong>${m.nama}</strong><div style="font-size:10px;color:#94a3b8">${m.wilayah}</div></td>
+    <td><code style="font-size:10px;color:#7c3aed;font-weight:700">${m.kuponKode}</code></td>
+    <td><span class="badge" style="background:${m.status==="sudah"?"#dcfce7":"#fef3c7"};color:${m.status==="sudah"?"#16a34a":"#d97706"}">${m.status==="sudah"?"✅":"⏳"} ${m.status==="sudah"?"Sudah":"Belum"}</span></td>
+    <td><div style="display:flex;gap:4px">
+      <button class="btn-icon btn-sm" onclick="editMustahiq('${m.id}')">✏️</button>
+      ${isAdmin?`<button style="background:#fef2f2;color:#dc2626;border:none;padding:5px 8px;border-radius:6px;cursor:pointer;font-size:12px" onclick="delMustahiq('${m.id}')">🗑️</button>`:""}
+    </div></td>
+  </tr>`).join("");
+
+  return `<div class="page">
+    <div class="page-header"><span style="font-size:24px">👥</span><div><h2>Data Mustahiq</h2><p>Pendataan penerima daging qurban</p></div></div>
+    <div class="toolbar">
+      <div class="search-box"><span>🔍</span><input class="search-input" value="${STATE.mustahiqSearch}" oninput="STATE.mustahiqSearch=this.value;renderPage()" placeholder="Cari nama atau NIK..."></div>
+      <select class="select" onchange="STATE.mustahiqFilter=this.value;renderPage()">
+        <option value="semua" ${STATE.mustahiqFilter==="semua"?"selected":""}>Semua</option>
+        <option value="belum" ${STATE.mustahiqFilter==="belum"?"selected":""}>Belum Distribusi</option>
+        <option value="sudah" ${STATE.mustahiqFilter==="sudah"?"selected":""}>Sudah Distribusi</option>
+      </select>
+    </div>
+    <button class="btn btn-primary btn-sm" style="margin-bottom:12px" onclick="openAddMustahiq()">➕ Tambah Mustahiq</button>
+    ${formHTML}
+    <div class="card">
+      <div style="font-size:11px;color:#94a3b8;margin-bottom:8px">${filtered.length} dari ${myMustahiq.length} mustahiq</div>
+      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>No</th><th>Nama</th><th>Kupon</th><th>Status</th><th>Aksi</th></tr></thead><tbody>${rows}</tbody></table></div>
+    </div>
+  </div>`;
+}
+
+function openAddMustahiq(){
+  _mForm={nama:"",nik:"",alamat:STATE.user.wilayah?"":_mForm.alamat,wilayah:STATE.user.wilayah||"",kategori:"fakir",jumlahKG:1};
+  _editMustahiqId=null;_showMustahiqForm=true;renderPage();
+}
+
+function editMustahiq(id){
+  const m=STATE.mustahiq.find(x=>x.id===id);if(!m)return;
+  if(m.status==="sudah"){showToast("Sudah distribusi, tidak bisa diedit.","error");return;}
+  if(STATE.user.role!=="admin"&&m.petugasId!==STATE.user.id){showToast("Anda hanya bisa edit data sendiri.","error");return;}
+  _mForm={nama:m.nama,nik:m.nik,alamat:m.alamat,wilayah:m.wilayah,kategori:m.kategori,jumlahKG:m.jumlahKG};
+  _editMustahiqId=id;_showMustahiqForm=true;renderPage();
+}
+
+function saveMustahiq(){
+  // read current form values from DOM
+  const getV=(id)=>{const el=document.getElementById(id);return el?el.value.trim():""};
+  _mForm.nama=getV("mf-nama")||_mForm.nama;
+  _mForm.nik=getV("mf-nik")||_mForm.nik;
+  _mForm.alamat=getV("mf-alamat")||_mForm.alamat;
+  _mForm.wilayah=getV("mf-wilayah")||_mForm.wilayah;
+  if(!_mForm.nama||!_mForm.nik||!_mForm.alamat||!_mForm.wilayah){showToast("Lengkapi semua data!","error");return;}
+  if(_mForm.nik.length!==16){showToast("NIK harus 16 digit!","error");return;}
+  const dup=STATE.mustahiq.find(m=>m.nik===_mForm.nik&&m.id!==_editMustahiqId);
+  if(dup){showToast("NIK sudah terdaftar! Duplikat.","error");return;}
+  if(_editMustahiqId){
+    const idx=STATE.mustahiq.findIndex(m=>m.id===_editMustahiqId);
+    if(idx>=0)STATE.mustahiq[idx]={...STATE.mustahiq[idx],..._mForm,jumlahKG:parseFloat(_mForm.jumlahKG)};
+    showToast("Data mustahiq diperbarui.");
+  } else {
+    const nid=genId("M");
+    STATE.mustahiq.push({id:nid,..._mForm,jumlahKG:parseFloat(_mForm.jumlahKG),status:"belum",petugasId:STATE.user.id,tanggal:todayStr(),distribusiId:null,kuponKode:makeKode(nid),kuponCetak:false});
+    showToast("Mustahiq ditambahkan — kupon otomatis digenerate.");
+  }
+  _showMustahiqForm=false;_editMustahiqId=null;renderPage();
+}
+
+function delMustahiq(id){
+  const m=STATE.mustahiq.find(x=>x.id===id);if(!m)return;
+  if(m.status==="sudah"){showToast("Tidak bisa hapus — sudah didistribusi.","error");return;}
+  openModal("Hapus Mustahiq","Hapus data "+m.nama+"?","Ya, Hapus",true,()=>{
+    STATE.mustahiq=STATE.mustahiq.filter(x=>x.id!==id);showToast("Data dihapus.","error");renderPage();
+  });
+}
+
+// ================================================================
+// KUPON
+// ================================================================
+function renderKupon(){
+  const myMustahiq=STATE.user.role==="pendataan"?STATE.mustahiq.filter(m=>m.wilayah===STATE.user.wilayah):STATE.mustahiq;
+  const wilayahs=[...new Set(myMustahiq.map(m=>m.wilayah))];
+  const filtered=myMustahiq.filter(m=>{
+    const ms=m.nama.toLowerCase().includes(STATE.kuponSearch.toLowerCase())||m.kuponKode.includes(STATE.kuponSearch.toUpperCase());
+    const mw=STATE.kuponFilterW==="semua"||m.wilayah===STATE.kuponFilterW;
+    const mc=STATE.kuponFilterC==="semua"||(STATE.kuponFilterC==="cetak"?m.kuponCetak:!m.kuponCetak);
+    return ms&&mw&&mc;
+  });
+  const belumCetak=filtered.filter(m=>!m.kuponCetak).length;
+
+  const cards=filtered.map(m=>`<div style="margin-bottom:16px">
+    <div style="overflow-x:auto">${kuponHTML(m,false)}</div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn btn-secondary btn-sm" style="flex:1" onclick="previewKupon('${m.id}')">🔍 Preview</button>
+      <button class="btn btn-sm" style="flex:1;background:${m.kuponCetak?"#475569":"#7c3aed"};color:#fff" onclick="printKupon('${m.id}')">🖨️ ${m.kuponCetak?"Cetak Ulang":"Cetak"}</button>
+    </div>
+  </div>`).join("");
+
+  return `<div class="page">
+    <div class="page-header"><span style="font-size:24px">🎫</span><div><h2>Kelola Kupon</h2><p>Generate, preview, dan cetak kupon distribusi</p></div></div>
+    <div class="stat-grid">
+      <div class="stat-card" style="color:#7c3aed"><div class="stat-icon">🎫</div><div class="stat-val" style="color:#7c3aed">${myMustahiq.length}</div><div class="stat-lbl">Total Kupon</div></div>
+      <div class="stat-card" style="color:#2563eb"><div class="stat-icon">🖨️</div><div class="stat-val" style="color:#2563eb">${myMustahiq.filter(m=>m.kuponCetak).length}</div><div class="stat-lbl">Sudah Dicetak</div></div>
+      <div class="stat-card" style="color:#d97706"><div class="stat-icon">⬜</div><div class="stat-val" style="color:#d97706">${myMustahiq.filter(m=>!m.kuponCetak).length}</div><div class="stat-lbl">Belum Dicetak</div></div>
+      <div class="stat-card" style="color:#16a34a"><div class="stat-icon">✅</div><div class="stat-val" style="color:#16a34a">${myMustahiq.filter(m=>m.status==="sudah").length}</div><div class="stat-lbl">Sudah Dipakai</div></div>
+    </div>
+    <div class="toolbar">
+      <div class="search-box"><span>🔍</span><input class="search-input" value="${STATE.kuponSearch}" oninput="STATE.kuponSearch=this.value;renderPage()" placeholder="Cari nama atau kode..."></div>
+      <select class="select" onchange="STATE.kuponFilterW=this.value;renderPage()">
+        <option value="semua">Semua Wilayah</option>
+        ${wilayahs.map(w=>`<option value="${w}" ${STATE.kuponFilterW===w?"selected":""}>${w}</option>`).join("")}
+      </select>
+      <select class="select" onchange="STATE.kuponFilterC=this.value;renderPage()">
+        <option value="semua">Semua Status</option>
+        <option value="belum" ${STATE.kuponFilterC==="belum"?"selected":""}>Belum Dicetak</option>
+        <option value="cetak" ${STATE.kuponFilterC==="cetak"?"selected":""}>Sudah Dicetak</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <button class="btn btn-sm" style="background:#7c3aed;color:#fff" onclick="printAllKupon()">🖨️ Cetak Semua (${filtered.length})</button>
+    </div>
+    ${belumCetak>0?`<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:8px"><span>⚠️</span><span style="color:#92400e;font-size:13px"><strong>${belumCetak} kupon</strong> belum dicetak. Cetak sebelum hari distribusi.</span></div>`:""}
+    ${filtered.length===0?`<div class="empty-state">Tidak ada kupon sesuai filter</div>`:""}
+    ${cards}
+  </div>`;
+}
+
+function previewKupon(id){
+  const m=STATE.mustahiq.find(x=>x.id===id);if(!m)return;
+  const box=document.getElementById("modal-box");
+  box.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+    <div class="modal-title">🎫 Preview Kupon</div>
+    <button onclick="closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer">✖</button>
+  </div>
+  <div style="overflow-x:auto;margin-bottom:14px">${kuponHTML(m,false)}</div>
+  <div style="background:#f8fafc;border-radius:8px;padding:10px;margin-bottom:14px;font-size:12px;color:#475569">
+    <strong>Kode:</strong> <code style="color:#7c3aed;font-weight:700">${m.kuponKode}</code><br>
+    <strong>Status:</strong> ${m.status==="sudah"?"✅ Sudah Dipakai":"⏳ Belum Dipakai"}<br>
+    <strong>Cetak:</strong> ${m.kuponCetak?"🖨️ Sudah":"⬜ Belum"}
+  </div>
+  <div style="display:flex;gap:10px">
+    <button class="btn btn-secondary" style="flex:1" onclick="closeModal()">Tutup</button>
+    <button class="btn" style="flex:1;background:#7c3aed;color:#fff" onclick="printKupon('${id}');closeModal()">🖨️ Cetak</button>
+  </div>`;
+  document.getElementById("modal-overlay").classList.add("show");
+}
+
+function printKupon(id){
+  const m=STATE.mustahiq.find(x=>x.id===id);if(!m)return;
+  const idx=STATE.mustahiq.findIndex(x=>x.id===id);
+  if(idx>=0)STATE.mustahiq[idx].kuponCetak=true;
+  const area=document.getElementById("kupon-print-area");
+  area.innerHTML=kuponHTML(m,true);
+  showToast("Membuka dialog cetak...");
+  setTimeout(()=>window.print(),200);
+}
+
+function printAllKupon(){
+  const myMustahiq=STATE.user.role==="pendataan"?STATE.mustahiq.filter(m=>m.wilayah===STATE.user.wilayah):STATE.mustahiq;
+  myMustahiq.forEach(m=>{const i=STATE.mustahiq.findIndex(x=>x.id===m.id);if(i>=0)STATE.mustahiq[i].kuponCetak=true;});
+  const area=document.getElementById("kupon-print-area");
+  area.innerHTML=myMustahiq.map(m=>kuponHTML(m,true)).join("<div style='width:8px'></div>");
+  showToast("Mencetak "+myMustahiq.length+" kupon...");
+  setTimeout(()=>window.print(),200);
+}
+
+// ================================================================
+// DISTRIBUSI — 3 MODE: KAMERA | NIK | LIST
+// ================================================================
+function renderDistribusi(){
+  const tabs=[
+    {key:"camera",label:"📷 Kamera",sub:"Scan QR/barcode"},
+    {key:"manual",label:"⌨️ Kode Manual",sub:"Ketik kode kupon"},
+    {key:"list",  label:"📋 Daftar",sub:"Pilih dari antrian"},
+  ];
+  const tabBar=`<div class="tab-bar">${tabs.map(t=>`<button class="tab-btn${STATE.scanMode===t.key?" active":""}" onclick="setScanMode('${t.key}')">${t.label}<span class="tab-sub">${t.sub}</span></button>`).join("")}</div>`;
+
+  const pending=STATE.mustahiq.filter(m=>m.status==="belum");
+  const totalKg=STATE.scanLog.reduce((s,d)=>s+d.jumlahKG,0).toFixed(1);
+
+  let modeContent="";
+  if(STATE.scanMode==="camera") modeContent=renderCameraScanner();
+  else if(STATE.scanMode==="manual") modeContent=renderManualScanner();
+  else modeContent=renderListMode(pending);
+
+  const logHTML=STATE.scanLog.length>0?`<div class="card" style="margin-top:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div class="card-title" style="margin:0">📜 Log Sesi Ini</div>
+      <span style="background:#dcfce7;color:#16a34a;font-weight:700;padding:3px 10px;border-radius:20px;font-size:12px">${STATE.scanLog.length} distribusi • ${totalKg} kg</span>
+    </div>
+    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Waktu</th><th>Nama</th><th>Kupon</th><th>Jatah</th></tr></thead><tbody>
+      ${STATE.scanLog.map((d,i)=>`<tr style="background:${i===0?"#f0fdf4":""}"><td><code style="font-size:10px">${fmtTime(d.waktu)}</code></td><td><strong style="font-size:12px">${d.nama}</strong><div style="font-size:10px;color:#94a3b8">${d.wilayah}</div></td><td><code style="color:#7c3aed;font-size:10px;font-weight:700">${d.kuponKode}</code></td><td><strong style="color:#16a34a">${d.jumlahKG} kg</strong></td></tr>`).join("")}
+    </tbody></table></div>
+  </div>`:"";
+
+  return `<div class="page">
+    <div class="page-header"><span style="font-size:24px">📦</span><div><h2>Distribusi Daging</h2><p>Konfirmasi pengambilan daging qurban</p></div></div>
+    <div class="stat-grid">
+      <div class="stat-card" style="color:#d97706"><div class="stat-icon">⏳</div><div class="stat-val" style="color:#d97706">${fmt(pending.length)}</div><div class="stat-lbl">Antrian Belum</div></div>
+      <div class="stat-card" style="color:#16a34a"><div class="stat-icon">✅</div><div class="stat-val" style="color:#16a34a">${fmt(STATE.scanLog.length)}</div><div class="stat-lbl">Sesi Ini</div></div>
+      <div class="stat-card" style="color:#7c3aed"><div class="stat-icon">🥩</div><div class="stat-val" style="color:#7c3aed">${totalKg} kg</div><div class="stat-lbl">Daging Sesi</div></div>
+      <div class="stat-card" style="color:#2563eb"><div class="stat-icon">👥</div><div class="stat-val" style="color:#2563eb">${fmt(STATE.mustahiq.length)}</div><div class="stat-lbl">Total</div></div>
+    </div>
+    ${tabBar}
+    ${modeContent}
+    ${logHTML}
+  </div>`;
+}
+
+function setScanMode(m){stopCamera();STATE.scanMode=m;STATE.confirmPending=null;STATE.scanResult=null;renderPage();}
+
+// ── CAMERA SCANNER ──
+function renderCameraScanner(){
+  const confirmHTML=STATE.confirmPending&&!STATE.scanResult?`<div class="confirm-card">
+    <div style="font-weight:800;font-size:13px;color:#0369a1;margin-bottom:10px">🔍 Verifikasi — Pastikan identitas sesuai</div>
+    <div style="display:flex;gap:12px;align-items:flex-start">
+      <div style="flex-shrink:0;border:1px solid #e2e8f0;border-radius:6px;padding:3px;background:white">${qrSVG(STATE.confirmPending.kuponKode,72)}</div>
+      <div style="flex:1">
+        <div style="font-weight:800;font-size:16px;color:#1e293b">${STATE.confirmPending.nama}</div>
+        <div style="font-size:12px;color:#64748b">${STATE.confirmPending.alamat}</div>
+        <div style="font-size:12px;font-weight:600;color:#475569">${STATE.confirmPending.wilayah}</div>
+        <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+          <span class="badge" style="background:#dbeafe;color:#1d4ed8">${STATE.confirmPending.kategori}</span>
+          <span style="background:#fef3c7;color:#92400e;border-radius:4px;padding:3px 8px;font-size:13px;font-weight:800">🥩 ${STATE.confirmPending.jumlahKG} kg</span>
+        </div>
+        <div style="margin-top:6px;font-size:11px;color:#64748b">Kupon: <code style="color:#7c3aed;font-weight:700">${STATE.confirmPending.kuponKode}</code></div>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:12px">
+      <button class="btn btn-secondary btn-sm" style="flex:1" onclick="cancelConfirm()">✖ Batal</button>
+      <button class="btn btn-green" style="flex:2;font-size:14px;font-weight:800;padding:12px;justify-content:center" onclick="confirmDist()">✅ SERAHKAN DAGING</button>
+    </div>
+  </div>`:"";
+
+  const resultHTML=STATE.scanResult&&!STATE.confirmPending?renderScanResult():"";
+
+  return `
+    ${resultHTML}
+    ${confirmHTML}
+    ${!STATE.confirmPending&&!STATE.scanResult?`
+    <div class="scanner-container" id="scanner-wrap">
+      <video id="scan-video" class="scanner-video" playsinline muted></video>
+      <canvas id="scan-canvas" class="scanner-canvas"></canvas>
+      <div class="scan-overlay">
+        <div style="position:relative">
+          <div class="scan-frame"></div>
+          <div class="scan-line"></div>
+        </div>
+      </div>
+      <button class="cam-switch-btn" onclick="switchCamera()" title="Ganti kamera">🔄</button>
+      <div class="scanner-status" id="scanner-status">⏳ Memulai kamera...</div>
+    </div>
+    <div style="margin-top:10px;font-size:12px;color:#64748b;text-align:center">
+      Arahkan kamera ke <strong>QR code</strong> atau <strong>barcode</strong> pada kupon mustahiq
+    </div>
+    <div style="background:#f8fafc;border-radius:10px;padding:10px;margin-top:10px">
+      <div style="color:#64748b;font-size:12px;font-weight:600;margin-bottom:6px">Tap kode untuk scan manual:</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${STATE.mustahiq.filter(m=>m.status==="belum").map(m=>`<span onclick="handleScannedCode('${m.kuponKode}')" style="background:white;border:1.5px solid rgba(124,58,237,.35);border-radius:6px;padding:5px 10px;font-family:monospace;font-size:11px;color:#7c3aed;cursor:pointer;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:1px"><span>${m.kuponKode}</span><span style="font-size:9px;color:#94a3b8;font-family:sans-serif">${m.nama.split(" ")[0]}</span></span>`).join("")}
+        ${STATE.mustahiq.filter(m=>m.status==="belum").length===0?`<span style="color:#16a34a;font-weight:700;font-size:13px">✅ Semua sudah terdistribusi!</span>`:""}
+      </div>
+    </div>`:""}
+  `;
+}
+
+// ── MANUAL SCANNER ──
+function renderManualScanner(){
+  const confirmHTML=STATE.confirmPending&&!STATE.scanResult?`<div class="confirm-card">
+    <div style="font-weight:800;font-size:13px;color:#0369a1;margin-bottom:10px">🔍 Verifikasi Identitas Mustahiq</div>
+    <div style="display:flex;gap:12px;align-items:flex-start">
+      <div style="flex-shrink:0;border:1px solid #e2e8f0;border-radius:6px;padding:3px;background:white">${qrSVG(STATE.confirmPending.kuponKode,70)}</div>
+      <div style="flex:1">
+        <div style="font-weight:800;font-size:15px;color:#1e293b">${STATE.confirmPending.nama}</div>
+        <div style="font-size:12px;color:#64748b">${STATE.confirmPending.alamat} — ${STATE.confirmPending.wilayah}</div>
+        <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+          <span class="badge" style="background:#dbeafe;color:#1d4ed8">${STATE.confirmPending.kategori}</span>
+          <span style="background:#fef3c7;color:#92400e;border-radius:4px;padding:2px 8px;font-size:13px;font-weight:800">🥩 ${STATE.confirmPending.jumlahKG} kg</span>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:12px">
+      <button class="btn btn-secondary btn-sm" style="flex:1" onclick="cancelConfirm()">✖ Batal</button>
+      <button class="btn btn-green" style="flex:2;font-size:14px;font-weight:800;padding:12px;justify-content:center" onclick="confirmDist()">✅ SERAHKAN DAGING</button>
+    </div>
+  </div>`:"";
+
+  const resultHTML=STATE.scanResult&&!STATE.confirmPending?renderScanResult():"";
+
+  return `<div class="card" style="background:linear-gradient(135deg,#fafaff,#f5f3ff);border:2px solid rgba(124,58,237,.2)">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+      <span style="font-size:20px">⌨️</span>
+      <div><div style="font-weight:700;font-size:14px;color:#6d28d9">Input Kode Kupon Manual</div><div style="font-size:11px;color:#64748b">Ketik kode kupon lalu tekan Kirim</div></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <input id="kupon-manual-input" class="input" style="flex:1;font-family:monospace;font-size:16px;font-weight:700;letter-spacing:2px;border:2px solid #7c3aed;text-transform:uppercase" value="${STATE.kuponInput}" oninput="STATE.kuponInput=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')submitManualKupon()" placeholder="QRB-XXXXX-XXX" autocomplete="off" autocorrect="off">
+      <button class="btn btn-purple" style="padding:0 16px;font-size:15px;border-radius:10px" onclick="submitManualKupon()">✓</button>
+    </div>
+    ${resultHTML}
+    ${confirmHTML}
+    <div style="background:#f8fafc;border-radius:8px;padding:10px">
+      <div style="color:#64748b;font-size:12px;font-weight:600;margin-bottom:6px">Kode aktif — tap untuk isi otomatis:</div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap">
+        ${STATE.mustahiq.filter(m=>m.status==="belum").map(m=>`<span onclick="STATE.kuponInput='${m.kuponKode}';document.getElementById('kupon-manual-input').value='${m.kuponKode}'" style="background:white;border:1.5px solid rgba(124,58,237,.35);border-radius:5px;padding:4px 8px;font-family:monospace;font-size:11px;color:#7c3aed;cursor:pointer;font-weight:700">${m.kuponKode}</span>`).join("")}
+      </div>
+    </div>
+  </div>`;
+}
+
+function submitManualKupon(){
+  const kode=(STATE.kuponInput||"").trim().toUpperCase();
+  if(!kode){showToast("Masukkan kode kupon!","error");return;}
+  const target=STATE.mustahiq.find(m=>m.kuponKode===kode);
+  if(!target){STATE.scanResult={status:"notfound",kode};STATE.confirmPending=null;renderPage();return;}
+  if(target.status==="sudah"){STATE.scanResult={status:"used",mustahiq:target};STATE.confirmPending=null;renderPage();return;}
+  STATE.confirmPending=target;STATE.scanResult=null;STATE.kuponInput="";renderPage();
+}
+
+// ── LIST MODE ──
+function renderListMode(pending){
+  const wilayahs=[...new Set(STATE.mustahiq.map(m=>m.wilayah))];
+  const filtered=pending.filter(m=>{
+    const ms=m.nama.toLowerCase().includes(STATE.distSearch.toLowerCase())||m.nik.includes(STATE.distSearch)||m.kuponKode.includes(STATE.distSearch.toUpperCase());
+    const mw=STATE.distFilterW==="semua"||m.wilayah===STATE.distFilterW;
+    return ms&&mw;
+  });
+
+  const confirmHTML=STATE.confirmPending&&STATE.scanMode==="list"?`<div class="confirm-card" style="margin-bottom:12px">
+    <div style="font-weight:800;font-size:13px;color:#0369a1;margin-bottom:10px">🔍 Konfirmasi Distribusi</div>
+    <div style="display:flex;gap:12px;align-items:center">
+      <div style="flex-shrink:0;border:1px solid #e2e8f0;border-radius:6px;padding:3px;background:white">${qrSVG(STATE.confirmPending.kuponKode,60)}</div>
+      <div style="flex:1">
+        <div style="font-weight:800;font-size:15px">${STATE.confirmPending.nama}</div>
+        <div style="font-size:11px;color:#64748b">${STATE.confirmPending.wilayah}</div>
+        <span style="background:#fef3c7;color:#92400e;border-radius:4px;padding:2px 8px;font-size:13px;font-weight:800;display:inline-block;margin-top:4px">🥩 ${STATE.confirmPending.jumlahKG} kg</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <button class="btn btn-secondary btn-sm" onclick="cancelConfirm()">✖</button>
+        <button class="btn btn-green btn-sm" onclick="confirmDist()">✅</button>
+      </div>
+    </div>
+  </div>`:"";
+
+  const rows=filtered.map((m,i)=>`<tr style="background:${STATE.confirmPending&&STATE.confirmPending.id===m.id?"#f0f9ff":""}">
+    <td>${i+1}</td>
+    <td><strong style="font-size:12px">${m.nama}</strong><div style="font-size:10px;color:#94a3b8">${m.wilayah}</div></td>
+    <td><code style="font-size:10px;color:#7c3aed;font-weight:700">${m.kuponKode}</code></td>
+    <td><strong style="color:#dc2626">${m.jumlahKG} kg</strong></td>
+    <td><button class="btn btn-sm" style="background:${STATE.confirmPending&&STATE.confirmPending.id===m.id?"#0ea5e9":"#16a34a"};color:#fff" onclick="listSelectConfirm('${m.id}')">${STATE.confirmPending&&STATE.confirmPending.id===m.id?"Konfirm":"✅"}</button></td>
+  </tr>`).join("");
+
+  return `<div>
+    <div class="toolbar">
+      <div class="search-box"><span>🔍</span><input class="search-input" value="${STATE.distSearch}" oninput="STATE.distSearch=this.value;renderPage()" placeholder="Cari nama atau NIK..."></div>
+      <select class="select" onchange="STATE.distFilterW=this.value;renderPage()">
+        <option value="semua">Semua Wilayah</option>
+        ${wilayahs.map(w=>`<option value="${w}" ${STATE.distFilterW===w?"selected":""}>${w}</option>`).join("")}
+      </select>
+    </div>
+    ${confirmHTML}
+    <div class="card">
+      <div style="font-size:11px;color:#94a3b8;margin-bottom:8px">Antrian: <strong style="color:#d97706">${filtered.length} mustahiq</strong></div>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>No</th><th>Nama</th><th>Kupon</th><th>Jatah</th><th>Aksi</th></tr></thead>
+        <tbody>${filtered.length===0?`<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:24px">🎉 Semua sudah terdistribusi!</td></tr>`:rows}</tbody>
+      </table></div>
+    </div>
+  </div>`;
+}
+
+function listSelectConfirm(id){
+  if(STATE.confirmPending&&STATE.confirmPending.id===id){confirmDist();return;}
+  const m=STATE.mustahiq.find(x=>x.id===id);if(!m)return;
+  STATE.confirmPending=m;renderPage();
+}
+
+function renderScanResult(){
+  const r=STATE.scanResult;
+  if(!r)return "";
+  if(r.status==="ok")return `<div class="result-ok"><div class="result-title" style="color:#16a34a">✅ DISTRIBUSI BERHASIL</div><div style="font-size:13px;color:#166534"><strong>${r.mustahiq.nama}</strong> — ${r.mustahiq.wilayah}<br><span style="font-size:15px;font-weight:800;color:#16a34a">🥩 ${r.mustahiq.jumlahKG} kg</span></div></div>`;
+  if(r.status==="used")return `<div class="result-warn"><div class="result-title" style="color:#d97706">⚠️ KUPON SUDAH DIPAKAI</div><div style="font-size:13px;color:#92400e"><strong>${r.mustahiq.nama}</strong> sudah mengambil daging sebelumnya.</div></div>`;
+  return `<div class="result-err"><div class="result-title" style="color:#dc2626">❌ KUPON TIDAK VALID</div><div style="font-size:13px;color:#991b1b">Kode <code style="background:#fee2e2;padding:0 4px;border-radius:3px">${r.kode}</code> tidak ditemukan.</div></div>`;
+}
+
+function cancelConfirm(){STATE.confirmPending=null;STATE.scanResult=null;if(STATE.scanMode==="camera")startCamera();renderPage();}
+function confirmDist(){
+  if(!STATE.confirmPending)return;
+  doDistribute(STATE.confirmPending);
+  STATE.scanResult={status:"ok",mustahiq:STATE.confirmPending};
+  const nama=STATE.confirmPending.nama,kg=STATE.confirmPending.jumlahKG;
+  STATE.confirmPending=null;
+  showToast(nama+" — "+kg+" kg berhasil dicatat!");
+  renderPage();
+  if(STATE.scanMode==="camera")setTimeout(()=>startCamera(),2500);
+}
+
+// ================================================================
+// HEWAN
+// ================================================================
+let _showHewanForm=false,_hForm={jenis:"Sapi",nomorHewan:"",beratKg:"",estimasiDaging:""};
+function renderHewan(){
+  const formHTML=_showHewanForm?`<div class="card" style="background:#f8fafc;border:1px solid #e2e8f0">
+    <div class="card-title">Tambah Hewan Qurban</div>
+    <div class="form-grid">
+      <div class="form-group"><label class="form-label">Jenis</label><select class="select" style="width:100%" onchange="_hForm.jenis=this.value"><option value="Sapi" ${_hForm.jenis==="Sapi"?"selected":""}>🐄 Sapi</option><option value="Kambing" ${_hForm.jenis==="Kambing"?"selected":""}>🐐 Kambing</option></select></div>
+      <div class="form-group"><label class="form-label">Nomor Hewan</label><input class="input" id="hf-nomor" value="${_hForm.nomorHewan}" oninput="_hForm.nomorHewan=this.value" placeholder="S-003"></div>
+      <div class="form-group"><label class="form-label">Berat Hidup (kg)</label><input class="input" id="hf-berat" type="number" value="${_hForm.beratKg}" oninput="_hForm.beratKg=this.value" inputmode="decimal"></div>
+      <div class="form-group"><label class="form-label">Est. Daging (kg)</label><input class="input" id="hf-daging" type="number" step="0.5" value="${_hForm.estimasiDaging}" oninput="_hForm.estimasiDaging=this.value" placeholder="Auto (60%/50%)" inputmode="decimal"></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:10px">
+      <button class="btn btn-primary btn-sm" onclick="saveHewan()">💾 Simpan</button>
+      <button class="btn btn-secondary btn-sm" onclick="_showHewanForm=false;renderPage()">✖ Batal</button>
+    </div>
+  </div>`:"";
+  const total_berat=STATE.hewan.reduce((s,h)=>s+h.beratKg,0);
+  const total_daging=STATE.hewan.reduce((s,h)=>s+h.estimasiDaging,0);
+  return `<div class="page">
+    <div class="page-header"><span style="font-size:24px">🐄</span><div><h2>Data Hewan Qurban</h2><p>Manajemen hewan yang akan disembelih</p></div></div>
+    <button class="btn btn-primary btn-sm" style="margin-bottom:12px" onclick="_showHewanForm=!_showHewanForm;renderPage()">➕ Tambah Hewan</button>
+    ${formHTML}
+    <div class="card"><div class="tbl-wrap"><table class="tbl">
+      <thead><tr><th>No.</th><th>Jenis</th><th>Berat</th><th>Est. Daging</th></tr></thead>
+      <tbody>
+        ${STATE.hewan.map(h=>`<tr><td><strong>${h.nomorHewan}</strong></td><td>${h.jenis==="Sapi"?"🐄":"🐐"} ${h.jenis}</td><td>${h.beratKg} kg</td><td><strong>${h.estimasiDaging} kg</strong></td></tr>`).join("")}
+        <tr style="background:#eff6ff;font-weight:700"><td colspan="2">TOTAL (${STATE.hewan.length} hewan)</td><td>${fmt(total_berat)} kg</td><td style="color:#dc2626">${fmt(total_daging)} kg</td></tr>
+      </tbody>
+    </table></div></div>
+  </div>`;
+}
+function saveHewan(){
+  _hForm.nomorHewan=document.getElementById("hf-nomor")?.value.trim()||_hForm.nomorHewan;
+  _hForm.beratKg=document.getElementById("hf-berat")?.value||_hForm.beratKg;
+  _hForm.estimasiDaging=document.getElementById("hf-daging")?.value||_hForm.estimasiDaging;
+  if(!_hForm.nomorHewan||!_hForm.beratKg){showToast("Lengkapi data hewan!","error");return;}
+  const est=_hForm.estimasiDaging||parseFloat(_hForm.beratKg)*(_hForm.jenis==="Sapi"?0.6:0.5);
+  STATE.hewan.push({id:genId("H"),jenis:_hForm.jenis,nomorHewan:_hForm.nomorHewan,beratKg:parseFloat(_hForm.beratKg),estimasiDaging:parseFloat(est),status:"siap",createdAt:todayStr()});
+  showToast("Hewan ditambahkan.");_showHewanForm=false;_hForm={jenis:"Sapi",nomorHewan:"",beratKg:"",estimasiDaging:""};renderPage();
+}
+
+// ================================================================
+// PENGGUNA
+// ================================================================
+let _showPenggunaForm=false,_pForm={username:"",password:"",name:"",role:"pendataan",wilayah:""};
+function renderPengguna(){
+  const formHTML=_showPenggunaForm?`<div class="card" style="background:#f8fafc;border:1px solid #e2e8f0">
+    <div class="card-title">Tambah Pengguna Baru</div>
+    <div class="form-grid">
+      <div class="form-group"><label class="form-label">Nama</label><input class="input" id="pf-nama" value="${_pForm.name}" oninput="_pForm.name=this.value"></div>
+      <div class="form-group"><label class="form-label">Username</label><input class="input" id="pf-user" value="${_pForm.username}" oninput="_pForm.username=this.value" autocomplete="off"></div>
+      <div class="form-group"><label class="form-label">Password</label><input class="input" id="pf-pass" type="password" value="${_pForm.password}" oninput="_pForm.password=this.value" autocomplete="new-password"></div>
+      <div class="form-group"><label class="form-label">Role</label><select class="select" style="width:100%" onchange="_pForm.role=this.value;renderPage()"><option value="admin" ${_pForm.role==="admin"?"selected":""}>Admin</option><option value="pendataan" ${_pForm.role==="pendataan"?"selected":""}>Pendataan</option><option value="distribusi" ${_pForm.role==="distribusi"?"selected":""}>Distribusi</option><option value="viewer" ${_pForm.role==="viewer"?"selected":""}>Viewer</option></select></div>
+      ${_pForm.role==="pendataan"?`<div class="form-group"><label class="form-label">Wilayah</label><input class="input" id="pf-wil" value="${_pForm.wilayah}" oninput="_pForm.wilayah=this.value" placeholder="RT 03/RW 01"></div>`:""}
+    </div>
+    <div style="display:flex;gap:10px;margin-top:10px">
+      <button class="btn btn-primary btn-sm" onclick="savePengguna()">💾 Simpan</button>
+      <button class="btn btn-secondary btn-sm" onclick="_showPenggunaForm=false;renderPage()">✖ Batal</button>
+    </div>
+  </div>`:"";
+  return `<div class="page">
+    <div class="page-header"><span style="font-size:24px">👤</span><div><h2>Manajemen Pengguna</h2><p>Kelola akun dan hak akses tim</p></div></div>
+    <button class="btn btn-primary btn-sm" style="margin-bottom:12px" onclick="_showPenggunaForm=!_showPenggunaForm;renderPage()">➕ Tambah Pengguna</button>
+    ${formHTML}
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px">
+      ${STATE.users.map(u=>{const rc=ROLES[u.role];return`<div class="card" style="display:flex;align-items:center;gap:12px;margin-bottom:0">
+        <div style="width:42px;height:42px;border-radius:50%;background:${rc.color};display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">${rc.icon}</div>
+        <div style="flex:1"><div style="font-weight:700;font-size:14px">${u.name}</div><div style="font-size:12px;color:#94a3b8">@${u.username}</div>
+        <div style="display:flex;gap:5px;margin-top:4px;flex-wrap:wrap">
+          <span class="badge" style="background:${rc.color}22;color:${rc.color};border:1px solid ${rc.color}44;font-size:10px">${rc.label}</span>
+          ${u.wilayah?`<span class="badge" style="background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;font-size:10px">${u.wilayah}</span>`:""}
+        </div></div>
+      </div>`;}).join("")}
+    </div>
+  </div>`;
+}
+function savePengguna(){
+  _pForm.name=document.getElementById("pf-nama")?.value.trim()||_pForm.name;
+  _pForm.username=document.getElementById("pf-user")?.value.trim()||_pForm.username;
+  _pForm.password=document.getElementById("pf-pass")?.value||_pForm.password;
+  _pForm.wilayah=document.getElementById("pf-wil")?.value.trim()||_pForm.wilayah;
+  if(!_pForm.name||!_pForm.username||!_pForm.password){showToast("Lengkapi data!","error");return;}
+  if(STATE.users.find(u=>u.username===_pForm.username)){showToast("Username sudah digunakan!","error");return;}
+  STATE.users.push({id:genId("U"),..._pForm});showToast("Pengguna ditambahkan.");
+  _showPenggunaForm=false;_pForm={username:"",password:"",name:"",role:"pendataan",wilayah:""};renderPage();
+}
+
+// ================================================================
+// LAPORAN
+// ================================================================
+function renderLaporan(){
+  const m=STATE.mustahiq;
+  const h=STATE.hewan;
+  const dagingEst=h.reduce((s,x)=>s+x.estimasiDaging,0);
+  const dagingDist=m.filter(x=>x.status==="sudah").reduce((s,x)=>s+x.jumlahKG,0);
+  const dagingBelum=m.filter(x=>x.status==="belum").reduce((s,x)=>s+x.jumlahKG,0);
+  const byKat=KATEGORI.reduce((acc,k)=>{const list=m.filter(x=>x.kategori===k);if(list.length)acc[k]={total:list.length,sudah:list.filter(x=>x.status==="sudah").length,kg:list.reduce((s,x)=>s+x.jumlahKG,0)};return acc;},{});
+  const byWil=[...new Set(m.map(x=>x.wilayah))].map(w=>{const list=m.filter(x=>x.wilayah===w);return{wilayah:w,total:list.length,sudah:list.filter(x=>x.status==="sudah").length,kg:list.reduce((s,x)=>s+x.jumlahKG,0)};});
+  return `<div class="page">
+    <div class="page-header"><span style="font-size:24px">📊</span><div><h2>Laporan & Rekap</h2><p>Ringkasan pelaksanaan distribusi qurban</p></div></div>
+    <div class="stat-grid">
+      <div class="stat-card" style="color:#7c3aed"><div class="stat-icon">🥩</div><div class="stat-val" style="color:#7c3aed">${fmt(dagingEst)} kg</div><div class="stat-lbl">Est. Daging Total</div></div>
+      <div class="stat-card" style="color:#16a34a"><div class="stat-icon">✅</div><div class="stat-val" style="color:#16a34a">${fmt(dagingDist)} kg</div><div class="stat-lbl">Sudah Distribusi</div></div>
+      <div class="stat-card" style="color:#d97706"><div class="stat-icon">⏳</div><div class="stat-val" style="color:#d97706">${fmt(dagingBelum)} kg</div><div class="stat-lbl">Belum Distribusi</div></div>
+      <div class="stat-card" style="color:#2563eb"><div class="stat-icon">🎫</div><div class="stat-val" style="color:#2563eb">${m.filter(x=>x.kuponCetak).length}</div><div class="stat-lbl">Kupon Tercetak</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-bottom:12px">
+      <div class="card"><div class="card-title">📊 Per Kategori Asnaf</div><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Kategori</th><th>Total</th><th>Sudah</th><th>(kg)</th></tr></thead><tbody>
+        ${Object.entries(byKat).map(([k,v])=>`<tr><td><span class="badge" style="background:#dbeafe;color:#1d4ed8;font-size:10px">${k}</span></td><td>${v.total}</td><td><span style="color:#16a34a">${v.sudah}</span>/${v.total}</td><td>${v.kg} kg</td></tr>`).join("")}
+      </tbody></table></div></div>
+      <div class="card"><div class="card-title">🗺️ Per Wilayah</div><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Wilayah</th><th>Total</th><th>Sudah</th><th>(kg)</th></tr></thead><tbody>
+        ${byWil.map(w=>`<tr><td><strong style="font-size:12px">${w.wilayah}</strong></td><td>${w.total}</td><td><span style="color:#16a34a">${w.sudah}</span>/${w.total}</td><td>${w.kg} kg</td></tr>`).join("")}
+      </tbody></table></div></div>
+    </div>
+    <div class="card"><div class="card-title">📋 Daftar Lengkap Mustahiq</div><div class="tbl-wrap"><table class="tbl"><thead><tr><th>No</th><th>Nama</th><th>Wilayah</th><th>Kode Kupon</th><th>Jatah</th><th>Cetak</th><th>Status</th></tr></thead><tbody>
+      ${m.map((x,i)=>`<tr><td>${i+1}</td><td><strong style="font-size:12px">${x.nama}</strong></td><td style="font-size:11px">${x.wilayah}</td><td><code style="font-size:10px;color:#7c3aed;font-weight:700">${x.kuponKode}</code></td><td>${x.jumlahKG} kg</td><td><span class="badge" style="background:${x.kuponCetak?"#f3e8ff":"#f1f5f9"};color:${x.kuponCetak?"#7c3aed":"#94a3b8"};font-size:10px">${x.kuponCetak?"🖨️":"⬜"}</span></td><td><span class="badge" style="background:${x.status==="sudah"?"#dcfce7":"#fef3c7"};color:${x.status==="sudah"?"#16a34a":"#d97706"};font-size:10px">${x.status==="sudah"?"✅ Sudah":"⏳ Belum"}</span></td></tr>`).join("")}
+    </tbody></table></div></div>
+  </div>`;
+}
+
+// ================================================================
+// INIT
+// ================================================================
+render();
+</script>
+</body>
+</html>
