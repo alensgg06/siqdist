@@ -253,6 +253,7 @@ const STATE = {
   scanLog: [],
   mustahiqSearch: "",
   mustahiqFilter: "semua",
+  mustahiqFilterKat: "semua",
   mustahiqPage: 0,
   mustahiqPerPage: 10,
   kuponSearch: "",
@@ -658,7 +659,11 @@ function doLogin(){
     document.getElementById("li-pass").focus();
   }
 }
-function doLogout(){stopCamera();STATE.user=null;STATE.page="dashboard";STATE.scanLog=[];render();}
+function doLogout(){
+  openModal("Keluar dari Sistem","Yakin ingin keluar? Sesi distribusi aktif akan berakhir.","Ya, Keluar",true,()=>{
+    stopCamera();STATE.user=null;STATE.page="dashboard";STATE.scanLog=[];render();
+  });
+}
 
 // ================================================================
 // CURRENT PAGE ROUTER
@@ -792,7 +797,8 @@ function renderMustahiq(){
     const q=STATE.mustahiqSearch.toLowerCase();
     const ms=m.nama.toLowerCase().includes(q)||m.nik.includes(STATE.mustahiqSearch)||m.kuponKode.includes(STATE.mustahiqSearch.toUpperCase());
     const st=STATE.mustahiqFilter==="semua"||m.status===STATE.mustahiqFilter;
-    return ms&&st;
+    const kt=STATE.mustahiqFilterKat==="semua"||m.kategori===STATE.mustahiqFilterKat;
+    return ms&&st&&kt;
   });
 
   // ── Pagination ──
@@ -802,13 +808,21 @@ function renderMustahiq(){
   const pageStart=STATE.mustahiqPage*perPage;
   const pageRows=filtered.slice(pageStart,pageStart+perPage);
 
+  const allWilayah=[...new Set(STATE.mustahiq.map(m=>m.wilayah).filter(Boolean))].sort();
   const formHTML=_showMustahiqForm?`<div class="card" style="background:#f8fafc;border:1px solid #e2e8f0">
+    <datalist id="wil-list">${allWilayah.map(w=>`<option value="${w}">`).join("")}</datalist>
     <div class="card-title">${_editMustahiqId?"✏️ Edit":"➕ Tambah"} Mustahiq</div>
     <div class="form-grid">
-      <div class="form-group"><label class="form-label">Nama Lengkap *</label><input class="input" id="mf-nama" value="${_mForm.nama}" oninput="_mForm.nama=this.value" placeholder="Nama lengkap"></div>
-      <div class="form-group"><label class="form-label">NIK (16 digit) *</label><input class="input" id="mf-nik" value="${_mForm.nik}" oninput="_mForm.nik=this.value.replace(/\\D/g,'').slice(0,16)" placeholder="16 digit NIK" inputmode="numeric" maxlength="16"></div>
+      <div class="form-group"><label class="form-label">Nama Lengkap *</label><input class="input" id="mf-nama" value="${_mForm.nama}" oninput="_mForm.nama=this.value" placeholder="Nama lengkap" autofocus></div>
+      <div class="form-group">
+        <label class="form-label" style="display:flex;justify-content:space-between">
+          <span>NIK (16 digit) *</span>
+          <span id="nik-counter" style="color:${_mForm.nik.length===16?"#16a34a":"#d97706"};font-weight:700">${_mForm.nik.length}/16</span>
+        </label>
+        <input class="input" id="mf-nik" value="${_mForm.nik}" oninput="_mForm.nik=this.value.replace(/\\D/g,'').slice(0,16);this.value=_mForm.nik;const c=document.getElementById('nik-counter');if(c){c.textContent=_mForm.nik.length+'/16';c.style.color=_mForm.nik.length===16?'#16a34a':'#d97706'}" placeholder="16 digit NIK" inputmode="numeric" maxlength="16">
+      </div>
       <div class="form-group"><label class="form-label">Alamat *</label><input class="input" id="mf-alamat" value="${_mForm.alamat}" oninput="_mForm.alamat=this.value" placeholder="Alamat lengkap"></div>
-      <div class="form-group"><label class="form-label">Wilayah/RT-RW *</label><input class="input" id="mf-wilayah" value="${_mForm.wilayah}" oninput="_mForm.wilayah=this.value" placeholder="RT 01/RW 02" ${STATE.user.role==="pendataan"?"readonly":""}></div>
+      <div class="form-group"><label class="form-label">Wilayah/RT-RW *</label><input class="input" id="mf-wilayah" value="${_mForm.wilayah}" list="wil-list" oninput="_mForm.wilayah=this.value" placeholder="RT 01/RW 02" ${STATE.user.role==="pendataan"?"readonly":""}></div>
       <div class="form-group"><label class="form-label">Kategori</label><select class="select" style="width:100%" onchange="_mForm.kategori=this.value;_mForm.jumlahKG=JATAH[this.value]||1;document.getElementById('mf-jatah').value=_mForm.jumlahKG">${KATEGORI.map(k=>`<option value="${k}" ${_mForm.kategori===k?"selected":""}>${k.charAt(0).toUpperCase()+k.slice(1)}</option>`).join("")}</select></div>
       <div class="form-group"><label class="form-label">Jatah Daging (kg)</label><input class="input" id="mf-jatah" type="number" step="0.5" min="0.5" value="${_mForm.jumlahKG}" oninput="_mForm.jumlahKG=parseFloat(this.value)||1" inputmode="decimal"></div>
     </div>
@@ -848,13 +862,20 @@ function renderMustahiq(){
         <option value="belum" ${STATE.mustahiqFilter==="belum"?"selected":""}>Belum Distribusi</option>
         <option value="sudah" ${STATE.mustahiqFilter==="sudah"?"selected":""}>Sudah Distribusi</option>
       </select>
+      <select class="select" onchange="STATE.mustahiqFilterKat=this.value;STATE.mustahiqPage=0;renderPage()">
+        <option value="semua" ${STATE.mustahiqFilterKat==="semua"?"selected":""}>Semua Kategori</option>
+        ${KATEGORI.map(k=>`<option value="${k}" ${STATE.mustahiqFilterKat===k?"selected":""}>${k.charAt(0).toUpperCase()+k.slice(1)}</option>`).join("")}
+      </select>
       <select class="select" onchange="STATE.mustahiqPerPage=parseInt(this.value);STATE.mustahiqPage=0;renderPage()">
         <option value="10" ${STATE.mustahiqPerPage===10?"selected":""}>10/hal</option>
         <option value="25" ${STATE.mustahiqPerPage===25?"selected":""}>25/hal</option>
         <option value="50" ${STATE.mustahiqPerPage===50?"selected":""}>50/hal</option>
       </select>
     </div>
-    <button class="btn btn-primary btn-sm" style="margin-bottom:12px" onclick="openAddMustahiq()">➕ Tambah Mustahiq</button>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+      <button class="btn btn-primary btn-sm" onclick="openAddMustahiq()">➕ Tambah Mustahiq</button>
+      ${(STATE.mustahiqSearch||STATE.mustahiqFilter!=="semua"||STATE.mustahiqFilterKat!=="semua")?`<button class="btn btn-secondary btn-sm" onclick="STATE.mustahiqSearch='';STATE.mustahiqFilter='semua';STATE.mustahiqFilterKat='semua';STATE.mustahiqPage=0;renderPage()">✖ Reset Filter</button><span style="font-size:12px;color:#d97706;font-weight:600">${filtered.length} hasil filter</span>`:""}
+    </div>
     ${formHTML}
     <div class="card">
       <div class="tbl-wrap"><table class="tbl"><thead><tr><th>No</th><th>Nama &amp; Kategori</th><th>Kupon</th><th>Status</th><th>Aksi</th></tr></thead>
@@ -1028,9 +1049,16 @@ function renderDistribusi(){
       <div class="card-title" style="margin:0">📜 Log Sesi Ini</div>
       <span style="background:#dcfce7;color:#16a34a;font-weight:700;padding:3px 10px;border-radius:20px;font-size:12px">${STATE.scanLog.length} distribusi • ${totalKg} kg</span>
     </div>
-    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Waktu</th><th>Nama</th><th>Kupon</th><th>Jatah</th></tr></thead><tbody>
-      ${STATE.scanLog.map((d,i)=>`<tr style="background:${i===0?"#f0fdf4":""}"><td><code style="font-size:10px">${fmtTime(d.waktu)}</code></td><td><strong style="font-size:12px">${d.nama}</strong><div style="font-size:10px;color:#94a3b8">${d.wilayah}</div></td><td><code style="color:#7c3aed;font-size:10px;font-weight:700">${d.kuponKode}</code></td><td><strong style="color:#16a34a">${d.jumlahKG} kg</strong></td></tr>`).join("")}
+    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Waktu</th><th>Nama</th><th>Kupon</th><th>Jatah</th><th>Batal</th></tr></thead><tbody>
+      ${STATE.scanLog.map((d,i)=>`<tr style="background:${i===0?"#f0fdf4":""}">
+        <td><code style="font-size:10px">${fmtTime(d.waktu)}</code></td>
+        <td><strong style="font-size:12px">${d.nama}</strong><div style="font-size:10px;color:#94a3b8">${d.wilayah}</div></td>
+        <td><code style="color:#7c3aed;font-size:10px;font-weight:700">${d.kuponKode}</code></td>
+        <td><strong style="color:#16a34a">${d.jumlahKG} kg</strong></td>
+        <td><button style="background:#fef2f2;color:#dc2626;border:none;padding:4px 8px;border-radius:5px;cursor:pointer;font-size:11px;font-weight:600" onclick="undoDistribusi('${d.id}')" title="Batalkan distribusi ini">↩ Batal</button></td>
+      </tr>`).join("")}
     </tbody></table></div>
+    <div style="font-size:10px;color:#94a3b8;margin-top:8px">↩ Batalkan hanya untuk koreksi kesalahan input pada sesi ini.</div>
   </div>`:"";
 
   return `<div class="page">
@@ -1233,6 +1261,28 @@ function confirmDist(){
   if(STATE.scanMode==="camera")setTimeout(()=>startCamera(),2500);
 }
 
+function undoDistribusi(distId){
+  const rec=STATE.distribusi.find(d=>d.id===distId);
+  if(!rec){showToast("Data distribusi tidak ditemukan!","error");return;}
+  openModal(
+    "Batalkan Distribusi",
+    "Batalkan distribusi untuk "+rec.nama+" ("+rec.jumlahKG+" kg)? Status mustahiq akan dikembalikan ke 'Belum'.",
+    "Ya, Batalkan",true,
+    ()=>{
+      // hapus dari distribusi
+      STATE.distribusi=STATE.distribusi.filter(d=>d.id!==distId);
+      // hapus dari scanLog sesi ini
+      STATE.scanLog=STATE.scanLog.filter(d=>d.id!==distId);
+      // kembalikan status mustahiq
+      const idx=STATE.mustahiq.findIndex(m=>m.id===rec.mustahiqId);
+      if(idx>=0)STATE.mustahiq[idx]={...STATE.mustahiq[idx],status:"belum",distribusiId:null};
+      saveData();
+      showToast("Distribusi "+rec.nama+" berhasil dibatalkan.","warn");
+      renderPage();
+    }
+  );
+}
+
 // ================================================================
 // HEWAN
 // ================================================================
@@ -1261,9 +1311,25 @@ function renderHewan(){
   const statusBg={siap:"#dcfce7",disembelih:"#fef3c7",selesai:"#dbeafe"};
   const total_berat=STATE.hewan.reduce((s,h)=>s+h.beratKg,0);
   const total_daging=STATE.hewan.reduce((s,h)=>s+h.estimasiDaging,0);
+  const total_dibutuhkan=STATE.mustahiq.reduce((s,m)=>s+m.jumlahKG,0);
+  const total_terdistribusi=STATE.mustahiq.filter(m=>m.status==="sudah").reduce((s,m)=>s+m.jumlahKG,0);
+  const sisa_daging=parseFloat((total_daging-total_terdistribusi).toFixed(1));
+  const sisa_kebutuhan=parseFloat((total_dibutuhkan-total_terdistribusi).toFixed(1));
+  const selisih=parseFloat((total_daging-total_dibutuhkan).toFixed(1));
 
   return `<div class="page">
     <div class="page-header"><span style="font-size:24px">🐄</span><div><h2>Data Hewan Qurban</h2><p>Manajemen hewan yang akan disembelih</p></div></div>
+    <div class="stat-grid" style="margin-bottom:14px">
+      <div class="stat-card" style="color:#7c3aed"><div class="stat-icon">🥩</div><div class="stat-val" style="color:#7c3aed">${fmt(total_daging)} kg</div><div class="stat-lbl">Est. Daging Total</div></div>
+      <div class="stat-card" style="color:#2563eb"><div class="stat-icon">👥</div><div class="stat-val" style="color:#2563eb">${fmt(total_dibutuhkan)} kg</div><div class="stat-lbl">Total Kebutuhan</div></div>
+      <div class="stat-card" style="color:${selisih>=0?"#16a34a":"#dc2626"}">
+        <div class="stat-icon">${selisih>=0?"✅":"⚠️"}</div>
+        <div class="stat-val" style="color:${selisih>=0?"#16a34a":"#dc2626"}">${selisih>=0?"+":""}${fmt(selisih)} kg</div>
+        <div class="stat-lbl">${selisih>=0?"Surplus Daging":"Defisit Daging"}</div>
+      </div>
+      <div class="stat-card" style="color:#d97706"><div class="stat-icon">⏳</div><div class="stat-val" style="color:#d97706">${fmt(sisa_kebutuhan)} kg</div><div class="stat-lbl">Sisa Belum Distribusi</div></div>
+    </div>
+    ${selisih<0?`<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:#991b1b"><strong>⚠️ Perhatian:</strong> Estimasi daging (${total_daging} kg) lebih kecil dari total kebutuhan mustahiq (${total_dibutuhkan} kg). Selisih ${Math.abs(selisih)} kg. Pertimbangkan penambahan hewan.</div>`:""}
     <button class="btn btn-primary btn-sm" style="margin-bottom:12px" onclick="openAddHewan()">➕ Tambah Hewan</button>
     ${formHTML}
     <div class="card"><div class="tbl-wrap"><table class="tbl">
