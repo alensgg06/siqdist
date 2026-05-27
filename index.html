@@ -253,6 +253,8 @@ const STATE = {
   scanLog: [],
   mustahiqSearch: "",
   mustahiqFilter: "semua",
+  mustahiqPage: 0,
+  mustahiqPerPage: 10,
   kuponSearch: "",
   kuponFilterW: "semua",
   kuponFilterC: "semua",
@@ -727,16 +729,24 @@ function renderMustahiq(){
   const isAdmin=STATE.user.role==="admin";
   const myMustahiq=STATE.user.role==="pendataan"?STATE.mustahiq.filter(m=>m.wilayah===STATE.user.wilayah):STATE.mustahiq;
   const filtered=myMustahiq.filter(m=>{
-    const ms=m.nama.toLowerCase().includes(STATE.mustahiqSearch.toLowerCase())||m.nik.includes(STATE.mustahiqSearch);
+    const q=STATE.mustahiqSearch.toLowerCase();
+    const ms=m.nama.toLowerCase().includes(q)||m.nik.includes(STATE.mustahiqSearch)||m.kuponKode.includes(STATE.mustahiqSearch.toUpperCase());
     const st=STATE.mustahiqFilter==="semua"||m.status===STATE.mustahiqFilter;
     return ms&&st;
   });
+
+  // ── Pagination ──
+  const perPage=STATE.mustahiqPerPage;
+  const totalPages=Math.max(1,Math.ceil(filtered.length/perPage));
+  if(STATE.mustahiqPage>=totalPages)STATE.mustahiqPage=totalPages-1;
+  const pageStart=STATE.mustahiqPage*perPage;
+  const pageRows=filtered.slice(pageStart,pageStart+perPage);
 
   const formHTML=_showMustahiqForm?`<div class="card" style="background:#f8fafc;border:1px solid #e2e8f0">
     <div class="card-title">${_editMustahiqId?"✏️ Edit":"➕ Tambah"} Mustahiq</div>
     <div class="form-grid">
       <div class="form-group"><label class="form-label">Nama Lengkap *</label><input class="input" id="mf-nama" value="${_mForm.nama}" oninput="_mForm.nama=this.value" placeholder="Nama lengkap"></div>
-      <div class="form-group"><label class="form-label">NIK (16 digit) *</label><input class="input" id="mf-nik" value="${_mForm.nik}" oninput="_mForm.nik=this.value.replace(/\\D/g,'').slice(0,16)" placeholder="16 digit NIK" inputmode="numeric"></div>
+      <div class="form-group"><label class="form-label">NIK (16 digit) *</label><input class="input" id="mf-nik" value="${_mForm.nik}" oninput="_mForm.nik=this.value.replace(/\\D/g,'').slice(0,16)" placeholder="16 digit NIK" inputmode="numeric" maxlength="16"></div>
       <div class="form-group"><label class="form-label">Alamat *</label><input class="input" id="mf-alamat" value="${_mForm.alamat}" oninput="_mForm.alamat=this.value" placeholder="Alamat lengkap"></div>
       <div class="form-group"><label class="form-label">Wilayah/RT-RW *</label><input class="input" id="mf-wilayah" value="${_mForm.wilayah}" oninput="_mForm.wilayah=this.value" placeholder="RT 01/RW 02" ${STATE.user.role==="pendataan"?"readonly":""}></div>
       <div class="form-group"><label class="form-label">Kategori</label><select class="select" style="width:100%" onchange="_mForm.kategori=this.value;_mForm.jumlahKG=JATAH[this.value]||1;document.getElementById('mf-jatah').value=_mForm.jumlahKG">${KATEGORI.map(k=>`<option value="${k}" ${_mForm.kategori===k?"selected":""}>${k.charAt(0).toUpperCase()+k.slice(1)}</option>`).join("")}</select></div>
@@ -748,32 +758,48 @@ function renderMustahiq(){
     </div>
   </div>`:"";
 
-  const rows=filtered.map((m,i)=>`<tr>
-    <td>${i+1}</td>
-    <td><strong>${m.nama}</strong><div style="font-size:10px;color:#94a3b8">${m.wilayah}</div></td>
+  const rows=pageRows.map((m,i)=>`<tr>
+    <td style="color:#94a3b8;font-size:11px">${pageStart+i+1}</td>
+    <td><strong style="font-size:13px">${m.nama}</strong><div style="font-size:10px;color:#94a3b8">${m.wilayah} &bull; <span class="badge" style="background:#dbeafe;color:#1d4ed8;font-size:9px;padding:1px 5px">${m.kategori}</span></div></td>
     <td><code style="font-size:10px;color:#7c3aed;font-weight:700">${m.kuponKode}</code></td>
-    <td><span class="badge" style="background:${m.status==="sudah"?"#dcfce7":"#fef3c7"};color:${m.status==="sudah"?"#16a34a":"#d97706"}">${m.status==="sudah"?"✅":"⏳"} ${m.status==="sudah"?"Sudah":"Belum"}</span></td>
+    <td><span class="badge" style="background:${m.status==="sudah"?"#dcfce7":"#fef3c7"};color:${m.status==="sudah"?"#16a34a":"#d97706"}">${m.status==="sudah"?"✅ Sudah":"⏳ Belum"}</span></td>
     <td><div style="display:flex;gap:4px">
-      <button class="btn-icon btn-sm" onclick="editMustahiq('${m.id}')">✏️</button>
-      ${isAdmin?`<button style="background:#fef2f2;color:#dc2626;border:none;padding:5px 8px;border-radius:6px;cursor:pointer;font-size:12px" onclick="delMustahiq('${m.id}')">🗑️</button>`:""}
+      <button class="btn-icon btn-sm" title="Edit" onclick="editMustahiq('${m.id}')">✏️</button>
+      ${isAdmin?`<button style="background:#fef2f2;color:#dc2626;border:none;padding:5px 8px;border-radius:6px;cursor:pointer;font-size:12px" title="Hapus" onclick="delMustahiq('${m.id}')">🗑️</button>`:""}
     </div></td>
   </tr>`).join("");
+
+  // ── Pagination controls ──
+  const pagBtns=Array.from({length:totalPages},(_,i)=>`<button onclick="STATE.mustahiqPage=${i};renderPage()" style="padding:5px 10px;border-radius:6px;border:1px solid ${STATE.mustahiqPage===i?"#2563eb":"#e2e8f0"};background:${STATE.mustahiqPage===i?"#2563eb":"#fff"};color:${STATE.mustahiqPage===i?"#fff":"#475569"};cursor:pointer;font-size:12px;font-weight:600">${i+1}</button>`).join("");
+
+  const paginationHTML=totalPages>1?`<div style="display:flex;align-items:center;gap:6px;margin-top:12px;flex-wrap:wrap">
+    <button onclick="STATE.mustahiqPage=Math.max(0,STATE.mustahiqPage-1);renderPage()" ${STATE.mustahiqPage===0?"disabled":""} style="padding:5px 10px;border-radius:6px;border:1px solid #e2e8f0;background:#fff;cursor:pointer;font-size:12px;color:#475569">◀</button>
+    ${pagBtns}
+    <button onclick="STATE.mustahiqPage=Math.min(${totalPages-1},STATE.mustahiqPage+1);renderPage()" ${STATE.mustahiqPage===totalPages-1?"disabled":""} style="padding:5px 10px;border-radius:6px;border:1px solid #e2e8f0;background:#fff;cursor:pointer;font-size:12px;color:#475569">▶</button>
+    <span style="font-size:11px;color:#94a3b8;margin-left:4px">Hal ${STATE.mustahiqPage+1} dari ${totalPages} &bull; ${filtered.length} data</span>
+  </div>`:`<div style="font-size:11px;color:#94a3b8;margin-top:8px">${filtered.length} dari ${myMustahiq.length} mustahiq</div>`;
 
   return `<div class="page">
     <div class="page-header"><span style="font-size:24px">👥</span><div><h2>Data Mustahiq</h2><p>Pendataan penerima daging qurban</p></div></div>
     <div class="toolbar">
-      <div class="search-box"><span>🔍</span><input class="search-input" value="${STATE.mustahiqSearch}" oninput="STATE.mustahiqSearch=this.value;renderPage()" placeholder="Cari nama atau NIK..."></div>
-      <select class="select" onchange="STATE.mustahiqFilter=this.value;renderPage()">
-        <option value="semua" ${STATE.mustahiqFilter==="semua"?"selected":""}>Semua</option>
+      <div class="search-box"><span>🔍</span><input class="search-input" value="${STATE.mustahiqSearch}" oninput="STATE.mustahiqSearch=this.value;STATE.mustahiqPage=0;renderPage()" placeholder="Cari nama, NIK, atau kode kupon..."></div>
+      <select class="select" onchange="STATE.mustahiqFilter=this.value;STATE.mustahiqPage=0;renderPage()">
+        <option value="semua" ${STATE.mustahiqFilter==="semua"?"selected":""}>Semua Status</option>
         <option value="belum" ${STATE.mustahiqFilter==="belum"?"selected":""}>Belum Distribusi</option>
         <option value="sudah" ${STATE.mustahiqFilter==="sudah"?"selected":""}>Sudah Distribusi</option>
+      </select>
+      <select class="select" onchange="STATE.mustahiqPerPage=parseInt(this.value);STATE.mustahiqPage=0;renderPage()">
+        <option value="10" ${STATE.mustahiqPerPage===10?"selected":""}>10/hal</option>
+        <option value="25" ${STATE.mustahiqPerPage===25?"selected":""}>25/hal</option>
+        <option value="50" ${STATE.mustahiqPerPage===50?"selected":""}>50/hal</option>
       </select>
     </div>
     <button class="btn btn-primary btn-sm" style="margin-bottom:12px" onclick="openAddMustahiq()">➕ Tambah Mustahiq</button>
     ${formHTML}
     <div class="card">
-      <div style="font-size:11px;color:#94a3b8;margin-bottom:8px">${filtered.length} dari ${myMustahiq.length} mustahiq</div>
-      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>No</th><th>Nama</th><th>Kupon</th><th>Status</th><th>Aksi</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>No</th><th>Nama &amp; Kategori</th><th>Kupon</th><th>Status</th><th>Aksi</th></tr></thead>
+      <tbody>${filtered.length===0?`<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:24px">Tidak ada data sesuai filter</td></tr>`:rows}</tbody></table></div>
+      ${paginationHTML}
     </div>
   </div>`;
 }
@@ -1150,95 +1176,206 @@ function confirmDist(){
 // ================================================================
 // HEWAN
 // ================================================================
-let _showHewanForm=false,_hForm={jenis:"Sapi",nomorHewan:"",beratKg:"",estimasiDaging:""};
+let _showHewanForm=false,_editHewanId=null;
+let _hForm={jenis:"Sapi",nomorHewan:"",beratKg:"",estimasiDaging:"",status:"siap"};
+
 function renderHewan(){
+  const STATUS_HEWAN=["siap","disembelih","selesai"];
   const formHTML=_showHewanForm?`<div class="card" style="background:#f8fafc;border:1px solid #e2e8f0">
-    <div class="card-title">Tambah Hewan Qurban</div>
+    <div class="card-title">${_editHewanId?"✏️ Edit":"➕ Tambah"} Hewan Qurban</div>
     <div class="form-grid">
       <div class="form-group"><label class="form-label">Jenis</label><select class="select" style="width:100%" onchange="_hForm.jenis=this.value"><option value="Sapi" ${_hForm.jenis==="Sapi"?"selected":""}>🐄 Sapi</option><option value="Kambing" ${_hForm.jenis==="Kambing"?"selected":""}>🐐 Kambing</option></select></div>
-      <div class="form-group"><label class="form-label">Nomor Hewan</label><input class="input" id="hf-nomor" value="${_hForm.nomorHewan}" oninput="_hForm.nomorHewan=this.value" placeholder="S-003"></div>
-      <div class="form-group"><label class="form-label">Berat Hidup (kg)</label><input class="input" id="hf-berat" type="number" value="${_hForm.beratKg}" oninput="_hForm.beratKg=this.value" inputmode="decimal"></div>
-      <div class="form-group"><label class="form-label">Est. Daging (kg)</label><input class="input" id="hf-daging" type="number" step="0.5" value="${_hForm.estimasiDaging}" oninput="_hForm.estimasiDaging=this.value" placeholder="Auto (60%/50%)" inputmode="decimal"></div>
+      <div class="form-group"><label class="form-label">Nomor Hewan *</label><input class="input" id="hf-nomor" value="${_hForm.nomorHewan}" oninput="_hForm.nomorHewan=this.value" placeholder="S-003"></div>
+      <div class="form-group"><label class="form-label">Berat Hidup (kg) *</label><input class="input" id="hf-berat" type="number" min="1" step="0.5" value="${_hForm.beratKg}" oninput="_hForm.beratKg=this.value" inputmode="decimal"></div>
+      <div class="form-group"><label class="form-label">Est. Daging (kg) <span style="color:#94a3b8">(opsional)</span></label><input class="input" id="hf-daging" type="number" step="0.5" min="0" value="${_hForm.estimasiDaging}" oninput="_hForm.estimasiDaging=this.value" placeholder="Otomatis jika kosong" inputmode="decimal"></div>
+      <div class="form-group"><label class="form-label">Status</label><select class="select" style="width:100%" onchange="_hForm.status=this.value">${STATUS_HEWAN.map(s=>`<option value="${s}" ${_hForm.status===s?"selected":""}>${s.charAt(0).toUpperCase()+s.slice(1)}</option>`).join("")}</select></div>
     </div>
+    <div style="font-size:11px;color:#64748b;margin-bottom:8px">Est. daging otomatis: Sapi = 60% berat, Kambing = 50% berat.</div>
     <div style="display:flex;gap:10px;margin-top:10px">
       <button class="btn btn-primary btn-sm" onclick="saveHewan()">💾 Simpan</button>
-      <button class="btn btn-secondary btn-sm" onclick="_showHewanForm=false;renderPage()">✖ Batal</button>
+      <button class="btn btn-secondary btn-sm" onclick="_showHewanForm=false;_editHewanId=null;renderPage()">✖ Batal</button>
     </div>
   </div>`:"";
+
+  const statusColor={siap:"#16a34a",disembelih:"#d97706",selesai:"#2563eb"};
+  const statusBg={siap:"#dcfce7",disembelih:"#fef3c7",selesai:"#dbeafe"};
   const total_berat=STATE.hewan.reduce((s,h)=>s+h.beratKg,0);
   const total_daging=STATE.hewan.reduce((s,h)=>s+h.estimasiDaging,0);
+
   return `<div class="page">
     <div class="page-header"><span style="font-size:24px">🐄</span><div><h2>Data Hewan Qurban</h2><p>Manajemen hewan yang akan disembelih</p></div></div>
-    <button class="btn btn-primary btn-sm" style="margin-bottom:12px" onclick="_showHewanForm=!_showHewanForm;renderPage()">➕ Tambah Hewan</button>
+    <button class="btn btn-primary btn-sm" style="margin-bottom:12px" onclick="openAddHewan()">➕ Tambah Hewan</button>
     ${formHTML}
     <div class="card"><div class="tbl-wrap"><table class="tbl">
-      <thead><tr><th>No.</th><th>Jenis</th><th>Berat</th><th>Est. Daging</th></tr></thead>
+      <thead><tr><th>No.</th><th>Jenis</th><th>Berat</th><th>Est. Daging</th><th>Status</th><th>Aksi</th></tr></thead>
       <tbody>
-        ${STATE.hewan.map(h=>`<tr><td><strong>${h.nomorHewan}</strong></td><td>${h.jenis==="Sapi"?"🐄":"🐐"} ${h.jenis}</td><td>${h.beratKg} kg</td><td><strong>${h.estimasiDaging} kg</strong></td></tr>`).join("")}
-        <tr style="background:#eff6ff;font-weight:700"><td colspan="2">TOTAL (${STATE.hewan.length} hewan)</td><td>${fmt(total_berat)} kg</td><td style="color:#dc2626">${fmt(total_daging)} kg</td></tr>
+        ${STATE.hewan.map(h=>`<tr>
+          <td><strong>${h.nomorHewan}</strong></td>
+          <td>${h.jenis==="Sapi"?"🐄":"🐐"} ${h.jenis}</td>
+          <td>${h.beratKg} kg</td>
+          <td><strong>${h.estimasiDaging} kg</strong></td>
+          <td><span class="badge" style="background:${statusBg[h.status]||"#f1f5f9"};color:${statusColor[h.status]||"#475569"}">${h.status}</span></td>
+          <td><div style="display:flex;gap:4px">
+            <button class="btn-icon btn-sm" title="Edit" onclick="editHewan('${h.id}')">✏️</button>
+            <button style="background:#fef2f2;color:#dc2626;border:none;padding:5px 8px;border-radius:6px;cursor:pointer;font-size:12px" title="Hapus" onclick="delHewan('${h.id}')">🗑️</button>
+          </div></td>
+        </tr>`).join("")}
+        <tr style="background:#eff6ff;font-weight:700"><td colspan="2">TOTAL (${STATE.hewan.length} hewan)</td><td>${fmt(total_berat)} kg</td><td style="color:#dc2626">${fmt(total_daging)} kg</td><td colspan="2"></td></tr>
       </tbody>
     </table></div></div>
   </div>`;
 }
+
+function openAddHewan(){
+  _hForm={jenis:"Sapi",nomorHewan:"",beratKg:"",estimasiDaging:"",status:"siap"};
+  _editHewanId=null;_showHewanForm=true;renderPage();
+}
+
+function editHewan(id){
+  const h=STATE.hewan.find(x=>x.id===id);if(!h)return;
+  _hForm={jenis:h.jenis,nomorHewan:h.nomorHewan,beratKg:h.beratKg,estimasiDaging:h.estimasiDaging,status:h.status||"siap"};
+  _editHewanId=id;_showHewanForm=true;renderPage();
+}
+
+function delHewan(id){
+  const h=STATE.hewan.find(x=>x.id===id);if(!h)return;
+  openModal("Hapus Hewan","Hapus data hewan "+h.nomorHewan+" ("+h.jenis+")?","Ya, Hapus",true,()=>{
+    STATE.hewan=STATE.hewan.filter(x=>x.id!==id);saveData();showToast("Hewan dihapus.","error");renderPage();
+  });
+}
+
 function saveHewan(){
-  _hForm.nomorHewan=document.getElementById("hf-nomor")?.value.trim()||_hForm.nomorHewan;
-  _hForm.beratKg=document.getElementById("hf-berat")?.value||_hForm.beratKg;
-  _hForm.estimasiDaging=document.getElementById("hf-daging")?.value||_hForm.estimasiDaging;
-  if(!_hForm.nomorHewan||!_hForm.beratKg){showToast("Lengkapi data hewan!","error");return;}
-  const est=_hForm.estimasiDaging||parseFloat(_hForm.beratKg)*(_hForm.jenis==="Sapi"?0.6:0.5);
-  STATE.hewan.push({id:genId("H"),jenis:_hForm.jenis,nomorHewan:_hForm.nomorHewan,beratKg:parseFloat(_hForm.beratKg),estimasiDaging:parseFloat(est),status:"siap",createdAt:todayStr()});
-  saveData();
-  showToast("Hewan ditambahkan.");_showHewanForm=false;_hForm={jenis:"Sapi",nomorHewan:"",beratKg:"",estimasiDaging:""};renderPage();
+  _hForm.nomorHewan=(document.getElementById("hf-nomor")?.value||"").trim();
+  _hForm.beratKg=document.getElementById("hf-berat")?.value||"";
+  _hForm.estimasiDaging=document.getElementById("hf-daging")?.value||"";
+  if(!_hForm.nomorHewan){showToast("Nomor hewan wajib diisi!","error");return;}
+  if(!_hForm.beratKg||parseFloat(_hForm.beratKg)<=0){showToast("Berat hewan harus lebih dari 0!","error");return;}
+  // cek duplikat nomor hewan
+  const dup=STATE.hewan.find(h=>h.nomorHewan===_hForm.nomorHewan&&h.id!==_editHewanId);
+  if(dup){showToast("Nomor hewan '"+_hForm.nomorHewan+"' sudah terdaftar!","error");return;}
+  const berat=parseFloat(_hForm.beratKg);
+  const est=_hForm.estimasiDaging?parseFloat(_hForm.estimasiDaging):berat*(_hForm.jenis==="Sapi"?0.6:0.5);
+  if(_editHewanId){
+    const idx=STATE.hewan.findIndex(x=>x.id===_editHewanId);
+    if(idx>=0)STATE.hewan[idx]={...STATE.hewan[idx],jenis:_hForm.jenis,nomorHewan:_hForm.nomorHewan,beratKg:berat,estimasiDaging:parseFloat(est.toFixed(1)),status:_hForm.status};
+    showToast("Data hewan diperbarui.");
+  } else {
+    STATE.hewan.push({id:genId("H"),jenis:_hForm.jenis,nomorHewan:_hForm.nomorHewan,beratKg:berat,estimasiDaging:parseFloat(est.toFixed(1)),status:_hForm.status||"siap",createdAt:todayStr()});
+    showToast("Hewan ditambahkan.");
+  }
+  saveData();_showHewanForm=false;_editHewanId=null;_hForm={jenis:"Sapi",nomorHewan:"",beratKg:"",estimasiDaging:"",status:"siap"};renderPage();
 }
 
 // ================================================================
 // PENGGUNA
 // ================================================================
-let _showPenggunaForm=false,_pForm={username:"",password:"",name:"",role:"pendataan",wilayah:""};
+let _showPenggunaForm=false,_editPenggunaId=null;
+let _pForm={username:"",password:"",name:"",role:"pendataan",wilayah:""};
+
 function renderPengguna(){
+  const isEdit=!!_editPenggunaId;
   const formHTML=_showPenggunaForm?`<div class="card" style="background:#f8fafc;border:1px solid #e2e8f0">
-    <div class="card-title">Tambah Pengguna Baru</div>
+    <div class="card-title">${isEdit?"✏️ Edit":"➕ Tambah"} Pengguna</div>
     <div class="form-grid">
-      <div class="form-group"><label class="form-label">Nama</label><input class="input" id="pf-nama" value="${_pForm.name}" oninput="_pForm.name=this.value"></div>
-      <div class="form-group"><label class="form-label">Username</label><input class="input" id="pf-user" value="${_pForm.username}" oninput="_pForm.username=this.value" autocomplete="off"></div>
-      <div class="form-group"><label class="form-label">Password</label><input class="input" id="pf-pass" type="password" value="${_pForm.password}" oninput="_pForm.password=this.value" autocomplete="new-password"></div>
-      <div class="form-group"><label class="form-label">Role</label><select class="select" style="width:100%" onchange="_pForm.role=this.value;renderPage()"><option value="admin" ${_pForm.role==="admin"?"selected":""}>Admin</option><option value="pendataan" ${_pForm.role==="pendataan"?"selected":""}>Pendataan</option><option value="distribusi" ${_pForm.role==="distribusi"?"selected":""}>Distribusi</option><option value="viewer" ${_pForm.role==="viewer"?"selected":""}>Viewer</option></select></div>
-      ${_pForm.role==="pendataan"?`<div class="form-group"><label class="form-label">Wilayah</label><input class="input" id="pf-wil" value="${_pForm.wilayah}" oninput="_pForm.wilayah=this.value" placeholder="RT 03/RW 01"></div>`:""}
+      <div class="form-group"><label class="form-label">Nama Lengkap *</label><input class="input" id="pf-nama" value="${_pForm.name}" oninput="_pForm.name=this.value" placeholder="Nama lengkap"></div>
+      <div class="form-group"><label class="form-label">Username *</label><input class="input" id="pf-user" value="${_pForm.username}" oninput="_pForm.username=this.value.toLowerCase().replace(/\\s+/g,'')" autocomplete="off" ${isEdit?"readonly style='background:#f1f5f9;color:#94a3b8'":""}></div>
+      <div class="form-group">
+        <label class="form-label">${isEdit?"Password Baru <span style='color:#94a3b8'>(kosongkan jika tidak diubah)</span>":"Password *"}</label>
+        <div style="position:relative">
+          <input class="input" id="pf-pass" type="password" value="${_pForm.password}" oninput="_pForm.password=this.value" autocomplete="new-password" placeholder="${isEdit?"Kosongkan jika tidak diubah":"Min. 6 karakter"}" style="padding-right:40px">
+          <button type="button" onclick="(function(){const i=document.getElementById('pf-pass');const b=document.getElementById('pf-pass-eye');const h=i.type==='password';i.type=h?'text':'password';b.textContent=h?'🙈':'👁️';})()" id="pf-pass-eye" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:14px;color:#94a3b8">👁️</button>
+        </div>
+      </div>
+      <div class="form-group"><label class="form-label">Role *</label><select class="select" style="width:100%" onchange="_pForm.role=this.value;renderPage()"><option value="admin" ${_pForm.role==="admin"?"selected":""}>🛡️ Admin</option><option value="pendataan" ${_pForm.role==="pendataan"?"selected":""}>📋 Pendataan</option><option value="distribusi" ${_pForm.role==="distribusi"?"selected":""}>📦 Distribusi</option><option value="viewer" ${_pForm.role==="viewer"?"selected":""}>📊 Viewer</option></select></div>
+      ${_pForm.role==="pendataan"?`<div class="form-group"><label class="form-label">Wilayah *</label><input class="input" id="pf-wil" value="${_pForm.wilayah}" oninput="_pForm.wilayah=this.value" placeholder="RT 03/RW 01"></div>`:""}
     </div>
     <div style="display:flex;gap:10px;margin-top:10px">
       <button class="btn btn-primary btn-sm" onclick="savePengguna()">💾 Simpan</button>
-      <button class="btn btn-secondary btn-sm" onclick="_showPenggunaForm=false;renderPage()">✖ Batal</button>
+      <button class="btn btn-secondary btn-sm" onclick="_showPenggunaForm=false;_editPenggunaId=null;renderPage()">✖ Batal</button>
     </div>
   </div>`:"";
-  return `<div class="page">
-    <div class="page-header"><span style="font-size:24px">👤</span><div><h2>Manajemen Pengguna</h2><p>Kelola akun dan hak akses tim</p></div></div>
-    <button class="btn btn-primary btn-sm" style="margin-bottom:12px" onclick="_showPenggunaForm=!_showPenggunaForm;renderPage()">➕ Tambah Pengguna</button>
-    ${formHTML}
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px">
-      ${STATE.users.map(u=>{const rc=ROLES[u.role];return`<div class="card" style="display:flex;align-items:center;gap:12px;margin-bottom:0">
-        <div style="width:42px;height:42px;border-radius:50%;background:${rc.color};display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">${rc.icon}</div>
-        <div style="flex:1"><div style="font-weight:700;font-size:14px">${u.name}</div><div style="font-size:12px;color:#94a3b8">@${u.username}</div>
+
+  const userCards=STATE.users.map(u=>{
+    const rc=ROLES[u.role];
+    const isSelf=u.id===STATE.user.id;
+    const adminCount=STATE.users.filter(x=>x.role==="admin").length;
+    const canDelete=!isSelf&&!(u.role==="admin"&&adminCount<=1);
+    return `<div class="card" style="display:flex;align-items:flex-start;gap:12px;margin-bottom:0;${isSelf?"border:2px solid "+rc.color+";":""}>
+      <div style="width:42px;height:42px;border-radius:50%;background:${rc.color};display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">${rc.icon}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:14px">${u.name}${isSelf?` <span style="font-size:10px;background:#eff6ff;color:#2563eb;border-radius:4px;padding:1px 6px;font-weight:600">Anda</span>`:""}</div>
+        <div style="font-size:12px;color:#94a3b8">@${u.username}</div>
         <div style="display:flex;gap:5px;margin-top:4px;flex-wrap:wrap">
           <span class="badge" style="background:${rc.color}22;color:${rc.color};border:1px solid ${rc.color}44;font-size:10px">${rc.label}</span>
           ${u.wilayah?`<span class="badge" style="background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;font-size:10px">${u.wilayah}</span>`:""}
-        </div></div>
-      </div>`;}).join("")}
-    </div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
+        <button class="btn-icon btn-sm" title="Edit" onclick="editPengguna('${u.id}')">✏️</button>
+        ${canDelete?`<button style="background:#fef2f2;color:#dc2626;border:none;padding:5px 8px;border-radius:6px;cursor:pointer;font-size:12px" title="Hapus" onclick="delPengguna('${u.id}')">🗑️</button>`:`<button style="background:#f1f5f9;color:#cbd5e1;border:none;padding:5px 8px;border-radius:6px;cursor:not-allowed;font-size:12px" title="${isSelf?"Tidak bisa hapus akun sendiri":"Admin terakhir"}" disabled>🗑️</button>`}
+      </div>
+    </div>`;
+  }).join("");
+
+  return `<div class="page">
+    <div class="page-header"><span style="font-size:24px">👤</span><div><h2>Manajemen Pengguna</h2><p>Kelola akun dan hak akses tim (${STATE.users.length} pengguna)</p></div></div>
+    <button class="btn btn-primary btn-sm" style="margin-bottom:12px" onclick="openAddPengguna()">➕ Tambah Pengguna</button>
+    ${formHTML}
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px">${userCards}</div>
   </div>`;
 }
+
+function openAddPengguna(){
+  _pForm={username:"",password:"",name:"",role:"pendataan",wilayah:""};
+  _editPenggunaId=null;_showPenggunaForm=true;renderPage();
+}
+
+function editPengguna(id){
+  const u=STATE.users.find(x=>x.id===id);if(!u)return;
+  _pForm={username:u.username,password:"",name:u.name,role:u.role,wilayah:u.wilayah||""};
+  _editPenggunaId=id;_showPenggunaForm=true;renderPage();
+}
+
+function delPengguna(id){
+  const u=STATE.users.find(x=>x.id===id);if(!u)return;
+  if(u.id===STATE.user.id){showToast("Tidak bisa menghapus akun sendiri!","error");return;}
+  const adminCount=STATE.users.filter(x=>x.role==="admin").length;
+  if(u.role==="admin"&&adminCount<=1){showToast("Tidak bisa menghapus admin terakhir!","error");return;}
+  openModal("Hapus Pengguna","Hapus akun @"+u.username+" ("+u.name+")?","Ya, Hapus",true,()=>{
+    STATE.users=STATE.users.filter(x=>x.id!==id);saveData();showToast("Pengguna dihapus.","error");renderPage();
+  });
+}
+
 function savePengguna(){
-  _pForm.name=document.getElementById("pf-nama")?.value.trim()||_pForm.name;
-  _pForm.username=(document.getElementById("pf-user")?.value.trim()||_pForm.username).toLowerCase().replace(/\s+/g,"");
-  _pForm.password=document.getElementById("pf-pass")?.value||_pForm.password;
-  _pForm.wilayah=document.getElementById("pf-wil")?.value.trim()||_pForm.wilayah;
+  _pForm.name=(document.getElementById("pf-nama")?.value||"").trim();
+  if(!_editPenggunaId) _pForm.username=(document.getElementById("pf-user")?.value||"").trim().toLowerCase().replace(/\s+/g,"");
+  _pForm.password=document.getElementById("pf-pass")?.value||"";
+  _pForm.wilayah=(document.getElementById("pf-wil")?.value||"").trim();
+
   if(!_pForm.name||_pForm.name.length<3){showToast("Nama minimal 3 karakter!","error");return;}
-  if(!_pForm.username||_pForm.username.length<3){showToast("Username minimal 3 karakter!","error");return;}
-  if(!/^[a-z0-9_]+$/.test(_pForm.username)){showToast("Username hanya boleh huruf kecil, angka, dan underscore!","error");return;}
-  if(!_pForm.password||_pForm.password.length<6){showToast("Password minimal 6 karakter!","error");return;}
+  if(!_editPenggunaId){
+    if(!_pForm.username||_pForm.username.length<3){showToast("Username minimal 3 karakter!","error");return;}
+    if(!/^[a-z0-9_]+$/.test(_pForm.username)){showToast("Username hanya huruf kecil, angka, dan underscore!","error");return;}
+    if(STATE.users.find(u=>u.username===_pForm.username)){showToast("Username '"+_pForm.username+"' sudah digunakan!","error");return;}
+  }
+  if(!_editPenggunaId&&(!_pForm.password||_pForm.password.length<6)){showToast("Password minimal 6 karakter!","error");return;}
+  if(_editPenggunaId&&_pForm.password&&_pForm.password.length<6){showToast("Password baru minimal 6 karakter!","error");return;}
   if(_pForm.role==="pendataan"&&!_pForm.wilayah){showToast("Wilayah wajib diisi untuk role Pendataan!","error");return;}
-  if(STATE.users.find(u=>u.username===_pForm.username)){showToast("Username '"+_pForm.username+"' sudah digunakan!","error");return;}
-  STATE.users.push({id:genId("U"),..._pForm});saveData();showToast("Pengguna ditambahkan.");
-  _showPenggunaForm=false;_pForm={username:"",password:"",name:"",role:"pendataan",wilayah:""};renderPage();
+
+  if(_editPenggunaId){
+    const idx=STATE.users.findIndex(u=>u.id===_editPenggunaId);
+    if(idx>=0){
+      STATE.users[idx]={...STATE.users[idx],name:_pForm.name,role:_pForm.role,wilayah:_pForm.wilayah||null};
+      if(_pForm.password)STATE.users[idx].password=_pForm.password;
+      // update STATE.user jika edit diri sendiri
+      if(STATE.user.id===_editPenggunaId)STATE.user={...STATE.users[idx]};
+    }
+    showToast("Data pengguna diperbarui.");
+  } else {
+    STATE.users.push({id:genId("U"),username:_pForm.username,password:_pForm.password,name:_pForm.name,role:_pForm.role,wilayah:_pForm.wilayah||null});
+    showToast("Pengguna ditambahkan.");
+  }
+  saveData();_showPenggunaForm=false;_editPenggunaId=null;_pForm={username:"",password:"",name:"",role:"pendataan",wilayah:""};renderPage();
 }
 
 // ================================================================
