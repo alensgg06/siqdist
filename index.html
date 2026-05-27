@@ -203,6 +203,41 @@ function fmt(n){return new Intl.NumberFormat("id-ID").format(n)}
 function fmtTime(iso){return new Date(iso).toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit",second:"2-digit"})}
 
 // ================================================================
+// PERSISTENSI — localStorage
+// ================================================================
+const LS_KEY = "siqdist_v1";
+
+function saveData(){
+  try{
+    localStorage.setItem(LS_KEY, JSON.stringify({
+      mustahiq: STATE.mustahiq,
+      hewan:    STATE.hewan,
+      users:    STATE.users,
+      distribusi: STATE.distribusi,
+      savedAt:  new Date().toISOString()
+    }));
+  }catch(e){console.warn("saveData gagal:",e);}
+}
+
+function loadData(){
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    if(!raw) return false;
+    const d = JSON.parse(raw);
+    if(d.mustahiq)  STATE.mustahiq  = d.mustahiq;
+    if(d.hewan)     STATE.hewan     = d.hewan;
+    if(d.users)     STATE.users     = d.users;
+    if(d.distribusi)STATE.distribusi= d.distribusi;
+    return true;
+  }catch(e){console.warn("loadData gagal:",e);return false;}
+}
+
+function clearData(){
+  localStorage.removeItem(LS_KEY);
+  location.reload();
+}
+
+// ================================================================
 // STATE
 // ================================================================
 const STATE = {
@@ -244,8 +279,10 @@ const STATE = {
   distribusi: [],
 };
 
-// Init mustahiq
+// Init mustahiq — hanya dipakai kalau localStorage kosong
 (function(){
+  const hasSaved = loadData();
+  if(hasSaved) return; // pakai data tersimpan
   const raw = [
     {id:"M001",nama:"Pak Suroto",nik:"3201010101010001",alamat:"Jl. Mawar No.5",wilayah:"RT 01/RW 02",kategori:"fakir",jumlahKG:1.5,petugasId:"U002"},
     {id:"M002",nama:"Bu Aminah",nik:"3201010101010002",alamat:"Jl. Melati No.3",wilayah:"RT 01/RW 02",kategori:"miskin",jumlahKG:1,petugasId:"U002"},
@@ -254,6 +291,7 @@ const STATE = {
     {id:"M005",nama:"Pak Wahyudi",nik:"3201010101010005",alamat:"Jl. Dahlia No.7",wilayah:"RT 01/RW 02",kategori:"gharim",jumlahKG:1,petugasId:"U002"},
   ];
   STATE.mustahiq = raw.map(m=>({...m,status:"belum",tanggal:todayStr(),distribusiId:null,kuponKode:makeKode(m.id),kuponCetak:false}));
+  saveData(); // simpan data awal
 })();
 
 // ================================================================
@@ -374,6 +412,7 @@ function doDistribute(m){
   const idx=STATE.mustahiq.findIndex(x=>x.id===m.id);
   if(idx>=0)STATE.mustahiq[idx]={...STATE.mustahiq[idx],status:"sudah",distribusiId:rec.id};
   STATE.scanLog.unshift(rec);
+  saveData();
   return rec;
 }
 
@@ -531,6 +570,11 @@ function renderSidebar(){
       <div><div style="font-weight:700;font-size:13px;color:#1e293b">${STATE.user.name}</div><div style="font-size:11px;font-weight:600;color:${rc.color}">${rc.label}</div>${STATE.user.wilayah?`<div style="font-size:10px;color:#94a3b8;margin-top:1px">${STATE.user.wilayah}</div>`:""}</div>
     </div>
     <div class="nav-area">${navBtns}</div>
+    <div style="margin:0 12px 4px;font-size:10px;color:#475569;display:flex;align-items:center;gap:5px">
+      <span style="width:7px;height:7px;border-radius:50%;background:#22c55e;display:inline-block"></span>
+      Data tersimpan otomatis
+    </div>
+    ${STATE.user.role==="admin"?`<button onclick="openModal('Reset Data','Semua data akan dikembalikan ke default demo. Tindakan ini tidak bisa dibatalkan!','Ya, Reset',true,()=>{clearData()})" style="margin:0 12px 4px;padding:7px;background:rgba(220,38,38,.08);color:#f87171;border:1px solid rgba(220,38,38,.2);border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;width:calc(100% - 24px)">🗑️ Reset Data Demo</button>`:""}
     <button class="logout-btn" onclick="doLogout()">🚪 Keluar</button>
   </aside>`;
 }
@@ -566,22 +610,51 @@ function renderLogin(){
         <p style="color:#64748b;font-size:13px;margin:4px 0 0">Sistem Informasi Qurban Digital</p>
         <p style="color:#94a3b8;font-size:11px;margin:2px 0 0">Pendataan & Distribusi Daging Qurban</p>
       </div>
-      <div class="form-group"><label class="form-label">Username</label><input class="input" id="li-user" placeholder="Username" onkeydown="if(event.key==='Enter')doLogin()"></div>
-      <div class="form-group"><label class="form-label">Password</label><input class="input" id="li-pass" type="password" placeholder="Password" onkeydown="if(event.key==='Enter')doLogin()"></div>
-      <div id="li-err" style="color:#dc2626;font-size:12px;margin-bottom:8px;display:none">Username atau password salah.</div>
-      <button class="btn btn-primary" style="width:100%;padding:12px;font-size:14px;justify-content:center;border-radius:8px" onclick="doLogin()">Masuk ke Sistem</button>
+      <div class="form-group">
+        <label class="form-label">Username</label>
+        <input class="input" id="li-user" placeholder="Masukkan username" autocomplete="username" onkeydown="if(event.key==='Enter')document.getElementById('li-pass').focus()">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <div style="position:relative">
+          <input class="input" id="li-pass" type="password" placeholder="Masukkan password" autocomplete="current-password" style="padding-right:42px" onkeydown="if(event.key==='Enter')doLogin()">
+          <button type="button" onclick="toggleLoginPass()" id="li-pass-toggle" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;color:#94a3b8;padding:2px 4px">👁️</button>
+        </div>
+      </div>
+      <div id="li-err" style="color:#dc2626;font-size:12px;margin-bottom:8px;display:none;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:8px 10px">❌ Username atau password salah. Coba lagi.</div>
+      <button class="btn btn-primary" style="width:100%;padding:12px;font-size:14px;justify-content:center;border-radius:8px" onclick="doLogin()">🔐 Masuk ke Sistem</button>
       <div style="margin-top:16px;padding:12px;background:#f8fafc;border-radius:8px;font-size:11px;color:#94a3b8;line-height:1.8">
-        <strong>Akun Demo:</strong><br>admin / admin123 &nbsp;|&nbsp; petugas1 / petugas123<br>distribusi1 / dist123 &nbsp;|&nbsp; viewer1 / viewer123
+        <strong style="color:#64748b">Akun Demo:</strong><br>
+        admin / admin123 &nbsp;|&nbsp; petugas1 / petugas123<br>
+        distribusi1 / dist123 &nbsp;|&nbsp; viewer1 / viewer123
       </div>
     </div>
   </div>`;
 }
+
+function toggleLoginPass(){
+  const inp=document.getElementById("li-pass");
+  const btn=document.getElementById("li-pass-toggle");
+  if(!inp)return;
+  const isHidden=inp.type==="password";
+  inp.type=isHidden?"text":"password";
+  btn.textContent=isHidden?"🙈":"👁️";
+}
+
 function doLogin(){
-  const u=document.getElementById("li-user").value.trim();
-  const p=document.getElementById("li-pass").value;
+  const u=(document.getElementById("li-user").value||"").trim();
+  const p=document.getElementById("li-pass").value||"";
+  const errEl=document.getElementById("li-err");
+  if(!u||!p){if(errEl){errEl.textContent="❌ Username dan password wajib diisi.";errEl.style.display="block";}return;}
   const found=STATE.users.find(x=>x.username===u&&x.password===p);
-  if(found){STATE.user=found;STATE.page="dashboard";render();}
-  else{const e=document.getElementById("li-err");if(e)e.style.display="block";}
+  if(found){
+    if(errEl)errEl.style.display="none";
+    STATE.user=found;STATE.page="dashboard";render();
+  }else{
+    if(errEl){errEl.textContent="❌ Username atau password salah. Coba lagi.";errEl.style.display="block";}
+    document.getElementById("li-pass").value="";
+    document.getElementById("li-pass").focus();
+  }
 }
 function doLogout(){stopCamera();STATE.user=null;STATE.page="dashboard";STATE.scanLog=[];render();}
 
@@ -719,16 +792,19 @@ function editMustahiq(id){
 }
 
 function saveMustahiq(){
-  // read current form values from DOM
   const getV=(id)=>{const el=document.getElementById(id);return el?el.value.trim():""};
   _mForm.nama=getV("mf-nama")||_mForm.nama;
-  _mForm.nik=getV("mf-nik")||_mForm.nik;
+  _mForm.nik=getV("mf-nik").replace(/\D/g,"")||_mForm.nik;
   _mForm.alamat=getV("mf-alamat")||_mForm.alamat;
   _mForm.wilayah=getV("mf-wilayah")||_mForm.wilayah;
-  if(!_mForm.nama||!_mForm.nik||!_mForm.alamat||!_mForm.wilayah){showToast("Lengkapi semua data!","error");return;}
-  if(_mForm.nik.length!==16){showToast("NIK harus 16 digit!","error");return;}
+  if(!_mForm.nama.trim()){showToast("Nama wajib diisi!","error");return;}
+  if(_mForm.nama.trim().length<3){showToast("Nama minimal 3 karakter!","error");return;}
+  if(!_mForm.nik){showToast("NIK wajib diisi!","error");return;}
+  if(!/^\d{16}$/.test(_mForm.nik)){showToast("NIK harus tepat 16 digit angka!","error");return;}
+  if(!_mForm.alamat.trim()){showToast("Alamat wajib diisi!","error");return;}
+  if(!_mForm.wilayah.trim()){showToast("Wilayah wajib diisi!","error");return;}
   const dup=STATE.mustahiq.find(m=>m.nik===_mForm.nik&&m.id!==_editMustahiqId);
-  if(dup){showToast("NIK sudah terdaftar! Duplikat.","error");return;}
+  if(dup){showToast("NIK sudah terdaftar atas nama "+dup.nama+"!","error");return;}
   if(_editMustahiqId){
     const idx=STATE.mustahiq.findIndex(m=>m.id===_editMustahiqId);
     if(idx>=0)STATE.mustahiq[idx]={...STATE.mustahiq[idx],..._mForm,jumlahKG:parseFloat(_mForm.jumlahKG)};
@@ -738,6 +814,7 @@ function saveMustahiq(){
     STATE.mustahiq.push({id:nid,..._mForm,jumlahKG:parseFloat(_mForm.jumlahKG),status:"belum",petugasId:STATE.user.id,tanggal:todayStr(),distribusiId:null,kuponKode:makeKode(nid),kuponCetak:false});
     showToast("Mustahiq ditambahkan — kupon otomatis digenerate.");
   }
+  saveData();
   _showMustahiqForm=false;_editMustahiqId=null;renderPage();
 }
 
@@ -745,7 +822,7 @@ function delMustahiq(id){
   const m=STATE.mustahiq.find(x=>x.id===id);if(!m)return;
   if(m.status==="sudah"){showToast("Tidak bisa hapus — sudah didistribusi.","error");return;}
   openModal("Hapus Mustahiq","Hapus data "+m.nama+"?","Ya, Hapus",true,()=>{
-    STATE.mustahiq=STATE.mustahiq.filter(x=>x.id!==id);showToast("Data dihapus.","error");renderPage();
+    STATE.mustahiq=STATE.mustahiq.filter(x=>x.id!==id);saveData();showToast("Data dihapus.","error");renderPage();
   });
 }
 
@@ -824,6 +901,7 @@ function printKupon(id){
   const m=STATE.mustahiq.find(x=>x.id===id);if(!m)return;
   const idx=STATE.mustahiq.findIndex(x=>x.id===id);
   if(idx>=0)STATE.mustahiq[idx].kuponCetak=true;
+  saveData();
   const area=document.getElementById("kupon-print-area");
   area.innerHTML=kuponHTML(m,true);
   showToast("Membuka dialog cetak...");
@@ -833,6 +911,7 @@ function printKupon(id){
 function printAllKupon(){
   const myMustahiq=STATE.user.role==="pendataan"?STATE.mustahiq.filter(m=>m.wilayah===STATE.user.wilayah):STATE.mustahiq;
   myMustahiq.forEach(m=>{const i=STATE.mustahiq.findIndex(x=>x.id===m.id);if(i>=0)STATE.mustahiq[i].kuponCetak=true;});
+  saveData();
   const area=document.getElementById("kupon-print-area");
   area.innerHTML=myMustahiq.map(m=>kuponHTML(m,true)).join("<div style='width:8px'></div>");
   showToast("Mencetak "+myMustahiq.length+" kupon...");
@@ -1108,6 +1187,7 @@ function saveHewan(){
   if(!_hForm.nomorHewan||!_hForm.beratKg){showToast("Lengkapi data hewan!","error");return;}
   const est=_hForm.estimasiDaging||parseFloat(_hForm.beratKg)*(_hForm.jenis==="Sapi"?0.6:0.5);
   STATE.hewan.push({id:genId("H"),jenis:_hForm.jenis,nomorHewan:_hForm.nomorHewan,beratKg:parseFloat(_hForm.beratKg),estimasiDaging:parseFloat(est),status:"siap",createdAt:todayStr()});
+  saveData();
   showToast("Hewan ditambahkan.");_showHewanForm=false;_hForm={jenis:"Sapi",nomorHewan:"",beratKg:"",estimasiDaging:""};renderPage();
 }
 
@@ -1148,12 +1228,16 @@ function renderPengguna(){
 }
 function savePengguna(){
   _pForm.name=document.getElementById("pf-nama")?.value.trim()||_pForm.name;
-  _pForm.username=document.getElementById("pf-user")?.value.trim()||_pForm.username;
+  _pForm.username=(document.getElementById("pf-user")?.value.trim()||_pForm.username).toLowerCase().replace(/\s+/g,"");
   _pForm.password=document.getElementById("pf-pass")?.value||_pForm.password;
   _pForm.wilayah=document.getElementById("pf-wil")?.value.trim()||_pForm.wilayah;
-  if(!_pForm.name||!_pForm.username||!_pForm.password){showToast("Lengkapi data!","error");return;}
-  if(STATE.users.find(u=>u.username===_pForm.username)){showToast("Username sudah digunakan!","error");return;}
-  STATE.users.push({id:genId("U"),..._pForm});showToast("Pengguna ditambahkan.");
+  if(!_pForm.name||_pForm.name.length<3){showToast("Nama minimal 3 karakter!","error");return;}
+  if(!_pForm.username||_pForm.username.length<3){showToast("Username minimal 3 karakter!","error");return;}
+  if(!/^[a-z0-9_]+$/.test(_pForm.username)){showToast("Username hanya boleh huruf kecil, angka, dan underscore!","error");return;}
+  if(!_pForm.password||_pForm.password.length<6){showToast("Password minimal 6 karakter!","error");return;}
+  if(_pForm.role==="pendataan"&&!_pForm.wilayah){showToast("Wilayah wajib diisi untuk role Pendataan!","error");return;}
+  if(STATE.users.find(u=>u.username===_pForm.username)){showToast("Username '"+_pForm.username+"' sudah digunakan!","error");return;}
+  STATE.users.push({id:genId("U"),..._pForm});saveData();showToast("Pengguna ditambahkan.");
   _showPenggunaForm=false;_pForm={username:"",password:"",name:"",role:"pendataan",wilayah:""};renderPage();
 }
 
