@@ -422,25 +422,50 @@ function doDistribute(m){
 // ================================================================
 // CAMERA SCANNER
 // ================================================================
-let _camActive=false,_animFrame=null,_stream=null;
+let _camActive=false,_animFrame=null,_stream=null,_lastScanMs=0;
+const SCAN_INTERVAL_MS=150; // throttle: max ~7fps untuk jsQR
 
 async function startCamera(){
   const vid=document.getElementById("scan-video");
   const canv=document.getElementById("scan-canvas");
   if(!vid||!canv)return;
   stopCamera();
-  try{
-    const constraints={video:{facingMode:STATE.camFacing,width:{ideal:1280},height:{ideal:720}}};
-    _stream=await navigator.mediaDevices.getUserMedia(constraints);
-    vid.srcObject=_stream;
-    await vid.play();
-    _camActive=true;
-    document.getElementById("scanner-status").textContent="📷 Arahkan kamera ke kupon...";
-    tickScan(vid,canv);
-  }catch(e){
-    document.getElementById("scanner-status").textContent="❌ Kamera tidak bisa diakses: "+e.message;
-    console.error(e);
+  _setScannerStatus("⏳ Memulai kamera...");
+
+  // Coba kamera belakang dulu, fallback ke kamera mana saja
+  const constraintsList=[
+    {video:{facingMode:{exact:STATE.camFacing},width:{ideal:1920},height:{ideal:1080}}},
+    {video:{facingMode:STATE.camFacing,width:{ideal:1280},height:{ideal:720}}},
+    {video:{facingMode:STATE.camFacing}},
+    {video:true}
+  ];
+
+  let stream=null;
+  for(const c of constraintsList){
+    try{stream=await navigator.mediaDevices.getUserMedia(c);break;}
+    catch(e){continue;}
   }
+  if(!stream){
+    _setScannerStatus("❌ Kamera tidak dapat diakses. Periksa izin kamera di browser.");
+    return;
+  }
+
+  _stream=stream;
+  vid.srcObject=stream;
+  vid.setAttribute("playsinline","true");
+  vid.setAttribute("muted","true");
+
+  try{
+    await vid.play();
+  }catch(e){
+    _setScannerStatus("❌ Video gagal diputar: "+e.message);
+    return;
+  }
+
+  _camActive=true;
+  _lastScanMs=0;
+  _setScannerStatus("📷 Arahkan QR code ke dalam kotak...");
+  _animFrame=requestAnimationFrame((ts)=>_tickScan(vid,canv,ts));
 }
 
 function stopCamera(){
@@ -449,49 +474,120 @@ function stopCamera(){
   if(_stream){_stream.getTracks().forEach(t=>t.stop());_stream=null}
 }
 
-function tickScan(vid,canv){
-  if(!_camActive)return;
-  if(vid.readyState===vid.HAVE_ENOUGH_DATA){
-    canv.width=vid.videoWidth;canv.height=vid.videoHeight;
-    const ctx=canv.getContext("2d");
-    ctx.drawImage(vid,0,0,canv.width,canv.height);
-    const img=ctx.getImageData(0,0,canv.width,canv.height);
-    if(typeof jsQR!=="undefined"){
-      const code=jsQR(img.data,img.width,img.height,{inversionAttempts:"dontInvert"});
-      if(code&&code.data){
-        handleScannedCode(code.data.trim().toUpperCase());
-        return; // pause briefly then resume
-      }
-    }
-  }
-  _animFrame=requestAnimationFrame(()=>tickScan(vid,canv));
+function _setScannerStatus(msg){
+  const el=document.getElementById("scanner-status");
+  if(el)el.textContent=msg;
 }
 
-function handleScannedCode(kode){
+function _tickScan(vid,canv,timestamp){
+  if(!_camActive)return;
+  if(vid.readyState<vid.HAVE_ENOUGH_DATA){
+    _animFrame=requestAnimationFrame((ts)=>_tickScan(vid,canv,ts));
+    return;
+  }
+
+  // Throttle: proses maksimal SCAN_INTERVAL_MS sekali
+  if(timestamp-_lastScanMs<SCAN_INTERVAL_MS){
+    _animFrame=requestAnimationFrame((ts)=>_tickScan(vid,canv,ts));
+    return;
+  }
+  _lastScanMs=timestamp;
+
+  try{
+    // Downscale: maksimal 640px lebar agar jsQR lebih cepat di HP
+    const MAX_W=640;
+    const scale=Math.min(1,MAX_W/vid.videoWidth);
+    const sw=Math.floor(vid.videoWidth*scale);
+    const sh=Math.floor(vid.videoHeight*scale);
+
+    // Crop area: ambil bagian tengah sesuai kotak scan visual (65%)
+    const cropRatio=0.65;
+    const cropW=Math.floor(sw*cropRatio);
+    const cropH=Math.floor(sh*cropRatio);
+    const cropX=Math.floor((sw-cropW)/2);
+    const cropY=Math.floor((sh-cropH)/2);
+
+    // Gambar full frame dulu ke canvas downscale
+    canv.width=sw;canv.height=sh;
+    const ctx=canv.getContext("2d",{willReadFrequently:true});
+    ctx.drawImage(vid,0,0,sw,sh);
+
+    // Scan seluruh frame dulu (lebih luas, lebih mudah baca)
+    const imgFull=ctx.getImageData(0,0,sw,sh);
+    let code=null;
+    if(typeof jsQR!=="undefined"){
+      code=jsQR(imgFull.data,sw,sh,{inversionAttempts:"attemptBoth"});
+      // Jika tidak ketemu di full frame, coba crop tengah (lebih akurat)
+      if(!code){
+        const imgCrop=ctx.getImageData(cropX,cropY,cropW,cropH);
+        code=jsQR(imgCrop.data,cropW,cropH,{inversionAttempts:"attemptBoth"});
+      }
+    }
+
+    if(code&&code.data&&code.data.trim()){
+      _handleScannedCode(code.data.trim().toUpperCase());
+      return; // stop loop, restart di handleScannedCode
+    }
+  }catch(e){
+    console.warn("scan error:",e);
+  }
+
+  _animFrame=requestAnimationFrame((ts)=>_tickScan(vid,canv,ts));
+}
+
+function _handleScannedCode(kode){
   stopCamera();
+
+  // Feedback getar jika browser mendukung
+  if(navigator.vibrate)navigator.vibrate(60);
+
   const target=STATE.mustahiq.find(m=>m.kuponKode===kode);
+
   if(!target){
     STATE.scanResult={status:"notfound",kode};
+    STATE.confirmPending=null;
+    _setScannerStatus("❌ Kupon tidak ditemukan");
     renderPage();
     showToast("Kupon tidak ditemukan: "+kode,"error");
-    setTimeout(()=>{if(_camActive||document.getElementById("scan-video"))startCamera();},2000);
+    // Setelah 2 detik: bersihkan result agar scanner container muncul kembali
+    setTimeout(()=>{
+      if(STATE.page==="distribusi"&&STATE.scanMode==="camera"&&!STATE.confirmPending){
+        STATE.scanResult=null;
+        renderPage();
+        // afterRender akan panggil startCamera via setTimeout(100)
+      }
+    },2000);
     return;
   }
+
   if(target.status==="sudah"){
     STATE.scanResult={status:"used",mustahiq:target};
+    STATE.confirmPending=null;
     renderPage();
     showToast(target.nama+" sudah mengambil daging!","warn");
-    setTimeout(()=>startCamera(),2500);
+    if(navigator.vibrate)navigator.vibrate([60,80,60]);
+    setTimeout(()=>{
+      if(STATE.page==="distribusi"&&STATE.scanMode==="camera"&&!STATE.confirmPending){
+        STATE.scanResult=null;
+        renderPage();
+      }
+    },2500);
     return;
   }
+
+  // Berhasil — tampilkan konfirmasi
+  if(navigator.vibrate)navigator.vibrate([60,50,120]);
   STATE.confirmPending=target;
   STATE.scanResult=null;
   renderPage();
 }
 
+// Tetap expose handleScannedCode untuk tap manual di UI
+function handleScannedCode(kode){_handleScannedCode(kode);}
+
 function switchCamera(){
   STATE.camFacing=STATE.camFacing==="environment"?"user":"environment";
-  if(_camActive)startCamera();
+  startCamera();
 }
 
 // ================================================================
@@ -526,11 +622,16 @@ function renderPage(){
 }
 
 function afterRender(){
-  // Re-attach camera if on distribusi scanner
   if(STATE.user&&STATE.page==="distribusi"&&STATE.scanMode==="camera"){
     const vid=document.getElementById("scan-video");
-    if(vid&&!_camActive)setTimeout(()=>startCamera(),100);
-  } else {
+    // Hanya mulai kamera jika elemen video ada di DOM dan kamera belum aktif
+    if(vid&&!_camActive){
+      setTimeout(()=>{
+        // Cek ulang — pastikan belum di-override oleh navigasi cepat
+        if(document.getElementById("scan-video")&&!_camActive)startCamera();
+      },120);
+    }
+  }else{
     stopCamera();
   }
 }
@@ -1107,22 +1208,29 @@ function renderCameraScanner(){
     ${confirmHTML}
     ${!STATE.confirmPending&&!STATE.scanResult?`
     <div class="scanner-container" id="scanner-wrap">
-      <video id="scan-video" class="scanner-video" playsinline muted></video>
+      <video id="scan-video" class="scanner-video" playsinline muted autoplay></video>
       <canvas id="scan-canvas" class="scanner-canvas"></canvas>
       <div class="scan-overlay">
         <div style="position:relative">
           <div class="scan-frame"></div>
           <div class="scan-line"></div>
         </div>
+        <div style="position:absolute;top:8%;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.55);color:#fff;font-size:11px;font-weight:600;padding:4px 12px;border-radius:20px;white-space:nowrap">QR Code / Barcode</div>
       </div>
       <button class="cam-switch-btn" onclick="switchCamera()" title="Ganti kamera">🔄</button>
       <div class="scanner-status" id="scanner-status">⏳ Memulai kamera...</div>
     </div>
-    <div style="margin-top:10px;font-size:12px;color:#64748b;text-align:center">
-      Arahkan kamera ke <strong>QR code</strong> atau <strong>barcode</strong> pada kupon mustahiq
+    <div style="margin-top:10px;display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap">
+      <div style="flex:1;min-width:220px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 12px;font-size:12px;color:#166534">
+        <strong>Tips agar QR terbaca:</strong><br>
+        • Pastikan kupon tidak terlipat atau buram<br>
+        • Jarak ideal 10–20 cm dari kamera<br>
+        • Hindari pantulan cahaya langsung<br>
+        • Tahan kamera tetap diam sejenak
+      </div>
     </div>
     <div style="background:#f8fafc;border-radius:10px;padding:10px;margin-top:10px">
-      <div style="color:#64748b;font-size:12px;font-weight:600;margin-bottom:6px">Tap kode untuk scan manual:</div>
+      <div style="color:#64748b;font-size:12px;font-weight:600;margin-bottom:6px">Atau tap kode untuk konfirmasi langsung:</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         ${STATE.mustahiq.filter(m=>m.status==="belum").map(m=>`<span onclick="handleScannedCode('${m.kuponKode}')" style="background:white;border:1.5px solid rgba(124,58,237,.35);border-radius:6px;padding:5px 10px;font-family:monospace;font-size:11px;color:#7c3aed;cursor:pointer;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:1px"><span>${m.kuponKode}</span><span style="font-size:9px;color:#94a3b8;font-family:sans-serif">${m.nama.split(" ")[0]}</span></span>`).join("")}
         ${STATE.mustahiq.filter(m=>m.status==="belum").length===0?`<span style="color:#16a34a;font-weight:700;font-size:13px">✅ Semua sudah terdistribusi!</span>`:""}
