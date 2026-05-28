@@ -10,6 +10,7 @@
 <meta name="apple-mobile-web-app-title" content="SIQDIST">
 <title>SIQDIST — Sistem Qurban Digital</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
 <style>
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
   :root{
@@ -325,45 +326,80 @@ function closeModal(){document.getElementById("modal-overlay").classList.remove(
 document.getElementById("modal-confirm-btn").onclick=()=>{if(_modalCb)_modalCb();closeModal();};
 
 // ================================================================
-// QR SVG GENERATOR
+// QR SVG — menggunakan qrcode-generator (QR nyata, bisa di-scan)
 // ================================================================
-function buildQRMatrix(text){
-  const S=25;
-  let seed=Math.abs([...text].reduce((a,c)=>(a*31+c.charCodeAt(0))&0x7fffffff,0));
-  function inFinder(r,c){return(r<7&&c<7)||(r<7&&c>=S-7)||(r>=S-7&&c<7)}
-  function finderBit(r,c){
-    function dot(br,bc){const lr=r-br,lc=c-bc;if(lr===0||lr===6||lc===0||lc===6)return 1;if(lr>=2&&lr<=4&&lc>=2&&lc<=4)return 1;return 0}
-    if(r<7&&c<7)return dot(0,0);if(r<7&&c>=S-7)return dot(0,S-7);if(r>=S-7&&c<7)return dot(S-7,0);return 0;
-  }
-  const m=[];
-  for(let r=0;r<S;r++){const row=[];for(let c=0;c<S;c++){
-    if(inFinder(r,c)){row.push(finderBit(r,c))}
-    else if(r===6||c===6){row.push((r+c)%2===0?1:0)}
-    else{seed=(seed*1664525+1013904223)&0x7fffffff;row.push((seed>>14)&1)}
-  }m.push(row)}
-  return m;
-}
 function qrSVG(text,sz){
   sz=sz||80;
-  const m=buildQRMatrix(text),cell=sz/25;
-  let rects='';
-  m.forEach((row,r)=>row.forEach((v,c)=>{if(v)rects+=`<rect x="${c*cell}" y="${r*cell}" width="${cell}" height="${cell}"/>` }));
-  return `<svg width="${sz}" height="${sz}" style="display:block;image-rendering:pixelated;border-radius:4px"><rect width="${sz}" height="${sz}" fill="white"/><g fill="#1e293b">${rects}</g></svg>`;
+  try{
+    // qrcode-generator: typeNumber=0 (auto), errorCorrectionLevel='M'
+    const qr=qrcode(0,'M');
+    qr.addData(text);
+    qr.make();
+    const mc=qr.getModuleCount();
+    const cell=sz/mc;
+    let rects='';
+    for(let r=0;r<mc;r++){
+      for(let c=0;c<mc;c++){
+        if(qr.isDark(r,c)){
+          rects+=`<rect x="${(c*cell).toFixed(2)}" y="${(r*cell).toFixed(2)}" width="${cell.toFixed(2)}" height="${cell.toFixed(2)}"/>`;
+        }
+      }
+    }
+    return `<svg width="${sz}" height="${sz}" style="display:block;border-radius:4px" viewBox="0 0 ${sz} ${sz}"><rect width="${sz}" height="${sz}" fill="white"/><g fill="#1e293b">${rects}</g></svg>`;
+  }catch(e){
+    // Fallback jika library belum load
+    return `<svg width="${sz}" height="${sz}" style="display:block;border-radius:4px"><rect width="${sz}" height="${sz}" fill="#f1f5f9"/><text x="${sz/2}" y="${sz/2+4}" text-anchor="middle" font-size="9" fill="#94a3b8" font-family="monospace">QR</text></svg>`;
+  }
 }
 
 // ================================================================
-// BARCODE SVG
+// BARCODE SVG — Code 39 (standar industri, bisa di-scan)
+// Mendukung: A-Z, 0-9, - . SPACE $ / + %
+// Kode kupon QRB-XXXXX-XXX valid untuk Code 39
 // ================================================================
 function barcodeSVG(text,w,h){
   w=w||240;h=h||44;
-  const bw=Math.max((w-12)/(text.length*9.5+4),.8);
-  let bars='',x=6;
-  for(let i=0;i<text.length;i++){
-    const code=text.charCodeAt(i);
-    for(let b=7;b>=0;b--){if((code>>b)&1)bars+=`<rect x="${x}" y="4" width="${Math.max(bw*1.2,.8)}" height="${h-8}"/>`;x+=bw*1.4}
-    x+=bw*.5;
+  // Pola Code 39: 9 bit, alternating bar/space, 0=narrow, 1=wide
+  const C39={
+    '0':'000110100','1':'100100001','2':'001100001','3':'101100000',
+    '4':'000110001','5':'100110000','6':'001110000','7':'000100101',
+    '8':'100100100','9':'001100100','A':'100001001','B':'001001001',
+    'C':'101001000','D':'000011001','E':'100011000','F':'001011000',
+    'G':'000001101','H':'100001100','I':'001001100','J':'000011100',
+    'K':'100000011','L':'001000011','M':'101000010','N':'000010011',
+    'O':'100010010','P':'001010010','Q':'000000111','R':'100000110',
+    'S':'001000110','T':'000010110','U':'110000001','V':'011000001',
+    'W':'111000000','X':'010010001','Y':'110010000','Z':'011010000',
+    '-':'010000101','.':'110000100',' ':'011000100','$':'010101000',
+    '/':'010100010','+':'010001010','%':'000101010','*':'010010100'
+  };
+  const str=('*'+text.toUpperCase()+'*');
+  // Validasi: pastikan semua karakter ada di C39
+  for(const ch of str){if(!C39[ch])return _barcodeFallback(text,w,h);}
+  // Hitung total unit: narrow=1, wide=3; antar karakter ada 1 unit gap
+  let totalUnits=0;
+  for(const ch of str){
+    totalUnits+=[...C39[ch]].reduce((s,b)=>s+(b==='1'?3:1),0)+1; // +1 inter-char gap
+  }
+  totalUnits--; // tidak ada gap setelah karakter terakhir
+  const unit=(w-12)/totalUnits;
+  let x=6,bars='';
+  for(let i=0;i<str.length;i++){
+    const pat=C39[str[i]];
+    let isBar=true;
+    for(const bit of pat){
+      const bw=bit==='1'?unit*3:unit;
+      if(isBar)bars+=`<rect x="${x.toFixed(2)}" y="4" width="${Math.max(bw,0.5).toFixed(2)}" height="${h-8}"/>`;
+      x+=bw;isBar=!isBar;
+    }
+    if(i<str.length-1)x+=unit; // inter-character gap
   }
   return `<svg width="${w}" height="${h}" style="display:block"><rect width="${w}" height="${h}" fill="white" rx="3"/><g fill="#1e293b">${bars}</g></svg>`;
+}
+
+function _barcodeFallback(text,w,h){
+  // Jika ada karakter yang tidak valid untuk Code 39, tampilkan teks saja
+  return `<svg width="${w}" height="${h}" style="display:block"><rect width="${w}" height="${h}" fill="#f8fafc" rx="3"/><text x="${w/2}" y="${h/2+5}" text-anchor="middle" font-size="13" font-family="monospace" font-weight="700" fill="#1e293b">${text}</text></svg>`;
 }
 
 // ================================================================
