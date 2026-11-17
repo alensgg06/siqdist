@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>SINAR TERAKHIR — Arena Orbit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root { --cy: #5ff2ff; --or: #ff8a3c; --ink: #04080c; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: #020406; overflow: hidden; color: #e6f7ff;
+    font-family: 'Rajdhani', 'Segoe UI', system-ui, sans-serif; -webkit-user-select: none; user-select: none;
+    touch-action: none; }
+  canvas#gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  .playing canvas#gl { cursor: none; }
+
+  /* letterbox bars for the cinematic title */
+  .bar { position: fixed; left: 0; right: 0; height: 9vh; background: #000; z-index: 4;
+    transition: transform .9s cubic-bezier(.7,0,.2,1); pointer-events: none; }
+  .bar.top { top: 0; } .bar.bot { bottom: 0; }
+  .playing .bar.top { transform: translateY(-100%); }
+  .playing .bar.bot { transform: translateY(100%); }
+
+  #hud { position: fixed; inset: 0; z-index: 5; pointer-events: none; opacity: 0; transition: opacity .6s; }
+  .playing #hud { opacity: 1; }
+  .panel { position: absolute; text-shadow: 0 0 12px rgba(95,242,255,.45); }
+  .label { font-size: 12px; letter-spacing: .32em; opacity: .65; font-weight: 600; }
+  #vitals { left: max(22px, 3vw); bottom: max(22px, 4vh); width: min(340px, 44vw); }
+  .track { position: relative; height: 12px; margin-top: 6px; background: rgba(8,20,28,.7);
+    border: 1px solid rgba(95,242,255,.35); transform: skewX(-18deg); overflow: hidden; }
+  .fill { position: absolute; inset: 0; transform-origin: left; background: linear-gradient(90deg, #19c8e6, #9ffcff);
+    box-shadow: 0 0 14px #37e6ff; transition: transform .12s linear; }
+  #hpFill.low { background: linear-gradient(90deg, #ff3b2f, #ff9a5c); box-shadow: 0 0 14px #ff5a3c; }
+  .track.thin { height: 5px; margin-top: 7px; border-color: rgba(255,255,255,.2); }
+  #dashFill { background: linear-gradient(90deg, #ffb347, #ffe9a8); box-shadow: 0 0 10px #ffb347; transition: none; }
+  #hpNum { font-size: 34px; font-weight: 700; line-height: 1; letter-spacing: .04em; }
+  #hpNum small { font-size: 14px; opacity: .55; letter-spacing: .2em; margin-left: 6px; }
+  #power { margin-top: 8px; font-size: 13px; letter-spacing: .28em; color: #ffd76a; text-shadow: 0 0 12px #ffb300;
+    opacity: 0; transition: opacity .2s; font-weight: 700; }
+  #scoreBox { right: max(22px, 3vw); top: max(18px, 3vh); text-align: right; }
+  #score { font-size: 40px; font-weight: 700; line-height: 1; letter-spacing: .05em; font-variant-numeric: tabular-nums; }
+  #combo { margin-top: 4px; font-size: 18px; font-weight: 700; color: var(--or); letter-spacing: .15em;
+    text-shadow: 0 0 14px rgba(255,138,60,.8); opacity: 0; transition: opacity .25s; }
+  #waveBox { left: max(22px, 3vw); top: max(18px, 3vh); }
+  #wave { font-size: 30px; font-weight: 700; line-height: 1; letter-spacing: .08em; }
+  #foes { font-size: 13px; letter-spacing: .25em; opacity: .7; margin-top: 4px; }
+  #banner { left: 0; right: 0; top: 26vh; text-align: center; font-size: clamp(30px, 6vw, 76px); font-weight: 700;
+    letter-spacing: .5em; padding-left: .5em; opacity: 0; }
+  #banner small { display: block; font-size: .28em; letter-spacing: .6em; opacity: .8; color: var(--or); margin-top: .5em; }
+  #banner.show { animation: banner 2.4s cubic-bezier(.2,.7,.2,1) forwards; }
+  @keyframes banner { 0% { opacity: 0; letter-spacing: 1.1em; filter: blur(8px); }
+    18% { opacity: 1; letter-spacing: .5em; filter: blur(0); } 75% { opacity: 1; } 100% { opacity: 0; letter-spacing: .42em; } }
+
+  #cross { position: fixed; left: 0; top: 0; width: 34px; height: 34px; margin: -17px 0 0 -17px; z-index: 6;
+    pointer-events: none; opacity: 0; will-change: transform; }
+  .playing #cross { opacity: 1; }
+  .touch #cross { display: none; }
+  #cross i { position: absolute; inset: 0; border: 1.5px solid rgba(160,250,255,.9); border-radius: 50%;
+    box-shadow: 0 0 10px rgba(95,242,255,.8), inset 0 0 6px rgba(95,242,255,.5); transition: transform .08s; }
+  #cross b { position: absolute; left: 50%; top: 50%; width: 3px; height: 3px; margin: -1.5px; background: #fff; border-radius: 50%; }
+  #cross.hit i { transform: scale(.62) rotate(45deg); border-color: #ffb37a; }
+
+  .screen { position: fixed; inset: 0; z-index: 8; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; text-align: center; transition: opacity .7s; padding: 12vh 6vw; }
+  .screen.hidden { opacity: 0; pointer-events: none; }
+  #title { background: radial-gradient(ellipse at 50% 60%, rgba(0,0,0,0) 30%, rgba(0,0,0,.55) 100%); }
+  h1 { font-size: clamp(40px, 9.5vw, 132px); font-weight: 700; letter-spacing: .26em; padding-left: .26em; line-height: .95;
+    background: linear-gradient(180deg, #fff 20%, #8ff6ff 55%, #1f8fb0 100%); -webkit-background-clip: text;
+    background-clip: text; color: transparent; filter: drop-shadow(0 0 28px rgba(60,220,255,.45)); }
+  .sub { margin-top: 18px; font-size: clamp(12px, 1.5vw, 17px); letter-spacing: .7em; padding-left: .7em; color: var(--or);
+    text-shadow: 0 0 16px rgba(255,138,60,.7); font-weight: 600; }
+  button.go { margin-top: 6vh; pointer-events: auto; font: inherit; font-size: 19px; font-weight: 700; letter-spacing: .5em;
+    padding: 15px 44px 15px 52px; color: #eaffff; background: rgba(10,40,52,.55); border: 1px solid rgba(95,242,255,.7);
+    transform: skewX(-14deg); cursor: pointer; box-shadow: 0 0 26px rgba(40,200,240,.35), inset 0 0 18px rgba(40,200,240,.2);
+    transition: background .2s, box-shadow .2s; backdrop-filter: blur(4px); }
+  button.go:hover { background: rgba(40,170,205,.5); box-shadow: 0 0 44px rgba(60,220,255,.7), inset 0 0 22px rgba(95,242,255,.4); }
+  .keys { margin-top: 4vh; font-size: 14px; letter-spacing: .2em; opacity: .7; line-height: 2; }
+  .keys kbd { font: inherit; font-weight: 700; padding: 2px 8px; border: 1px solid rgba(255,255,255,.35); margin: 0 3px; color: #fff; }
+  #over, #pause { background: rgba(2,6,10,.62); backdrop-filter: blur(5px); }
+  #over h2, #pause h2 { font-size: clamp(34px, 7vw, 92px); letter-spacing: .34em; padding-left: .34em; font-weight: 700; }
+  #over h2 { color: #ff7a4a; text-shadow: 0 0 34px rgba(255,90,40,.7); }
+  .stats { margin-top: 3vh; font-size: 20px; letter-spacing: .28em; line-height: 1.9; }
+  .stats b { color: var(--cy); font-size: 1.5em; margin-left: .4em; font-variant-numeric: tabular-nums; }
+  #best { color: #ffd76a; }
+  #err { position: fixed; inset: 0; z-index: 20; display: none; align-items: center; justify-content: center; padding: 8vw;
+    background: #05090d; font-size: 18px; letter-spacing: .08em; text-align: center; line-height: 1.7; }
+
+  /* touch controls */
+  #touchUI { display: none; }
+  .touch.playing #touchUI { display: block; }
+  .stick { position: fixed; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; z-index: 7;
+    border: 1.5px solid rgba(95,242,255,.4); background: rgba(10,30,40,.25); opacity: 0; pointer-events: none; transition: opacity .15s; }
+  .stick.on { opacity: 1; }
+  .stick i { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px; border-radius: 50%;
+    background: rgba(95,242,255,.45); box-shadow: 0 0 18px rgba(95,242,255,.7); }
+  #stickR { border-color: rgba(255,138,60,.5); } #stickR i { background: rgba(255,138,60,.5); box-shadow: 0 0 18px rgba(255,138,60,.7); }
+  #dashBtn { position: fixed; right: 22px; bottom: 44vh; width: 68px; height: 68px; border-radius: 50%; z-index: 9;
+    border: 1.5px solid rgba(255,215,106,.7); background: rgba(60,40,5,.4); color: #ffe9a8; font: inherit; font-weight: 700;
+    letter-spacing: .1em; font-size: 13px; pointer-events: auto; }
+  .hint { position: fixed; left: 0; right: 0; bottom: 12vh; text-align: center; z-index: 7; font-size: 12px;
+    letter-spacing: .3em; opacity: .45; pointer-events: none; }
+  @media (max-width: 640px) { #score { font-size: 28px; } #wave { font-size: 22px; } #hpNum { font-size: 26px; } .keys { display: none; } }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div class="bar top"></div><div class="bar bot"></div>
+
+<div id="hud">
+  <div class="panel" id="waveBox"><div class="label">GELOMBANG</div><div id="wave">01</div><div id="foes"></div></div>
+  <div class="panel" id="scoreBox"><div class="label">SKOR</div><div id="score">0</div><div id="combo">x2</div></div>
+  <div class="panel" id="banner"></div>
+  <div class="panel" id="vitals">
+    <div id="hpNum">100<small>INTEGRITAS</small></div>
+    <div class="track"><div class="fill" id="hpFill"></div></div>
+    <div class="track thin"><div class="fill" id="dashFill"></div></div>
+    <div id="power">◆ DAYA BERLEBIH</div>
+  </div>
+</div>
+<div id="cross"><i></i><b></b></div>
+
+<div id="touchUI">
+  <div class="stick" id="stickL"><i></i></div>
+  <div class="stick" id="stickR"><i></i></div>
+  <button id="dashBtn">DASH</button>
+  <div class="hint">KIRI: GERAK &nbsp;·&nbsp; KANAN: BIDIK + TEMBAK</div>
+</div>
+
+<div class="screen" id="title">
+  <h1>SINAR<br>TERAKHIR</h1>
+  <div class="sub">PERTAHANKAN ARENA ORBIT</div>
+  <button class="go" id="startBtn">MULAI</button>
+  <div class="keys">
+    <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> gerak &nbsp; <kbd>MOUSE</kbd> bidik &amp; tembak &nbsp; <kbd>SPASI</kbd> dash<br>
+    <kbd>P</kbd> jeda &nbsp; <kbd>M</kbd> suara
+  </div>
+</div>
+<div class="screen hidden" id="pause"><h2>JEDA</h2><button class="go" id="resumeBtn">LANJUT</button></div>
+<div class="screen hidden" id="over">
+  <h2>KAMU GUGUR</h2>
+  <div class="stats">SKOR<b id="finalScore">0</b><br>GELOMBANG<b id="finalWave">1</b><br><span id="best">REKOR<b id="bestScore">0</b></span></div>
+  <button class="go" id="againBtn">MAIN LAGI</button>
+</div>
+<div id="err"></div>
+<script src="game.js"></script>
+</body>
+</html>
