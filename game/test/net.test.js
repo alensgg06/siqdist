@@ -59,7 +59,7 @@ if (!ackOk) fail('server tidak meng-ack input');
 if (!moved) fail('pemain A tidak bergerak');
 console.log(`OK gerak & ack; damage A→B tercatat server: ${a.dmgTo[b.id] || 0}`);
 if (!(a.dmgTo[b.id] > 0)) fail('tidak ada damage tercatat');
-if (!killed) fail('B tidak gugur dalam 40 detik');
+if (!killed) fail(`B tidak gugur di tangan A dalam 40 detik; B gugur oleh: ${JSON.stringify(a.kills.filter(([, v]) => v === b.id))}, A=${a.id}`);
 const row = a.roster.find((r) => r[0] === a.id);
 if (!row || row[3] < 1) fail('skor kill A tidak bertambah di roster');
 // server harus menolak input ngawur tanpa crash
