@@ -68,6 +68,8 @@ const G = {
   ended: false, tm: 0, orbMask: 255, ping: 0, camDist: 7.2, lockId: 0,
   autoFire: store.get('autoFire', isTouch ? '1' : '') === '1', aimAssist: store.get('aimAssist', isTouch ? '1' : '') === '1',
   lastShotTick: new Map(), shake: 0, time: 0,
+  vibrate: store.get('vibrate', '1') === '1', code: null, practice: false, joinErr: '', buzzT: 0,
+  tut: null,
 };
 window.__arkana = G; // dipakai uji otomatis
 
@@ -99,27 +101,54 @@ function serverUrl() {
   return (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
 }
 
-$('play').addEventListener('click', () => {
+const menuBtns = ['play', 'create', 'joinBtn', 'practice'];
+const cleanCode = (v) => String(v || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4);
+{
+  const q = cleanCode(new URLSearchParams(location.search).get('room'));
+  if (q) { $('code').value = q; $('joinBtn').textContent = 'Gabung ' + q; }
+}
+$('code').addEventListener('input', (e) => { e.target.value = cleanCode(e.target.value); $('joinBtn').textContent = 'Gabung'; });
+$('code').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('joinBtn').click(); });
+
+function start(mode, code) {
   initAudio();
   const name = $('name').value.trim() || 'Pengembara';
   store.set('name', name);
-  $('play').disabled = true; $('menuMsg').textContent = 'Menghubungkan ke arena…';
-  if (isTouch) {
+  for (const b of menuBtns) $(b).disabled = true;
+  $('menuMsg').textContent = mode === 'practice' ? 'Menyiapkan arena latihan…' : 'Menghubungkan ke arena…';
+  if (isTouch && !document.fullscreenElement) {
     document.documentElement.requestFullscreen?.().then(() => screen.orientation?.lock?.('landscape').catch(() => {})).catch(() => {});
   }
-  connect(name);
+  connect(name, mode, code);
+}
+// Pertama kali bermain: tombol utama membuka latihan bertutorial dulu (bisa dilewati).
+$('play').addEventListener('click', () => {
+  if (!store.get('tutorDone', '')) { G.tut = newTutorial(); start('practice'); } else start('public');
 });
+$('create').addEventListener('click', () => start('create'));
+$('joinBtn').addEventListener('click', () => {
+  const c = cleanCode($('code').value);
+  if (c.length !== 4) { $('menuMsg').textContent = 'Kode room terdiri dari 4 huruf.'; $('code').focus(); return; }
+  start('join', c);
+});
+$('practice').addEventListener('click', () => { G.tut = newTutorial(); start('practice'); });
 
-function connect(name) {
+function connect(name, mode, code) {
   let ws;
   try { ws = new WebSocket(serverUrl()); } catch { return menuError('Alamat server tidak valid.'); }
-  G.ws = ws;
-  ws.onopen = () => ws.send(JSON.stringify({ t: 'join', name, cls: G.clsKey }));
+  G.ws = ws; G.joinErr = '';
+  ws.onopen = () => ws.send(JSON.stringify({ t: 'join', name, cls: G.clsKey, mode, code }));
   ws.onmessage = (e) => onMessage(JSON.parse(e.data));
-  ws.onclose = () => { if (G.ws === ws) { leaveGame(); menuError(G.phase === 'menu' && !G.myId ? 'Server tidak terjangkau. Coba lagi.' : 'Koneksi terputus.'); G.myId = 0; } };
+  ws.onclose = () => {
+    if (G.ws !== ws) return;
+    const wasIn = !!G.myId;
+    leaveGame();
+    menuError(G.joinErr || (wasIn ? 'Koneksi terputus.' : 'Server tidak terjangkau. Coba lagi.'));
+    G.myId = 0;
+  };
   ws.onerror = () => {};
 }
-function menuError(msg) { $('menuMsg').textContent = msg; $('play').disabled = false; }
+function menuError(msg) { $('menuMsg').textContent = msg; for (const b of menuBtns) $(b).disabled = false; }
 
 function leaveGame() {
   const ws = G.ws; G.ws = null;
@@ -130,7 +159,8 @@ function leaveGame() {
   G.phase = 'menu'; input.enabled = false; input.reset?.();
   document.exitPointerLock?.();
   $('hud').classList.add('hidden'); $('menu').classList.remove('hidden');
-  $('play').disabled = false;
+  $('tutor').classList.add('hidden'); $('hitDir').textContent = '';
+  for (const b of menuBtns) $(b).disabled = false;
 }
 
 // ---------- jaringan ----------
@@ -143,7 +173,14 @@ function onMessage(m) {
     $('skillName').textContent = G.cls.skillName;
     $('death').classList.add('hidden'); $('score').classList.add('hidden'); $('pause').classList.add('hidden');
     input.enabled = true;
-    toast('Pertarungan dimulai');
+    G.code = m.code || null; G.practice = !!m.practice;
+    const pill = $('roomPill');
+    pill.classList.toggle('hidden', !G.code && !G.practice);
+    pill.textContent = G.code ? `Room ${G.code} ⤴` : 'Latihan';
+    if (G.practice && G.tut) { G.tut.show(); } else { G.tut = null; $('tutor').classList.add('hidden'); }
+    if (!G.practice || !G.tut) toast(G.code ? `Room ${G.code}: ketuk kode untuk membagikan` : G.practice ? 'Arena latihan' : 'Pertarungan dimulai');
+  } else if (m.t === 'e') {
+    G.joinErr = m.m;
   } else if (m.t === 'r') {
     G.roster.clear();
     for (const [id, name, cls, kills, deaths, bot] of m.l) G.roster.set(id, { id, name, cls, kills, deaths, bot });
@@ -152,6 +189,72 @@ function onMessage(m) {
   else if (m.t === 'pg') G.ping = Math.round(performance.now() - m.c);
 }
 setInterval(() => { if (G.ws?.readyState === 1) G.ws.send(JSON.stringify({ t: 'pg', c: performance.now() })); }, 2000);
+// laporan untuk catatan pertandingan di server (ping dan fps), hanya saat bermain dan tab terlihat
+setInterval(() => { if (G.ws?.readyState === 1 && G.myId && !document.hidden && G.ping > 0) G.ws.send(JSON.stringify({ t: 'st', p: G.ping, f: fpsShown })); }, 5000);
+
+function buzz(pattern) {
+  if (!G.vibrate || !navigator.vibrate) return;
+  try { navigator.vibrate(pattern); } catch { /* tidak didukung */ }
+}
+
+// Busur merah di tepi lingkaran tengah, menunjuk ke arah penyerang relatif terhadap arah pandang.
+function hitArc(ax, az) {
+  const wrap = $('hitDir');
+  while (wrap.children.length >= 4) wrap.firstChild.remove();
+  const rel = angDiff(Math.atan2(ax - G.rx, az - G.rz), input.yaw);
+  const R = Math.min(innerWidth, innerHeight) * 0.38, w = R * 0.95, h = R * 0.3;
+  const a = document.createElement('div');
+  a.className = 'arc';
+  a.style.cssText = `width:${w}px;height:${h}px;left:${-w / 2}px;top:${-R}px;transform-origin:${w / 2}px ${R}px;transform:rotate(${(-rel * 180) / Math.PI}deg)`;
+  a.addEventListener('animationend', () => a.remove());
+  wrap.appendChild(a);
+}
+
+// ---------- tutorial ----------
+function newTutorial() {
+  const T = { i: 0, moved: 0, turned: 0, shots: 0, skills: 0, kills: 0, lastYaw: null, done: false };
+  const steps = () => [
+    [isTouch ? 'Geser jempol kiri untuk berjalan.' : 'Tekan W A S D untuk berjalan.', () => T.moved > 8],
+    [isTouch ? 'Geser jari di sisi kanan layar untuk memutar arah bidikan.' : 'Klik layar, lalu gerakkan mouse untuk membidik.', () => T.turned > 1.6],
+    [isTouch ? 'Tahan tombol merah untuk menembak.' : 'Klik kiri untuk menembak.', () => T.shots >= 5],
+    [`${isTouch ? 'Ketuk tombol ungu' : 'Tekan Spasi'} untuk skill ${G.cls?.skillName || ''}. Skill punya waktu jeda.`, () => T.skills >= 1],
+    ['Tumbangkan satu bot boneka. Mereka tidak menyerang balik.', () => T.kills >= 1],
+  ];
+  T.show = () => { $('tutor').classList.remove('hidden'); T.render(); };
+  T.render = () => {
+    const st = steps();
+    $('tutorDots').innerHTML = st.map((_, k) => `<i class="${k < T.i ? 'on' : k === T.i && !T.done ? 'now' : ''}"></i>`).join('');
+    $('tutorText').textContent = T.done ? 'Siap. Di arena sungguhan lawan menyerang balik; pertama mencapai 20 kill menang.' : `${T.i + 1}/${st.length} · ${st[T.i][0]}`;
+    $('tutorGo').classList.toggle('hidden', !T.done);
+    $('tutorSkip').textContent = T.done ? 'Tetap berlatih' : 'Lewati latihan';
+  };
+  T.check = () => {
+    if (T.done) return;
+    const st = steps();
+    if (st[T.i][1]()) {
+      T.i++; sfx('orb'); buzz(30);
+      if (T.i >= st.length) { T.done = true; store.set('tutorDone', '1'); sfx('level'); }
+      T.render();
+    }
+  };
+  return T;
+}
+$('tutorSkip').addEventListener('click', () => {
+  store.set('tutorDone', '1');
+  if (G.tut?.done) { $('tutor').classList.add('hidden'); G.tut = null; return; }
+  G.tut = null; leaveGame(); start('public');
+});
+$('tutorGo').addEventListener('click', () => { G.tut = null; leaveGame(); start('public'); });
+for (const ev of ['touchstart', 'touchmove']) $('tutor').addEventListener(ev, (e) => e.stopPropagation());
+
+$('roomPill').addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (!G.code) return;
+  const link = `${location.origin}${location.pathname}?room=${G.code}`;
+  const done = () => toast(`Tautan room ${G.code} disalin`);
+  const fallback = () => toast(`Kode room: ${G.code}`);
+  try { navigator.clipboard.writeText(link).then(done, fallback); } catch { fallback(); }
+});
 
 function getPlayer(id) {
   let p = G.players.get(id);
@@ -221,7 +324,12 @@ function onEvent(e) {
     }
     case 'd': {
       const mine = e[1] === G.myId;
-      if (mine) { $('vignette').style.opacity = 0.75; setTimeout(() => { $('vignette').style.opacity = 0; }, 160); sfx('hurt'); G.shake = Math.max(G.shake, 0.35); }
+      if (mine) {
+        $('vignette').style.opacity = 0.75; setTimeout(() => { $('vignette').style.opacity = 0; }, 160); sfx('hurt'); G.shake = Math.max(G.shake, 0.35);
+        const att = e[2] && e[2] !== G.myId ? G.players.get(e[2]) : null;
+        if (att) { hitArc(att.x, att.z); G.arcN = (G.arcN || 0) + 1; }
+        if (G.time - G.buzzT > 0.12) { G.buzzT = G.time; buzz(35); }
+      }
       if (e[2] === G.myId && !mine) { const c = $('cross'); c.classList.remove('hit'); void c.offsetWidth; c.classList.add('hit'); sfx('hit'); }
       if (mine || e[2] === G.myId) dmgNumber(e[4], e[5], e[3], mine);
       fx.burst(e[4], 1.5, e[5], 0xff4b3a, 5, 4, 0.7, 0.3);
@@ -237,9 +345,9 @@ function onEvent(e) {
       setTimeout(() => div.remove(), 5000);
       const v = G.players.get(e[2]);
       if (v) fx.burst(v.x, 1.4, v.z, CLASSES[v.cls].color, 40, 8, 1.4, 0.9);
-      if (e[1] === G.myId && e[2] !== G.myId) { sfx('kill'); toast('Lawan tumbang'); }
+      if (e[1] === G.myId && e[2] !== G.myId) { sfx('kill'); toast('Lawan tumbang'); buzz([40, 40, 70]); if (G.tut) { G.tut.kills++; G.tut.check(); } }
       if (e[2] === G.myId) {
-        sfx('death'); input.fire = false;
+        sfx('death'); buzz(250); input.fire = false;
         $('deathBy').textContent = `Dikalahkan oleh ${nameOf(e[1])}`; $('death').classList.remove('hidden');
       }
       break;
@@ -322,6 +430,8 @@ $('autoFire').checked = G.autoFire; $('aimAssist').checked = G.aimAssist;
 $('autoFire').addEventListener('change', (e) => { G.autoFire = e.target.checked; store.set('autoFire', G.autoFire ? '1' : ''); });
 $('aimAssist').addEventListener('change', (e) => { G.aimAssist = e.target.checked; store.set('aimAssist', G.aimAssist ? '1' : ''); });
 $('mute').addEventListener('change', (e) => setMuted(e.target.checked));
+$('vibrate').checked = G.vibrate;
+$('vibrate').addEventListener('change', (e) => { G.vibrate = e.target.checked; store.set('vibrate', G.vibrate ? '1' : ''); if (G.vibrate) buzz(40); });
 for (const el of [pauseEl]) for (const ev of ['touchstart', 'touchmove']) el.addEventListener(ev, (e) => e.stopPropagation());
 
 // minimap
@@ -393,10 +503,21 @@ function fixedTick() {
   G.pending.push(inp);
   if (G.pending.length > 90) G.pending.shift();
   const mine = G.players.get(G.myId);
+  if (G.tut && !G.tut.done) {
+    const T = G.tut;
+    const step = Math.hypot(G.pred.x - (T.px ?? G.pred.x), G.pred.z - (T.pz ?? G.pred.z));
+    if (step < 2) T.moved += step; // abaikan lompatan posisi saat spawn/rekonsiliasi
+    T.px = G.pred.x; T.pz = G.pred.z;
+    if (T.lastYaw !== null && T.i >= 1) T.turned += Math.abs(angDiff(input.yaw, T.lastYaw));
+    T.lastYaw = input.yaw;
+    if (skillFired) T.skills++;
+    T.check();
+  }
   if (skillFired) { sfx(G.cls.skill); if (G.cls.skill === 'dash' && mine) fx.burst(G.rx, 1.2, G.rz, G.cls.color, 24, 5, 1.2, 0.4, 0); }
   G.localFireCd -= DT;
   if (inp.f && G.localFireCd <= 0 && mine) {
     G.localFireCd = G.cls.fireCd;
+    if (G.tut) G.tut.shots++;
     mine.av.fireKick(); fx.muzzle(mine.av.tipWorld(tmpV), G.clsKey, input.yaw); sfx(G.clsKey);
     G.shake = Math.max(G.shake, G.clsKey === 'ranger' ? 0.08 : 0.22);
   }

@@ -93,6 +93,25 @@ sebagai bawaan; pemain bisa menggantinya lewat tombol Kembali > "Ganti server".
 Simpan file kunci tanda tangan (`~/.arkana/arkana.jks`): versi baru hanya bisa menimpa
 versi lama bila ditandatangani kunci yang sama.
 
+## Bermain bersama teman
+
+- **Room privat**: di menu, *Buat room privat*. Kode 4 huruf muncul di atas layar; ketuk untuk
+  menyalin tautan `…/?room=KODE`, atau sebutkan kodenya. Teman mengisi kode lalu *Gabung*.
+  Room privat tidak pernah dimasuki pemain dari tombol *Masuk Arena*.
+- **Latihan**: pemain baru otomatis masuk latihan bertutorial (5 langkah, bot boneka tidak
+  menyerang). Bisa dilewati, dan bisa diulang dari *Latihan dan tutorial* di menu.
+
+## Catatan pertandingan
+
+Setiap ronde publik atau privat yang selesai dicatat satu baris di `data/matches.jsonl`
+(nama, kelas, kill, gugur, damage, level, rata-rata ping dan fps per pemain, siapa yang keluar
+di tengah). Ronde latihan tidak dicatat. Ringkasan keseimbangan kelas:
+
+```bash
+docker compose exec arkana node tools/stats.js     # di dockerlab
+npm run stats                                       # tanpa Docker
+```
+
 ## Kontrol
 
 | | HP | Desktop |

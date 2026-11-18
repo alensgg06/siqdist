@@ -12,6 +12,8 @@ services:
       - "${ARKANA_PORT:-18080}:8080"
     environment:
       - PORT=8080
+    volumes:
+      - arkana-data:/app/data   # catatan pertandingan (matches.jsonl), tetap ada saat image dibangun ulang
     mem_limit: 256m
     logging:
       driver: json-file
@@ -38,3 +40,6 @@ services:
     environment:
       - TUNNEL_TOKEN=${TUNNEL_TOKEN:-}
     depends_on: [arkana]
+
+volumes:
+  arkana-data:

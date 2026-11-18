@@ -118,3 +118,28 @@ body:not(.touch) #skillBtn{display:grid;right:24px;bottom:24px}
   #classes{margin:8px 0}.cls .dot{display:none}.cls small:not(.sk){display:none}
   #minimap{width:80px;height:80px}#fireBtn{width:76px;height:76px}
 }
+
+/* ---------- room, tutorial, arah serangan ---------- */
+#rooms{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin-top:8px}
+.sec{padding:11px 10px;border-radius:9px;border:1px solid var(--line);background:rgba(255,255,255,.06);font-weight:600;font-size:14px;min-height:44px}
+.sec:disabled{opacity:.5}
+.join{display:flex;gap:6px}
+#code{flex:1;min-width:0;width:100%;padding:10px;border-radius:9px;border:1px solid var(--line);background:rgba(0,0,0,.4);color:#fff;font-size:16px;
+  text-align:center;letter-spacing:.25em;text-transform:uppercase;outline:none;-webkit-user-select:text;user-select:text}
+#code:focus{border-color:var(--gold)}
+.link{background:none;color:#cdb9e6;font-size:13px;text-decoration:underline;margin-top:8px;padding:8px;min-height:36px}
+.pill.room{color:var(--gold);cursor:pointer}
+#hitDir{position:absolute;left:50%;top:50%;width:0;height:0}
+.arc{position:absolute;border-top:7px solid rgba(255,70,60,.95);border-radius:50% 50% 0 0/100% 100% 0 0;filter:drop-shadow(0 0 6px rgba(255,40,30,.9));animation:arcfade .9s ease-out forwards}
+@keyframes arcfade{0%{opacity:1}70%{opacity:.8}100%{opacity:0}}
+#tutor{position:absolute;left:50%;top:calc(52px + var(--st));transform:translateX(-50%);width:min(440px,74vw);padding:10px 14px 12px;border-radius:12px;
+  background:rgba(22,13,34,.86);border:1px solid var(--gold);text-align:center;pointer-events:auto;box-shadow:0 8px 30px rgba(0,0,0,.5)}
+#tutorDots{display:flex;justify-content:center;gap:6px;margin-bottom:6px}
+#tutorDots i{width:22px;height:5px;border-radius:3px;background:rgba(255,255,255,.2)}
+#tutorDots i.on{background:var(--gold)}#tutorDots i.now{background:#fff}
+#tutorText{font-size:15px;font-weight:600;line-height:1.35}
+.tbtns{display:flex;gap:8px;justify-content:center;margin-top:8px}
+.tbtns button{padding:8px 14px;border-radius:8px;font-weight:700;font-size:13px;min-height:36px;background:linear-gradient(180deg,#ffdf9a,#e0a23f);color:#2a1606}
+.tbtns button.ghost{background:transparent;border:1px solid var(--line);color:#f4e9d8}
+@media (max-height:430px){#tutor{top:calc(44px + var(--st));padding:7px 12px 9px}#tutorText{font-size:13.5px}#rooms{margin-top:6px}.link{margin-top:2px}}
+@media (prefers-reduced-motion:reduce){.arc{animation-duration:1.2s}}

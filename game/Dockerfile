@@ -6,6 +6,7 @@ RUN npm ci --ignore-scripts
 COPY shared ./shared
 COPY client ./client
 COPY server ./server
+COPY tools ./tools
 RUN npm run build && npm prune --omit=dev
 
 # Tahap jalan: image kecil, tanpa root
@@ -16,8 +17,12 @@ COPY --from=build /app/package.json ./
 COPY --from=build /app/node_modules/ws ./node_modules/ws
 COPY --from=build /app/shared ./shared
 COPY --from=build /app/server ./server
+COPY --from=build /app/tools ./tools
 COPY --from=build /app/client/index.html /app/client/style.css ./client/
 COPY --from=build /app/client/dist ./client/dist
+# folder catatan pertandingan; volume bernama mewarisi pemilik ini saat pertama dibuat
+RUN mkdir -p /app/data && chown node:node /app/data
+ENV DATA_DIR=/app/data
 USER node
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --retries=3 \

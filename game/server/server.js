@@ -1,6 +1,7 @@
 // Server otoritatif: semua gerak, tembakan, damage, dan skor dihitung di sini.
 import http from 'node:http';
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
@@ -15,6 +16,24 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'clie
 const PORT = Number(process.env.PORT) || 8080;
 const LIMIT = Number(process.env.KILL_LIMIT) || KILL_LIMIT;       // bisa diubah untuk uji
 const END_T = Number(process.env.END_TIME) || END_TIME;
+const DATA_DIR = process.env.DATA_DIR || path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'data');
+const PRACTICE_BOTS = 2;
+const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // tanpa I dan O agar tidak tertukar dengan 1 dan 0
+
+// Catatan pertandingan: satu baris JSON per ronde selesai. Gagal menulis tidak boleh menjatuhkan server.
+function logMatch(rec) {
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.appendFileSync(path.join(DATA_DIR, 'matches.jsonl'), JSON.stringify(rec) + '\n');
+  } catch (err) { console.error('gagal mencatat pertandingan:', err.message); }
+}
+function newCode() {
+  for (;;) {
+    let c = '';
+    for (let i = 0; i < 4; i++) c += CODE_CHARS[crypto.randomInt(CODE_CHARS.length)];
+    if (!rooms.some((r) => r.code === c)) return c;
+  }
+}
 const BOT_NAMES = ['Raka', 'Sura', 'Wira', 'Laksmi', 'Bayu', 'Kirana', 'Jaya', 'Dewangga', 'Sekar', 'Gendis'];
 const r2 = (v) => Math.round(v * 100) / 100;
 
@@ -22,7 +41,11 @@ const WAYPOINTS = [];
 for (let x = -40; x <= 40; x += 8) for (let z = -40; z <= 40; z += 8) if (!blocked(x, z, 1.5)) WAYPOINTS.push([x, z]);
 
 class Room {
-  constructor() {
+  constructor(opts = {}) {
+    this.code = opts.code || null;          // room privat: hanya bisa dimasuki dengan kode
+    this.practice = !!opts.practice;        // room latihan: satu pemain, bot boneka tidak menyerang
+    this.startedAt = Date.now();
+    this.left = [];                          // pemain manusia yang keluar di tengah ronde
     this.players = new Map();
     this.projs = [];
     this.events = [];
@@ -42,7 +65,8 @@ class Room {
     const p = {
       id: this.nextId++, name, clsKey, cls, bot: !ws, ws,
       x: 0, z: 0, yaw: 0, dashT: 0, dx: 0, dz: 0, skillCd: 0,
-      hp: cls.hp, maxHp: cls.hp, lvl: 1, xp: 0, kills: 0, deaths: 0,
+      hp: cls.hp, maxHp: cls.hp, lvl: 1, xp: 0, kills: 0, deaths: 0, dmg: 0,
+      pingSum: 0, pingN: 0, fpsSum: 0, fpsN: 0, joinedAt: Date.now(),
       dead: false, respawnT: 0, fireCd: 0, shieldT: 0, protT: 0, hurtT: 99,
       queue: [], last: { s: 0, mx: 0, mz: 0, y: 0, f: 0, k: 0 }, ack: 0,
       ai: { tgt: 0, retT: 0, err: 0, errT: 0, strT: 0, strDir: 1, wp: null, stuckT: 0, lx: 0, lz: 0 },
@@ -54,6 +78,7 @@ class Room {
   }
 
   removePlayer(p) {
+    if (!p.bot && this.state === 'play' && !this.practice) this.left.push(this.playerRecord(p));
     this.players.delete(p.id);
     this.rosterDirty = true;
   }
@@ -61,7 +86,7 @@ class Room {
   balanceBots() {
     const humans = this.humans();
     let bots = this.players.size - humans;
-    const want = humans === 0 ? 0 : Math.max(0, BOT_FILL - humans);
+    const want = humans === 0 ? 0 : this.practice ? PRACTICE_BOTS : Math.max(0, BOT_FILL - humans);
     while (bots < want) {
       const used = new Set([...this.players.values()].map((p) => p.name));
       const name = BOT_NAMES.find((n) => !used.has(n)) || 'Bot' + this.nextId;
@@ -76,7 +101,28 @@ class Room {
     }
   }
 
+  // Di room latihan bot boneka muncul 9-15 langkah dari pemain, di tempat terbuka dan terlihat langsung.
+  practiceSpot(p) {
+    const h = [...this.players.values()].find((q) => !q.bot && !q.dead && q !== p);
+    if (!h) return null;
+    for (let i = 0; i < 60; i++) {
+      const a = h.yaw + (Math.random() - 0.5) * 1.6, d = 9 + Math.random() * 6;
+      const x = h.x + Math.sin(a) * d, z = h.z + Math.cos(a) * d;
+      if (!blocked(x, z, 1.4) && los(h.x, h.z, x, z)) return { x, z };
+    }
+    return null;
+  }
+
   spawn(p) {
+    const near = this.practice && p.bot ? this.practiceSpot(p) : null;
+    if (near) {
+      p.x = near.x; p.z = near.z; p.yaw = 0;
+      p.dashT = 0; p.skillCd = 0; p.fireCd = 0.3; p.shieldT = 0;
+      p.maxHp = levelHp(p.cls, p.lvl); p.hp = p.maxHp;
+      p.dead = false; p.protT = 0; p.hurtT = 99; p.ai.wp = null; p.ai.tgt = 0;
+      this.events.push(['r', p.id, r2(p.x), r2(p.z)]);
+      return;
+    }
     const scored = SPAWNS.map(([x, z]) => {
       let min = 1e9;
       for (const q of this.players.values()) {
@@ -110,6 +156,7 @@ class Room {
     if (t.shieldT > 0) amount *= 0.3;
     amount = Math.max(1, Math.round(amount));
     t.hp -= amount; t.hurtT = 0;
+    if (att && att !== t) att.dmg += amount;
     this.events.push(['d', t.id, att ? att.id : 0, amount, r2(t.x), r2(t.z)]);
     if (att && att !== t) this.addXp(att, amount * 0.5);
     if (t.hp <= 0) {
@@ -121,17 +168,36 @@ class Room {
     }
   }
 
+  playerRecord(p) {
+    return {
+      name: p.name, cls: p.clsKey, bot: p.bot, kills: p.kills, deaths: p.deaths, dmg: p.dmg, lvl: p.lvl,
+      ping: p.pingN ? Math.round(p.pingSum / p.pingN) : null, fps: p.fpsN ? Math.round(p.fpsSum / p.fpsN) : null,
+      secs: Math.round((Date.now() - p.joinedAt) / 1000),
+    };
+  }
+
   endMatch() {
     if (this.state === 'end') return;
+    if (!this.practice && this.humans() > 0) {
+      const ps = [...this.players.values()].map((p) => this.playerRecord(p));
+      const win = ps.slice().sort((a, b) => b.kills - a.kills)[0];
+      logMatch({
+        at: new Date().toISOString(), room: this.code ? 'privat' : 'publik',
+        secs: Math.round((Date.now() - this.startedAt) / 1000), winner: win ? win.name : null,
+        players: ps, left: this.left,
+      });
+    }
     this.state = 'end'; this.endT = END_T; // proyektil dibersihkan di tick(), bukan di tengah iterasi
     this.rosterDirty = true;
   }
 
   resetMatch() {
     this.state = 'play'; this.timeLeft = MATCH_TIME; this.projs.length = 0;
+    this.startedAt = Date.now(); this.left = [];
     this.orbT.fill(0);
     for (const p of this.players.values()) {
-      p.kills = 0; p.deaths = 0; p.xp = 0; p.lvl = 1;
+      p.kills = 0; p.deaths = 0; p.xp = 0; p.lvl = 1; p.dmg = 0;
+      p.pingSum = p.pingN = p.fpsSum = p.fpsN = 0; p.joinedAt = Date.now();
       this.spawn(p);
     }
     this.rosterDirty = true;
@@ -220,6 +286,7 @@ class Room {
       if (p.clsKey === 'ranger' && p.hurtT < 0.2 && Math.random() < 0.15) k = 1;
       if (p.clsKey === 'mage' && d < NOVA_R - 1.5) k = 1;
       if (p.clsKey === 'guardian' && p.hp < p.maxHp * 0.5 && p.hurtT < 0.5) k = 1;
+      if (this.practice) { f = 0; k = 0; mx = -nz * ai.strDir * 0.25; mz = nx * ai.strDir * 0.25; } // bot boneka: bergeser pelan ke samping, tidak menyerang dan tidak kabur
     } else {
       const moved = Math.hypot(p.x - ai.lx, p.z - ai.lz);
       ai.lx = p.x; ai.lz = p.z;
@@ -368,11 +435,24 @@ wss.on('connection', (ws) => {
     if (m.t === 'join' && !me) {
       const clsKey = CLASS_KEYS.includes(m.cls) ? m.cls : 'ranger';
       const name = String(m.name || '').replace(/[^\p{L}\p{N} _\-]/gu, '').trim().slice(0, 14) || 'Pengembara';
-      room = rooms.find((r) => r.humans() < MAX_HUMANS);
-      if (!room) { room = new Room(); rooms.push(room); }
+      const mode = ['public', 'create', 'join', 'practice'].includes(m.mode) ? m.mode : 'public';
+      const fail = (msg) => { ws.send(JSON.stringify({ t: 'e', m: msg })); ws.close(); };
+      if (mode === 'join') {
+        const code = String(m.code || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4);
+        room = rooms.find((r) => r.code === code);
+        if (!room) return fail(`Room ${code || '(kosong)'} tidak ditemukan. Periksa kodenya.`);
+        if (room.humans() >= MAX_HUMANS) { room = null; return fail('Room itu sudah penuh (8 pemain).'); }
+      } else if (mode === 'create') {
+        room = new Room({ code: newCode() }); rooms.push(room);
+      } else if (mode === 'practice') {
+        room = new Room({ practice: true }); rooms.push(room);
+      } else {
+        room = rooms.find((r) => !r.code && !r.practice && r.humans() < MAX_HUMANS);
+        if (!room) { room = new Room(); rooms.push(room); }
+      }
       me = room.addPlayer(name, clsKey, ws);
       room.balanceBots();
-      ws.send(JSON.stringify({ t: 'w', id: me.id, limit: LIMIT }));
+      ws.send(JSON.stringify({ t: 'w', id: me.id, limit: LIMIT, code: room.code, practice: room.practice }));
     } else if (m.t === 'in' && me) {
       if (me.queue.length < 12) {
         me.queue.push({
@@ -380,6 +460,11 @@ wss.on('connection', (ws) => {
           y: num(m.y, -1e4, 1e4), f: m.f ? 1 : 0, k: m.k ? 1 : 0,
         });
       }
+    } else if (m.t === 'st' && me) {
+      // laporan berkala klien untuk catatan pertandingan
+      const pg = num(m.p, 0, 5000), f = num(m.f, 0, 240);
+      if (pg > 0) { me.pingSum += pg; me.pingN++; }
+      if (f > 0) { me.fpsSum += f; me.fpsN++; }
     } else if (m.t === 'pg') {
       ws.send(JSON.stringify({ t: 'pg', c: num(m.c, 0, 1e15) }));
     }
@@ -388,7 +473,7 @@ wss.on('connection', (ws) => {
     if (!room || !me) return;
     room.removePlayer(me);
     room.balanceBots();
-    if (room.humans() === 0) rooms.splice(rooms.indexOf(room), 1);
+    if (room.humans() === 0 && rooms.includes(room)) rooms.splice(rooms.indexOf(room), 1);
   });
   ws.on('error', () => {});
 });
