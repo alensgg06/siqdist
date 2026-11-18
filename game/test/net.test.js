@@ -2,6 +2,7 @@
 // Jalankan server dulu (PORT=8099 node server/server.js), lalu: node test/net.test.js
 import WebSocket from 'ws';
 import { los } from '../shared/sim.js';
+import { navStep } from './nav.js';
 
 const URL = process.env.WS_URL || 'ws://localhost:8099/ws';
 function client(name, cls) {
@@ -35,14 +36,14 @@ const pos = (c, id) => c.snap.p.find((p) => p[0] === id);
 let ackOk = false, moved = false;
 const start = pos(a, a.id).slice(1, 3);
 const t0 = Date.now();
+const nav = {};
 const timer = setInterval(() => {
   const me = pos(a, a.id), tg = pos(a, b.id);
   if (!me || !tg) return;
   const dx = tg[1] - me[1], dz = tg[2] - me[2], d = Math.hypot(dx, dz);
   const clear = los(me[1], me[2], tg[1], tg[2]);
-  // dekati B; bila terhalang tembok, menyamping
-  let mx = d > 6 ? dx / d : 0, mz = d > 6 ? dz / d : 0;
-  if (!clear) { const s = Math.floor((Date.now() - t0) / 2500) % 2 ? 1 : -1; mx = -dz / d * s; mz = dx / d * s; }
+  // dekati B lewat jalur yang memutari penghalang; berhenti dan menembak bila sudah dekat dan terlihat
+  const [mx, mz] = clear && d < 7 ? [0, 0] : navStep(nav, me[1], me[2], tg[1], tg[2]);
   a.ws.send(JSON.stringify({ t: 'in', s: ++a.seq, mx, mz, y: Math.atan2(dx, dz), f: clear ? 1 : 0, k: 0 }));
   b.ws.send(JSON.stringify({ t: 'in', s: ++b.seq, mx: 0, mz: 0, y: 0, f: 0, k: 0 }));
   if (a.snap.a > 0) ackOk = true;
@@ -50,7 +51,7 @@ const timer = setInterval(() => {
 }, 1000 / 30);
 
 let killed = false;
-while (Date.now() - t0 < 40000) {
+while (Date.now() - t0 < 60000) {
   await sleep(200);
   if (a.kills.some(([k, v]) => k === a.id && v === b.id)) { killed = true; break; }
 }
@@ -59,7 +60,7 @@ if (!ackOk) fail('server tidak meng-ack input');
 if (!moved) fail('pemain A tidak bergerak');
 console.log(`OK gerak & ack; damage A→B tercatat server: ${a.dmgTo[b.id] || 0}`);
 if (!(a.dmgTo[b.id] > 0)) fail('tidak ada damage tercatat');
-if (!killed) fail(`B tidak gugur di tangan A dalam 40 detik; B gugur oleh: ${JSON.stringify(a.kills.filter(([, v]) => v === b.id))}, A=${a.id}`);
+if (!killed) fail(`B tidak gugur di tangan A dalam 60 detik; B gugur oleh: ${JSON.stringify(a.kills.filter(([, v]) => v === b.id))}, A=${a.id}`);
 const row = a.roster.find((r) => r[0] === a.id);
 if (!row || row[3] < 1) fail('skor kill A tidak bertambah di roster');
 // server harus menolak input ngawur tanpa crash

@@ -33,3 +33,23 @@ for (const cls of ['ranger', 'mage', 'guardian']) {
   console.log(`${cls.padEnd(10)} ${String(ps.length).padStart(4)}  ${fmt(ps.length ? k / ps.length : null, 1).padStart(9)}  ${fmt(ps.length ? d / ps.length : null, 1).padStart(10)}  ${fmt(d ? k / d : null, 2).padStart(4)}  ${fmt(ps.length ? dm / ps.length : null, 0).padStart(11)}  ${pct(wins, matches.length).padStart(6)}`);
 }
 console.log('\nCatatan: dengan sedikit pertandingan angka ini masih acak; tunggu minimal ~20 ronde sebelum mengubah keseimbangan.');
+
+// ---- Bertahan Bersama ----
+const pve = matches.filter((m) => m.mode === 'pve');
+if (pve.length) {
+  console.log(`\nBertahan Bersama: ${pve.length} sesi (${pve.filter((m) => m.abandoned).length} ditinggalkan di tengah)`);
+  const by = {};
+  for (const m of pve) { const k = `${m.diff || '?'}`; (by[k] ||= []).push(m.cleared ?? m.wave); }
+  for (const [k, v] of Object.entries(by)) { v.sort((a, b) => a - b); console.log(`  tingkat ${k.padEnd(7)} gelombang selesai: median ${v[v.length >> 1]}, terbaik ${v.at(-1)}, sesi ${v.length}`); }
+  const deaths = pve.flatMap((m) => m.deaths || []);
+  if (deaths.length) {
+    const cause = deaths.reduce((a, d) => ((a[d.by] = (a[d.by] || 0) + 1), a), {});
+    console.log(`  tumbang ${deaths.length}x; penyebab: ${Object.entries(cause).map(([k, v]) => `${k} ${v}`).join(', ')}; dari belakang ${pct(deaths.filter((d) => d.behind).length, deaths.length)}`);
+    const early = deaths.filter((d) => d.wave <= 2).length;
+    console.log(`  tumbang di gelombang 1-2: ${pct(early, deaths.length)} dari semua kejadian tumbang`);
+  }
+  const perks = pve.flatMap((m) => m.players.filter((p) => !p.bot).flatMap((p) => Object.entries(p.perks || {})));
+  if (perks.length) { const c = perks.reduce((a, [k, n]) => ((a[k] = (a[k] || 0) + n), a), {}); console.log(`  berkah yang paling sering dipilih: ${Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([k, v]) => `${k} ${v}`).join(', ')}`); }
+  const stuck = pve.reduce((a, m) => a + (m.stuck || 0), 0);
+  if (stuck) console.log(`  monster tersangkut yang dipindahkan pengaman: ${stuck} kali`);
+}

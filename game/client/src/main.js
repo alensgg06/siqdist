@@ -3,7 +3,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { DT, CLASSES, CLASS_KEYS, ARENA, MAPS, XP_LV, MAX_LEVEL, NOVA_R, KILL_LIMIT, KOTH_R, RUNE_INFO, SPD_BUFF, INTERP, TEAMS, TEAM_MODES, SKINS, skinUnlocked, ULT, ULT_MAX, EVENTS, MONSTERS, ALL_CLASSES } from '../../shared/config.js';
+import { DT, CLASSES, CLASS_KEYS, ARENA, MAPS, XP_LV, MAX_LEVEL, NOVA_R, KILL_LIMIT, KOTH_R, RUNE_INFO, SPD_BUFF, INTERP, TEAMS, TEAM_MODES, SKINS, skinUnlocked, ULT, ULT_MAX, EVENTS, MONSTERS, ALL_CLASSES, PERKS, PVE } from '../../shared/config.js';
 import { stepPlayer, blocked, los, angDiff, setMap } from '../../shared/sim.js';
 import { buildWorld, buildExtras } from './world.js';
 import { buildHarbor } from './harbor.js';
@@ -196,6 +196,60 @@ for (const b of document.querySelectorAll('.mapb')) {
 }
 $('create').addEventListener('click', () => start('create'));
 
+// ---------- D1: panah ancaman, tanda rekan tumbang, pilihan berkah ----------
+const threatEls = [], downEls = [];
+const vtmp = new THREE.Vector3();
+// Panah merah di tepi layar menunjuk musuh dekat yang berada di luar layar atau di belakang kamera.
+function drawThreats() {
+  const W = innerWidth, H = innerHeight, list = [];
+  const winding = G.windIds || new Map();
+  for (const p of G.players.values()) {
+    if (p.id === G.myId || (p.flags & 1) || ally(p.id)) continue;
+    const d = Math.hypot(p.x - G.rx, p.z - G.rz);
+    if (d > 24) continue;
+    // di layar? cek di ruang kamera dulu (titik di belakang kamera tidak bisa diproyeksikan dengan andal)
+    vtmp.set(p.x, 1.5, p.z).applyMatrix4(camera.matrixWorldInverse);
+    if (vtmp.z < 0) { vtmp.set(p.x, 1.5, p.z).project(camera); if (Math.abs(vtmp.x) < 0.92 && Math.abs(vtmp.y) < 0.88) continue; }
+    // arah panah dari sudut relatif terhadap arah hadap: 0 = depan (atas layar), kanan pemain = kanan layar
+    const a = -angDiff(Math.atan2(p.x - G.rx, p.z - G.rz), input.yaw);
+    list.push({ a, d, boss: G.roster.get(p.id)?.cls === 'brute', wind: (winding.get(p.id) || 0) > G.time });
+  }
+  list.sort((x, y) => x.d - y.d);
+  for (let i = 0; i < 6; i++) {
+    let el = threatEls[i];
+    if (!el) { el = document.createElement('i'); el.className = 'threat'; $('threats').appendChild(el); threatEls.push(el); }
+    const t = list[i];
+    if (!t) { el.style.opacity = 0; continue; }
+    // lingkaran di sekitar bidikan (tidak tertutup tombol di tepi layar)
+    const R = Math.min(W, H) * 0.34, rx = R * 1.25, ry = R, x = W / 2 + Math.sin(t.a) * rx, y = H / 2 - Math.cos(t.a) * ry;
+    el.className = 'threat' + (t.boss ? ' boss' : '') + (t.wind ? ' wind' : '');
+    el.style.opacity = String(Math.max(0.7, 1 - t.d / 40));
+    el.style.transform = `translate(${x - 16}px,${y - 15}px) rotate(${t.a}rad) scale(${t.d < 8 ? 1.25 : 1})`;
+  }
+}
+// Label "Tolong!" di atas rekan yang tumbang, dengan kemajuan pertolongan
+function drawDowned() {
+  const rv = G.gm === 'pve' ? (G.rv || []).filter((r) => r[0] !== G.myId) : [];
+  for (let i = 0; i < Math.max(rv.length, downEls.length); i++) {
+    let el = downEls[i];
+    if (!el) { el = document.createElement('div'); el.className = 'down'; $('downTags').appendChild(el); downEls.push(el); }
+    const r = rv[i], p = r && G.players.get(r[0]);
+    if (!p) { el.style.display = 'none'; continue; }
+    vtmp.set(p.x, 2.2, p.z).project(camera);
+    if (vtmp.z > 1) { el.style.display = 'none'; continue; }
+    el.style.display = '';
+    el.textContent = r[1] > 0 ? `Menolong ${r[1]}%` : `Tolong ${nameOf(r[0])}!`;
+    el.style.transform = `translate(${(vtmp.x * 0.5 + 0.5) * innerWidth}px,${(-vtmp.y * 0.5 + 0.5) * innerHeight}px) translate(-50%,-100%)`;
+  }
+}
+function showPerks(offer) {
+  if (!offer || !offer.length) return;
+  $('perkCards').innerHTML = offer.map((k) => `<button class="perk" data-k="${k}"><b>${PERKS[k].name}</b><small>${PERKS[k].desc}</small><em>Ketuk untuk memilih</em></button>`).join('');
+  for (const b of $('perkCards').querySelectorAll('.perk')) b.addEventListener('click', () => { G.ws?.send(JSON.stringify({ t: 'perk', id: b.dataset.k })); $('perks').classList.add('hidden'); });
+  $('perks').classList.remove('hidden');
+}
+for (const ev of ['touchstart', 'touchmove']) $('perks').addEventListener(ev, (e) => e.stopPropagation());
+
 // ---------- peringkat dan jubah ----------
 const hex = (n) => '#' + n.toString(16).padStart(6, '0');
 async function openRanks() {
@@ -378,7 +432,7 @@ function getPlayer(id) {
   if (p) return p;
   const r = G.roster.get(id);
   if (!r) return null;
-  const av = MONSTERS[r.cls] ? new Monster(r.cls, world.glowTex) : new Avatar(r.cls, r.name, id === G.myId, world.glowTex, r.team >= 0 && G.gm !== 'pve' ? TEAMS[r.team].color : null, r.skin);
+  const av = MONSTERS[r.cls] ? new Monster(r.cls, world.glowTex) : new Avatar(r.cls, r.name, id === G.myId, world.glowTex, r.team >= 0 && (G.gm !== 'pve' || r.team === 0) ? TEAMS[r.team].color : null, r.skin);
   scene.add(av.group);
   p = { id, av, buf: [], x: 0, z: 0, yaw: 0, flags: 0, hp: 1, maxHp: 1, lvl: 1, cls: r.cls, seen: 0 };
   G.players.set(id, p);
@@ -410,7 +464,8 @@ function onSnapshot(m) {
   // rekonsiliasi prediksi
   const me = m.me, pr = G.pred;
   G.me.xp = me[6]; G.me.respawnT = me[7]; G.me.dmgT = me[8] || 0; G.me.spdT = me[9] || 0; G.me.ult = me[10] || 0;
-  G.ev = m.ev || null; G.wv = m.wv || null;
+  G.ev = m.ev || null; G.wv = m.wv || null; G.rv = m.rv || null;
+  G.me.perks = me[11] || ''; G.me.offer = me[12] || 0; G.me.spare = me[13] || 0;
   pr.spd = G.me.spdT > 0 ? SPD_BUFF : 1;
   while (G.pending.length && G.pending[0].s <= m.a) G.pending.shift();
   pr.x = me[0]; pr.z = me[1]; pr.dashT = me[2]; pr.dx = me[3]; pr.dz = me[4]; pr.skillCd = me[5];
@@ -518,8 +573,25 @@ function onEvent(e) {
       G.shake = Math.max(G.shake, 0.9 * vol(e[1], e[2]));
       break;
     }
-    case 'W': toast(e[2] ? `Gelombang ${e[1]}: Golem Batu datang!` : `Gelombang ${e[1]}`); sfx('level'); buzz([50, 50, 50]); break;
-    case 'w': toast(`Gelombang ${e[1]} selesai! Rekan bangkit, HP pulih`); sfx('level'); $('death').classList.add('hidden'); break;
+    case 'W': toast(e[2] ? `Gelombang ${e[1]}: Golem Batu datang!` : `Gelombang ${e[1]}`); sfx('level'); buzz([50, 50, 50]); $('perks').classList.add('hidden'); break;
+    case 'w': toast(e[2] === e[1] && e[1] > 0 ? `Gelombang ${e[1]} selesai! Titik simpan tercapai` : `Gelombang ${e[1]} selesai! Rekan bangkit, HP pulih`); sfx('level'); $('death').classList.add('hidden'); break;
+    case 'A': {
+      const p = G.players.get(e[1]); if (!p) break;
+      p.av.windup?.(e[2] ? 0.9 : PVE.windup);
+      (G.windIds ||= new Map()).set(e[1], G.time + (e[2] ? 0.9 : PVE.windup));
+      fx.ring(p.x, p.z, e[2] ? 0xff7a1a : 0xff3b3b, e[2] ? MONSTERS.brute.slam.r : 2.4, e[2] ? 0.9 : PVE.windup);
+      if (Math.hypot(p.x - G.rx, p.z - G.rz) < 8) sfx('hurt', 0.4);
+      break;
+    }
+    case 'P': if (e[1] === G.myId) showPerks(e[2]); break;
+    case 'p': if (e[1] === G.myId) { $('perks').classList.add('hidden'); toast(`Berkah ${PERKS[e[2]].name}: ${PERKS[e[2]].desc}`); } else if (G.roster.get(e[1])) toast(`${nameOf(e[1])} memilih ${PERKS[e[2]].name}`); break;
+    case 'v': {
+      const p = G.players.get(e[2]); if (p) { fx.pillar(p.x, p.z, 0x7dffb0); fx.burst(p.x, 1.2, p.z, 0x7dffb0, 30, 5, 1.2, 0.7, -2); }
+      if (e[2] === G.myId) { $('death').classList.add('hidden'); toast(e[1] === G.myId ? 'Bangkit dengan nyawa cadangan!' : `${nameOf(e[1])} menolongmu!`); buzz([40, 40, 80]); sfx('level'); }
+      else if (e[1] === G.myId) toast(`Kamu menolong ${nameOf(e[2])}!`);
+      break;
+    }
+    case 'x': fx.nova(e[1], e[2], 0xffb070, 4); sfx('boom', vol(e[1], e[2]) * 0.6); break;
     case 'a': { const p = G.players.get(e[1]); if (p) { p.av.fireKick(); sfx('hit', vol(p.x, p.z) * 0.6); } break; }
     case 'u': {
       const r = M.runes[e[1]]; if (!r) break;
@@ -581,7 +653,7 @@ function showScore(end) {
   fillScore();
   const top = sortedRoster()[0];
   const ts = G.teamScore, win = ts[0] === ts[1] ? -1 : ts[0] > ts[1] ? 0 : 1;
-  if (end && G.gm === 'pve') { $('scoreTitle').textContent = `Bertahan sampai gelombang ${G.wv?.[0] || 0}`; $('score').classList.remove('hidden'); return; }
+  if (end && G.gm === 'pve') { const ck = G.wv?.[3] || 0; $('scoreTitle').textContent = `Bertahan sampai gelombang ${G.wv?.[0] || 0}`; $('scoreNext').textContent = ck ? `Ronde berikutnya lanjut dari gelombang ${ck + 1} (titik simpan) dengan berkah acak` : 'Ronde berikutnya mulai dari gelombang 1'; $('score').classList.remove('hidden'); return; }
   $('scoreTitle').textContent = !end ? (G.team >= 0 ? `${TEAMS[0].name} ${ts[0]} · ${ts[1]} ${TEAMS[1].name}` : 'Papan Skor')
     : G.team >= 0 ? (win < 0 ? 'Seri' : win === G.team ? `Regu ${TEAMS[win].name} Menang!` : `Regu ${TEAMS[win].name} Menang`)
     : top?.id === G.myId ? 'Kamu Menang!' : `${top?.name || ''} Menang`;
@@ -805,8 +877,16 @@ function frame(now) {
       const tm = Math.max(0, G.tm);
       $('timer').textContent = G.gm === 'pve' && !G.ended ? (G.wv?.[1] === 0 ? `Mulai ${tm}` : `G${G.wv?.[0] || 1}`) : `${Math.floor(tm / 60)}:${String(tm % 60).padStart(2, '0')}`;
       if (G.gm === 'pve' && G.wv) $('myScore').textContent = G.wv[1] === 0 ? `Gelombang ${G.wv[0] + 1} segera` : `Gelombang ${G.wv[0]} · ${G.wv[2]} monster`;
-      if (me.flags & 1) $('deathT').textContent = G.gm === 'pve' ? 'Bangkit saat gelombang ini selesai. Rekanmu masih bertahan…' : `Bangkit dalam ${Math.ceil(me.respawnT)}…`;
-      if (G.ended) $('scoreNext').textContent = `Ronde berikutnya dalam ${tm} detik`;
+      if (me.flags & 1) {
+        const mine = G.rv?.find((r) => r[0] === G.myId);
+        $('deathT').textContent = G.gm !== 'pve' ? `Bangkit dalam ${Math.ceil(me.respawnT)}…`
+          : mine?.[2] > 0 ? `Nyawa cadangan: bangkit sendiri dalam ${mine[2]}…`
+          : mine?.[1] > 0 ? `Rekan sedang menolongmu… ${mine[1]}%`
+          : 'Tunggu rekan berdiri di dekatmu 3 detik, atau gelombang selesai.';
+      }
+      $('perkBar').innerHTML = G.gm === 'pve' ? (G.me.perks ? G.me.perks.split(',').map((x) => { const k = x.replace(/\d+$/, ''), n = +x.slice(k.length); return `<span>${PERKS[k]?.name || k}${n > 1 ? ' ×' + n : ''}</span>`; }).join('') : '') + (G.me.spare ? '<span>Nyawa cadangan</span>' : '') : '';
+      if (G.me.offer && $('perks').classList.contains('hidden') && !(G.me.flags & 1)) showPerks(G.me.offer);
+      if (G.ended) $('scoreNext').textContent = G.gm === 'pve' && G.wv?.[3] ? `Lanjut dari gelombang ${G.wv[3] + 1} (titik simpan) dalam ${tm} detik` : `Ronde berikutnya dalam ${tm} detik`;
       else $('scoreNext').textContent = '';
       if (!G.ended) { if (input.showScore && $('score').classList.contains('hidden')) showScore(false); else if (!input.showScore && !isTouch && G.tabOpen) $('score').classList.add('hidden'); G.tabOpen = input.showScore; }
       $('net').textContent = `${G.ping} ms · ${fpsShown} fps`;
@@ -822,6 +902,8 @@ function frame(now) {
     }
     updateDmg(dt);
     world.update(t, { x: G.rx, z: G.rz }, G.orbMask);
+    drawThreats(t);
+    drawDowned();
     extras.update(t, G.runeMask, G.gm, G.holder, G.myId);
     // Gerhana: arena meredup dan kabut menebal; dikembalikan perlahan setelah selesai
     const ecl = G.ev?.[0] === 'eclipse' ? 1 : 0;

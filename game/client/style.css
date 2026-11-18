@@ -216,3 +216,24 @@ body:not(.touch) #ultBtn{right:100px;bottom:24px}
 @media (min-width:641px){#skins{grid-template-columns:repeat(4,minmax(0,1fr))}}
 .modes:not(.maps):not(.diffs){grid-template-columns:repeat(5,minmax(0,1fr))}
 @media (max-width:700px){.modes:not(.maps):not(.diffs){grid-template-columns:repeat(3,minmax(0,1fr))}}
+
+/* ---------- D1 ---------- */
+#threats,#downTags{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+.threat{position:absolute;left:0;top:0;width:0;height:0;border-left:16px solid transparent;border-right:16px solid transparent;border-bottom:30px solid #ff2e2e;
+  filter:drop-shadow(0 0 2px #fff) drop-shadow(0 0 8px rgba(255,40,40,1));will-change:transform,opacity}
+.threat.boss{border-bottom-color:#ff9a2a;border-left-width:17px;border-right-width:17px;border-bottom-width:30px}
+.threat.wind{border-bottom-color:#fff07a}
+.down{position:absolute;left:0;top:0;transform:translate(-50%,-100%);padding:3px 9px;border-radius:999px;background:rgba(15,8,24,.85);border:1px solid #7dffb0;color:#7dffb0;font-size:12px;font-weight:800;white-space:nowrap}
+#perkBar{position:absolute;left:calc(12px + var(--sl));bottom:calc(84px + var(--sb));display:flex;flex-wrap:wrap;gap:4px;max-width:46vw}
+#perkBar span{padding:2px 7px;border-radius:6px;font-size:11px;font-weight:700;background:rgba(15,8,24,.75);border:1px solid rgba(242,198,109,.5);color:var(--gold)}
+#perks{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(680px,94vw);padding:14px 16px;border-radius:14px;background:rgba(18,10,30,.92);
+  border:1px solid var(--gold);text-align:center;pointer-events:auto;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+#perks h2{font-family:var(--serif);color:var(--gold);font-size:19px;letter-spacing:.1em;margin-bottom:10px}
+#perkCards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.perk{min-height:104px;padding:12px 10px;border-radius:12px;background:linear-gradient(180deg,rgba(255,223,154,.16),rgba(255,255,255,.04));border:1px solid rgba(242,198,109,.55);text-align:center}
+.perk b{display:block;font-family:var(--serif);font-size:17px;color:var(--gold);margin-bottom:6px}
+.perk small{display:block;font-size:13px;color:#e9dcf4;line-height:1.35}
+.perk em{display:block;font-style:normal;font-size:11px;color:#b9a9cf;margin-top:6px}
+.perk:active{transform:scale(.97)}
+#perkHint{font-size:12px;color:#b9a9cf;margin-top:8px}
+@media (max-height:430px){.perk{min-height:84px;padding:8px}#perks{padding:10px 12px}}

@@ -123,7 +123,18 @@ Mode kerja sama (room privat): semua teman melawan gelombang monster yang makin 
 | Dukun Bayang | menjaga jarak dan menembakkan bola gelap (sejak gelombang 2) |
 | Golem Batu | bos tiap 5 gelombang: pukulan berat dan hentakan tanah; HP menyesuaikan jumlah pemain |
 
-Pemain yang tumbang bangkit saat gelombang selesai; semua pemain pulih penuh di antara gelombang.
+Gelombang 1-3 adalah pemanasan (sedikit monster, serangan lebih lemah). Monster memberi aba-aba
+0,45 detik sebelum memukul, dan panah merah di sekitar bidikan menunjuk monster di luar layar.
+Bila pemain kurang dari 3, bot sekutu ikut bertarung.
+
+- **Berkah**: setelah tiap gelombang, pilih 1 dari 3 peningkatan acak (Tajam, Cepat, Vampir, Kokoh,
+  Lincah, Fokus, Amarah, Ganda, Ledak, Pulih). Bertahan sampai permainan berakhir.
+- **Tumbang**: satu nyawa cadangan per gelombang (bangkit sendiri setelah 4 detik); setelah itu
+  rekan bisa menolong dengan berdiri di dekatmu 3 detik.
+- **Titik simpan**: setelah kalah, ronde berikutnya lanjut dari gelombang kelipatan 5 terakhir
+  yang diselesaikan, dengan beberapa berkah acak sebagai bekal.
+
+Pemain yang tumbang juga bangkit saat gelombang selesai; semua pulih penuh di antara gelombang.
 Permainan berakhir bila semua tumbang bersamaan. Bertahan melewati gelombang 10 dihitung menang.
 Tingkat bot (Mudah/Normal/Sulit) mengatur kekuatan monster.
 

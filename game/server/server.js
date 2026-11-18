@@ -12,7 +12,7 @@ import {
   TEAM_MODES, TEAM_LIMIT, TEAMS, MAPS, MAP_KEYS, SKINS, skinUnlocked,
   DMG_SCALE, REGEN_DELAY, REGEN_RATE, BOT_DIFF, MERCY_DEATHS,
   BOUNTY_MIN, BOUNTY_LEAD, BOUNTY_XP, EVENT_FIRST, EVENT_EVERY, EVENTS, ULT_MAX,
-  MONSTERS, PVE, wavePlan, ARENA,
+  MONSTERS, PVE, wavePlan, ARENA, PERKS, PERK_KEYS,
   MODES, KOTH_R, KOTH_LIMIT, RUNES, RUNE_TIME, RUNE_RESPAWN, DMG_BUFF, SPD_BUFF, LAG_MAX,
 } from '../shared/config.js';
 import { stepPlayer, blocked, los, angDiff, setMap, collide } from '../shared/sim.js';
@@ -31,6 +31,10 @@ const LAGCOMP = process.env.LAGCOMP !== '0';
 const MATCH_T = Number(process.env.MATCH_TIME) || MATCH_TIME;
 const EV_FIRST = Number(process.env.EVENT_FIRST) || EVENT_FIRST;
 const PVE_BREAK = Number(process.env.PVE_BREAK) || PVE.breakTime;
+const CKPT = Number(process.env.PVE_CHECKPOINT) || PVE.checkpointEvery;
+const TEST_DMG = Number(process.env.PVE_DMG_MUL) || 1; // hanya untuk uji
+const ALLIES = process.env.PVE_ALLIES !== undefined ? Number(process.env.PVE_ALLIES) : PVE.allies;
+const PERK_BREAK = Number(process.env.PVE_PERK_BREAK) || PVE.perkBreak;
 const TEAM_WIN = Number(process.env.TEAM_LIMIT) || TEAM_LIMIT;
 const HIST = 16; // riwayat posisi per pemain, dalam tick (~0,53 dtk)
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // tanpa I dan O agar tidak tertukar dengan 1 dan 0
@@ -87,6 +91,7 @@ class Room {
     this.teams = TEAM_MODES.includes(this.mode) || this.mode === 'pve'; // Tim: dua regu seimbang; Lawan Bot/Bertahan: manusia satu regu
     this.pve = this.mode === 'pve';
     this.wave = 0; this.wavePhase = 0; this.waveT = PVE_BREAK; this.spawnQ = []; this.spawnT = 0; this.hpMul = 1; this.flow = null; this.flowT = 0;
+    this.waveDmg = 1; this.checkpoint = 0; this.deathLog = []; this.stuckN = 0; this.logged = false;
     this.teamScore = [0, 0];
     this.bounty = 0;                         // id buronan saat ini
     this.evT = EV_FIRST; this.ev = null;     // kejadian di tengah ronde
@@ -116,6 +121,7 @@ class Room {
       hp: cls.hp, maxHp: cls.hp, lvl: 1, xp: 0, kills: 0, deaths: 0, dmg: 0,
       pingSum: 0, pingN: 0, fpsSum: 0, fpsN: 0, joinedAt: Date.now(),
       pts: 0, ptsAcc: 0, dmgT: 0, spdT: 0, spd: 1, rtt: 0, hist: [], ult: 0,
+      perks: {}, offer: null, spare: 0, spareT: 0, reviveP: 0,
       dead: false, respawnT: 0, fireCd: 0, shieldT: 0, protT: 0, hurtT: 99,
       queue: [], last: { s: 0, mx: 0, mz: 0, y: 0, f: 0, k: 0 }, ack: 0,
       ai: { tgt: 0, retT: 0, err: 0, errT: 0, strT: 0, strDir: 1, wp: null, stuckT: 0, lx: 0, lz: 0, seenT: 0 },
@@ -136,6 +142,9 @@ class Room {
     this.rosterDirty = true;
   }
 
+  maxHpOf(p) { return levelHp(p.cls, p.lvl) + 25 * (p.perks?.kokoh || 0); }
+  perk(p, k) { return p.perks?.[k] || 0; }
+
   pickTeam(bot) {
     if (this.mode === 'coop' || this.pve) return bot ? 1 : 0;
     const n = [0, 0], h = [0, 0];
@@ -147,7 +156,14 @@ class Room {
   foes(a, b) { return a !== b && (!this.teams || a.team !== b.team); }
 
   balanceBots() {
-    if (this.pve) return; // monster diatur oleh gelombang, bukan pengisi bot
+    if (this.pve) {
+      // bot sekutu sampai ada PVE.allies petarung di pihak pemain
+      const humans = this.humans(), allies = [...this.players.values()].filter((q) => q.ally);
+      const want = humans === 0 ? 0 : Math.max(0, ALLIES - humans);
+      for (let i = allies.length; i < want; i++) { this.addBot(0); const b = [...this.players.values()].at(-1); b.ally = true; }
+      for (let i = allies.length; i > want; i--) this.removePlayer(allies[i - 1]);
+      return;
+    }
     if (this.teams) return this.balanceTeams();
     const humans = this.humans();
     let bots = this.players.size - humans;
@@ -202,7 +218,7 @@ class Room {
     if (near) {
       p.x = near.x; p.z = near.z; p.yaw = 0;
       p.dashT = 0; p.skillCd = 0; p.fireCd = 0.3; p.shieldT = 0;
-      p.maxHp = levelHp(p.cls, p.lvl); p.hp = p.maxHp;
+      p.maxHp = this.maxHpOf(p); p.hp = p.maxHp;
       p.dead = false; p.protT = 0; p.hurtT = 99; p.ai.wp = null; p.ai.tgt = 0;
       p.dmgT = 0; p.spdT = 0; p.spd = 1; p.hist.length = 0;
       this.events.push(['r', p.id, r2(p.x), r2(p.z)]);
@@ -219,7 +235,7 @@ class Room {
     const s = scored[Math.floor(Math.random() * Math.min(3, scored.length))];
     p.x = s.x; p.z = s.z; p.yaw = Math.atan2(-s.x, -s.z);
     p.dashT = 0; p.skillCd = 0; p.fireCd = 0.3; p.shieldT = 0;
-    p.maxHp = levelHp(p.cls, p.lvl); p.hp = p.maxHp;
+    p.maxHp = this.maxHpOf(p); p.hp = p.maxHp;
     p.dead = false; p.protT = PROTECT_TIME; p.hurtT = 99;
     p.dmgT = 0; p.spdT = 0; p.spd = 1; p.hist.length = 0;
     p.queue.length = 0; p.last.y = p.yaw; p.last.mx = 0; p.last.mz = 0; p.last.f = 0;
@@ -231,7 +247,7 @@ class Room {
     p.xp += amount;
     while (p.lvl < MAX_LEVEL && p.xp >= XP_LV[p.lvl]) {
       p.lvl++;
-      p.maxHp = levelHp(p.cls, p.lvl);
+      p.maxHp = this.maxHpOf(p);
       if (!p.dead) p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.3);
       this.events.push(['l', p.id, p.lvl]);
     }
@@ -243,14 +259,32 @@ class Room {
     if (t.shieldT > 0) amount *= 0.3;
     amount = Math.max(1, Math.round(amount));
     t.hp -= amount; t.hurtT = 0;
-    if (att && att !== t) { att.dmg += amount; if (!att.monster) att.ult = Math.min(ULT_MAX, att.ult + amount * 0.5); }
+    if (att && att !== t) {
+      att.dmg += amount;
+      if (!att.monster) att.ult = Math.min(ULT_MAX, att.ult + amount * 0.5 * (1 + 0.4 * this.perk(att, 'amarah')));
+      if (this.perk(att, 'vampir') && !att.dead) att.hp = Math.min(att.maxHp, att.hp + amount * 0.12 * this.perk(att, 'vampir'));
+    }
     this.events.push(['d', t.id, att ? att.id : 0, amount, r2(t.x), r2(t.z)]);
     if (att && att !== t) this.addXp(att, amount * 0.5);
     if (t.hp <= 0) {
       t.hp = 0; t.dead = true; t.respawnT = RESPAWN_TIME; t.deaths++; t.dashT = 0; t.streak++;
-      if (this.pve) { t.respawnT = t.monster ? 1.2 : 1e9; this.rosterDirty = true; } // Bertahan: manusia bangkit saat gelombang selesai
+      if (this.pve) {
+        // Bertahan: monster hilang; bot sekutu bangkit biasa; manusia menunggu ditolong, nyawa cadangan, atau akhir gelombang
+        t.respawnT = t.monster ? 1.2 : t.bot ? RESPAWN_TIME + 2 : 1e9;
+        t.reviveP = 0;
+        if (!t.bot && t.spare > 0) { t.spare--; t.spareT = PVE.spareDelay; }
+        if (!t.bot && att) {
+          const toAtt = Math.atan2(att.x - t.x, att.z - t.z);
+          this.deathLog.push({ wave: this.wave, by: att.clsKey, behind: Math.abs(angDiff(toAtt, t.yaw)) > Math.PI / 2 });
+        }
+        this.rosterDirty = true;
+      }
       if (att && att !== t) {
         att.kills++; this.addXp(att, 100); att.streak = 0; att.ult = Math.min(ULT_MAX, att.ult + 15);
+        if (this.perk(att, 'ledak')) { // berkah Ledak: musuh yang tumbang meledak
+          this.events.push(['x', r2(t.x), r2(t.z)]);
+          for (const q of this.players.values()) if (!q.dead && this.foes(att, q) && Math.hypot(q.x - t.x, q.z - t.z) < 4) this.damage(q, 22 * this.perk(att, 'ledak'), att);
+        }
         this.track(att, { type: 'kill', cls: att.clsKey });
         if (t.id === this.bounty) { this.addXp(att, BOUNTY_XP); this.events.push(['b', att.id, t.id]); this.track(att, { type: 'bounty' }); this.bounty = 0; }
         if (this.teams && !this.pve) { this.teamScore[att.team]++; if (this.teamScore[att.team] >= TEAM_WIN) this.endMatch(); } // Bertahan: tanpa batas kill
@@ -363,7 +397,11 @@ class Room {
       if (this.waveT > 0) return;
       this.wave++; this.wavePhase = 1;
       const plan = wavePlan(this.wave, humans.length);
-      this.spawnQ = plan.list; this.hpMul = plan.hpMul * PVE.diffMul[this.diff]; this.spawnT = 0;
+      this.spawnQ = plan.list; this.hpMul = plan.hpMul * PVE.diffMul[this.diff]; this.waveDmg = plan.dmgMul * TEST_DMG; this.spawnT = 0;
+      for (const h of this.players.values()) {
+        if (h.offer) this.pickPerk(h, h.offer[Math.floor(Math.random() * h.offer.length)]); // belum memilih: dipilihkan acak
+        if (!h.bot) h.spare = 1; // satu nyawa cadangan per gelombang
+      }
       this.events.push(['W', this.wave, plan.list.includes('brute') ? 1 : 0]);
       return;
     }
@@ -372,12 +410,63 @@ class Room {
     if (this.spawnQ.length && this.spawnT <= 0 && alive < PVE.cap) { this.spawnT = 1.1; this.addMonster(this.spawnQ.shift()); }
     if (!this.spawnQ.length && alive === 0 && ![...this.players.values()].some((p) => p.monster)) {
       // gelombang selesai: semua bangkit dan pulih penuh
-      this.wavePhase = 0; this.waveT = PVE_BREAK;
-      for (const h of humans) { if (h.dead) this.spawn(h); h.hp = h.maxHp; }
-      this.events.push(['w', this.wave]);
+      this.wavePhase = 0; this.waveT = Math.max(PVE_BREAK, PERK_BREAK);
+      if (this.wave % CKPT === 0) this.checkpoint = this.wave;
+      for (const h of this.players.values()) {
+        if (h.monster) continue;
+        if (h.dead) this.spawn(h);
+        h.hp = h.maxHp; h.spareT = 0;
+        this.offerPerks(h);
+      }
+      this.events.push(['w', this.wave, this.checkpoint]);
       for (const h of humans) this.track(h, { type: 'round' });
     }
-    if (humans.every((h) => h.dead)) this.endMatch(); // semua tumbang: permainan berakhir
+    // semua tumbang dan tak ada yang akan bangkit sendiri: permainan berakhir
+    if (humans.every((h) => h.dead && !(h.spareT > 0))) this.endMatch();
+  }
+
+  revive(p, by) {
+    p.dead = false; p.hp = Math.round(p.maxHp * 0.5); p.protT = 2; p.hurtT = 0; p.reviveP = 0; p.spareT = 0; p.respawnT = 0;
+    p.queue.length = 0;
+    this.events.push(['v', by ? by.id : p.id, p.id]);
+    this.rosterDirty = true;
+  }
+
+  unstick(p, t) {
+    // ke titik spawn terdekat dari target yang masih berjarak >12 dan bisa dilewati
+    const spots = this.M.spawns.map(([x, z]) => ({ x, z, d: Math.hypot(t.x - x, t.z - z) })).filter((s) => s.d > 12).sort((a, b) => a.d - b.d);
+    const s = spots[0] || { x: this.M.spawns[0][0], z: this.M.spawns[0][1] };
+    p.x = s.x; p.z = s.z; p.stuckN = (p.stuckN || 0) + 1; this.stuckN++;
+    this.events.push(['r', p.id, r2(p.x), r2(p.z)]);
+  }
+
+  // Berkah: tawarkan 3 pilihan acak; bot sekutu langsung memilih
+  offerPerks(p) {
+    const pool = PERK_KEYS.filter((k) => !(k === 'ganda' && this.perk(p, 'ganda') >= 2));
+    const offer = [];
+    while (offer.length < 3 && pool.length) offer.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+    p.offer = offer;
+    if (p.bot) return this.pickPerk(p, offer[0]);
+    this.events.push(['P', p.id, offer]);
+  }
+  pickPerk(p, k) {
+    if (!p.offer || !p.offer.includes(k)) return;
+    p.offer = null;
+    p.perks[k] = (p.perks[k] || 0) + 1;
+    if (k === 'kokoh') { p.maxHp = this.maxHpOf(p); p.hp = Math.min(p.maxHp, p.hp + 25); }
+    if (!p.bot) this.events.push(['p', p.id, k]);
+  }
+
+  // catatan sesi Bertahan: dipanggil saat semua tumbang, dan juga saat room ditinggalkan
+  logPve(abandoned) {
+    if (this.logged || !this.wave) return;
+    this.logged = true;
+    const ps = [...this.players.values()].filter((p) => !p.monster).map((p) => ({ ...this.playerRecord(p), perks: p.perks }));
+    logMatch({
+      at: new Date().toISOString(), room: 'privat', mode: 'pve', map: this.map, diff: this.diff, abandoned,
+      wave: this.wave, cleared: this.wavePhase === 0 ? this.wave : this.wave - 1, checkpoint: this.checkpoint,
+      secs: Math.round((Date.now() - this.startedAt) / 1000), players: ps, left: this.left, deaths: this.deathLog, stuck: this.stuckN,
+    });
   }
 
   addMonster(key) {
@@ -402,7 +491,7 @@ class Room {
     dist.fill(-1);
     const q = [];
     for (const h of this.players.values()) {
-      if (h.bot || h.dead) continue;
+      if (h.monster || h.dead) continue;
       const i = Math.round(h.x) + GN, j = Math.round(h.z) + GN, k = i * GW + j;
       if (i >= 0 && i < GW && j >= 0 && j < GW && dist[k] < 0) { dist[k] = 0; q.push(k); }
     }
@@ -424,7 +513,7 @@ class Room {
     this.flowT -= DT / Math.max(1, this.players.size);
     if (this.flowT <= 0 || !this.flow) { this.flowT = 0.4; this.updateFlow(); }
     let t = null, td = 1e9;
-    for (const q of this.players.values()) { if (q.bot || q.dead) continue; const d = Math.hypot(q.x - p.x, q.z - p.z); if (d < td) { td = d; t = q; } }
+    for (const q of this.players.values()) { if (q.monster || q.dead) continue; const d = Math.hypot(q.x - p.x, q.z - p.z); if (d < td) { td = d; t = q; } }
     if (!t) return { s: 0, mx: 0, mz: 0, y: p.yaw, f: 0, k: 0 };
     const dx = t.x - p.x, dz = t.z - p.z, see = td < 30 && los(p.x, p.z, t.x, t.z);
     let mx = 0, mz = 0, f = 0;
@@ -455,18 +544,33 @@ class Room {
     }
     // serangan jarak dekat
     if (m.melee) {
+      // aba-aba dulu (menyala dan mengangkat lengan), baru memukul; pemain yang menjauh saat aba-aba lolos
       p.meleeCd -= DT;
-      if (td < m.melee.r + PLAYER_R * 0.5 && p.meleeCd <= 0) {
-        p.meleeCd = m.melee.cd; this.events.push(['a', p.id]);
-        this.damage(t, m.melee.dmg * mul, p);
-      }
+      if (p.windT > 0) {
+        p.windT -= DT; mx = 0; mz = 0;
+        if (p.windT <= 0) {
+          p.meleeCd = m.melee.cd; this.events.push(['a', p.id]);
+          if (td < m.melee.r + PLAYER_R * 0.5 + 0.5) this.damage(t, m.melee.dmg * mul * this.waveDmg, p);
+        }
+      } else if (td < m.melee.r + PLAYER_R * 0.5 && p.meleeCd <= 0) { p.windT = PVE.windup; this.events.push(['A', p.id]); mx = 0; mz = 0; }
     }
     if (m.slam) {
       p.slamCd -= DT;
-      if (p.slamCd <= 0 && td < m.slam.r) {
-        p.slamCd = m.slam.cd; this.events.push(['n', p.id, r2(p.x), r2(p.z)]);
-        for (const q of this.players.values()) { if (q.bot || q.dead) continue; const d = Math.hypot(q.x - p.x, q.z - p.z); if (d < m.slam.r) this.damage(q, m.slam.dmg * mul * (1 - 0.4 * d / m.slam.r), p); }
-      }
+      if (p.slamT > 0) {
+        p.slamT -= DT; mx = 0; mz = 0;
+        if (p.slamT <= 0) {
+          this.events.push(['n', p.id, r2(p.x), r2(p.z)]);
+          for (const q of this.players.values()) { if (q.monster || q.dead) continue; const d = Math.hypot(q.x - p.x, q.z - p.z); if (d < m.slam.r) this.damage(q, m.slam.dmg * mul * this.waveDmg * (1 - 0.4 * d / m.slam.r), p); }
+        }
+      } else if (p.slamCd <= 0 && td < m.slam.r) { p.slamCd = m.slam.cd; p.slamT = 0.9; this.events.push(['A', p.id, 1]); }
+    }
+    // pengaman: monster yang hampir tidak berpindah selama 6 dtk tanpa sedang menyerang dipindah ke dekat pemain
+    p.stk ||= { t: 6, x: p.x, z: p.z };
+    p.stk.t -= DT;
+    if (p.stk.t <= 0) {
+      const busy = td < 3 || (p.clsKey === 'caster' && see);
+      if (!busy && Math.hypot(p.x - p.stk.x, p.z - p.stk.z) < 1.5) this.unstick(p, t);
+      p.stk = { t: 6, x: p.x, z: p.z };
     }
     const want = face + (p.clsKey === 'caster' ? (Math.random() - 0.5) * 0.12 : 0);
     const turn = 6 * DT, yaw = p.yaw + Math.max(-turn, Math.min(turn, angDiff(want, p.yaw)));
@@ -494,6 +598,7 @@ class Room {
         this.track(p, { type: 'round' });
         if (won(p)) this.track(p, { type: 'win' });
       }
+      if (this.pve) { this.logPve(false); } else {
       const ps = all.map((p) => this.playerRecord(p));
       const win = ps.slice().sort((a, b) => (this.mode === 'koth' ? b.pts - a.pts : 0) || b.kills - a.kills)[0];
       logMatch({
@@ -503,6 +608,7 @@ class Room {
         teamScore: this.teams ? this.teamScore : undefined,
         players: ps, left: this.left,
       });
+      }
     }
     this.state = 'end'; this.endT = END_T; // proyektil dibersihkan di tick(), bukan di tengah iterasi
     this.rosterDirty = true;
@@ -517,7 +623,15 @@ class Room {
     }
     this.orbT = this.M.orbs.map(() => 0); this.runeT = this.M.runes.map(() => 0);
     this.holder = 0; this.teamScore = [0, 0]; this.bounty = 0; this.evT = EV_FIRST; this.ev = null; this.meteors = [];
-    if (this.pve) { for (const p of [...this.players.values()]) if (p.monster) this.players.delete(p.id); this.wave = 0; this.wavePhase = 0; this.waveT = PVE_BREAK; this.spawnQ = []; }
+    if (this.pve) {
+      for (const p of [...this.players.values()]) if (p.monster) this.players.delete(p.id);
+      // lanjut dari titik simpan: mulai setelah gelombang kelipatan 5 terakhir, dengan berkah acak sebagai bekal
+      this.wave = this.checkpoint; this.wavePhase = 0; this.waveT = PVE_BREAK; this.spawnQ = []; this.deathLog = []; this.stuckN = 0; this.logged = false;
+      for (const p of this.players.values()) {
+        p.perks = {}; p.offer = null; p.spare = 0; p.spareT = 0;
+        for (let i = 0; i < Math.round(this.checkpoint * 0.6); i++) { const k = PERK_KEYS[Math.floor(Math.random() * PERK_KEYS.length)]; p.perks[k] = (p.perks[k] || 0) + 1; }
+      }
+    }
     for (const p of this.players.values()) {
       p.kills = 0; p.deaths = 0; p.xp = 0; p.lvl = 1; p.dmg = 0; p.pts = 0; p.ptsAcc = 0; p.ult = 0;
       p.pingSum = p.pingN = p.fpsSum = p.fpsN = 0; p.joinedAt = Date.now();
@@ -528,13 +642,15 @@ class Room {
 
   shoot(p) {
     const c = p.cls;
-    p.fireCd = c.fireCd * (p.bot ? this.D.cd : 1);
+    p.fireCd = c.fireCd * (p.bot ? this.dOf(p).cd : 1) * 0.88 ** this.perk(p, 'cepat');
     const ox = p.x + Math.sin(p.yaw) * 0.9, oz = p.z + Math.cos(p.yaw) * 0.9;
-    for (let i = 0; i < c.pellets; i++) {
-      const a = p.yaw + (Math.random() - 0.5) * 2 * c.spread;
+    const extra = this.perk(p, 'ganda') * (c.pellets > 1 ? 2 : 1), n = c.pellets + extra;
+    for (let i = 0; i < n; i++) {
+      // peluru tambahan dari berkah Ganda menyebar sedikit ke samping
+      const a = p.yaw + (Math.random() - 0.5) * 2 * c.spread + (i >= c.pellets ? ((i - c.pellets) % 2 ? -1 : 1) * 0.07 * (1 + Math.floor((i - c.pellets) / 2)) : 0);
       const pr = {
         id: this.nextPid++, o: p.id, tm: p.team, x: ox, z: oz, dx: Math.sin(a), dz: Math.cos(a),
-        sp: c.projSpeed, life: c.projLife, dmg: c.dmg * DMG_SCALE * levelDmg(p.lvl) * (p.dmgT > 0 ? DMG_BUFF : 1) * (p.monster ? PVE.diffMul[this.diff] : 1), splash: c.splash,
+        sp: c.projSpeed, life: c.projLife, dmg: c.dmg * DMG_SCALE * levelDmg(p.lvl) * (p.dmgT > 0 ? DMG_BUFF : 1) * (p.monster ? PVE.diffMul[this.diff] * this.waveDmg : 1) * (1 + 0.15 * this.perk(p, 'tajam')), splash: c.splash,
       };
       this.events.push(['s', pr.id, p.id, r2(ox), r2(oz), Math.round(a * 1000) / 1000]);
       if (this.pointBlank(pr, p)) continue;
@@ -633,7 +749,10 @@ class Room {
     }
   }
 
+  dOf(p) { return this.pve && p.ally ? BOT_DIFF.normal : this.D; }
+
   botThink(p) {
+    const D = this.dOf(p);
     const ai = p.ai;
     ai.retT -= DT;
     if (ai.retT <= 0) {
@@ -646,7 +765,7 @@ class Room {
         if (q.dead || !this.foes(p, q)) continue;
         const d = Math.hypot(q.x - p.x, q.z - p.z);
         // target lama diberi keuntungan 8 agar bot tidak berganti-ganti target (dan jeda reaksinya tidak terus mulai ulang)
-        const score = d + (hunted.get(q.id) || 0) * this.D.spread + (q.bot ? 0 : this.D.humanPenalty) - (q.id === prev ? 8 : 0);
+        const score = d + (hunted.get(q.id) || 0) * D.spread + (q.bot ? 0 : D.humanPenalty) - (q.id === prev ? 8 : 0);
         const sight = this.ev?.id === 'eclipse' ? 18 : 45; // saat Gerhana bot hanya melihat dekat
         if (score < best && d < sight && los(p.x, p.z, q.x, q.z)) { best = score; ai.tgt = q.id; }
       }
@@ -660,7 +779,7 @@ class Room {
       ai.errT -= DT;
       // pemain yang sedang sial (gugur beruntun tanpa kill) dibidik lebih longgar dan lebih lambat
       const mercy = !t.bot && t.streak >= MERCY_DEATHS;
-      const errMax = this.D.err * (mercy ? 1.6 : 1), react = this.D.react + (mercy ? 0.35 : 0);
+      const errMax = D.err * (mercy ? 1.6 : 1), react = D.react + (mercy ? 0.35 : 0);
       if (ai.errT <= 0) { ai.errT = 0.45; ai.err = (Math.random() - 0.5) * 2 * errMax; }
       want = Math.atan2(dx, dz) + ai.err;
       const range = p.clsKey === 'guardian' ? 9 : p.clsKey === 'mage' ? 20 : 24;
@@ -696,7 +815,7 @@ class Room {
       const dx = ai.wp[0] - p.x, dz = ai.wp[1] - p.z, d = Math.hypot(dx, dz) || 1;
       mx = dx / d; mz = dz / d; want = Math.atan2(dx, dz);
     }
-    const turn = (this.practice ? 5 : this.D.turn) * DT, diff = angDiff(want, p.yaw);
+    const turn = (this.practice ? 5 : D.turn) * DT, diff = angDiff(want, p.yaw);
     const yaw = p.yaw + Math.max(-turn, Math.min(turn, diff));
     const u = ai.ult ? 1 : 0; ai.ult = 0;
     return { s: 0, mx, mz, y: yaw, f, k, u };
@@ -704,6 +823,7 @@ class Room {
 
   applyInput(p, inp) {
     const fired = stepPlayer(p, inp, p.cls, DT);
+    if (fired && this.perk(p, 'fokus')) p.skillCd *= 0.8 ** this.perk(p, 'fokus');
     if (inp.s) p.ack = inp.s;
     if (inp.vt) p.vt = inp.vt;
     if (inp.u) this.ultimate(p);
@@ -731,11 +851,19 @@ class Room {
       for (const p of this.players.values()) {
         if (p.dead) {
           if (p.queue.length) { p.ack = p.queue[p.queue.length - 1].s; p.queue.length = 0; }
+          if (this.pve && !p.bot && this.state === 'play') {
+            // ditolong rekan yang berdiri di dekatnya, atau bangkit sendiri dengan nyawa cadangan
+            let by = null;
+            for (const q of this.players.values()) if (!q.dead && !q.monster && q !== p && Math.hypot(q.x - p.x, q.z - p.z) < PVE.reviveR) { by = q; break; }
+            if (by) p.reviveP += DT;
+            if (p.reviveP >= PVE.reviveTime) { this.revive(p, by); continue; }
+            if (p.spareT > 0) { p.spareT -= DT; if (p.spareT <= 0) { this.revive(p, p); continue; } }
+          }
           p.respawnT -= DT;
           if (p.respawnT <= 0) { if (p.monster) this.removePlayer(p); else this.spawn(p); }
           continue;
         }
-        p.spd = p.spdT > 0 ? SPD_BUFF : 1;
+        p.spd = (p.spdT > 0 ? SPD_BUFF : 1) * (1 + 0.1 * this.perk(p, 'lincah'));
         let inp;
         if (p.monster) { inp = this.monsterThink(p); this.applyInput(p, inp); } else if (p.bot) { inp = this.botThink(p); this.applyInput(p, inp); } else {
           inp = p.queue.shift();
@@ -755,7 +883,8 @@ class Room {
         if (p.spdT > 0) p.spdT -= DT;
         if (p.protT > 0) { p.protT -= DT; if (inp.f) p.protT = 0; }
         p.hurtT += DT;
-        if (p.hurtT > REGEN_DELAY && p.hp < p.maxHp) p.hp = Math.min(p.maxHp, p.hp + REGEN_RATE * DT);
+        const pl = this.perk(p, 'pulih');
+        if (p.hurtT > REGEN_DELAY - pl && p.hp < p.maxHp) p.hp = Math.min(p.maxHp, p.hp + (REGEN_RATE + 4 * pl) * DT);
         if (inp.f && p.fireCd <= 0 && !p.dead) this.shoot(p);
       }
       this.tickN++;
@@ -851,7 +980,8 @@ class Room {
     const base = {
       t: 's', st: this.state === 'end' ? 1 : 0,
       tm: Math.ceil(this.state === 'end' ? this.endT : this.pve ? Math.max(0, this.waveT) : this.timeLeft),
-      wv: this.pve ? [this.wave, this.wavePhase, this.spawnQ.length + [...this.players.values()].filter((q) => q.monster && !q.dead).length] : undefined,
+      wv: this.pve ? [this.wave, this.wavePhase, this.spawnQ.length + [...this.players.values()].filter((q) => q.monster && !q.dead).length, this.checkpoint] : undefined,
+      rv: this.pve ? [...this.players.values()].filter((q) => q.dead && !q.bot).map((q) => [q.id, Math.round((q.reviveP / PVE.reviveTime) * 100), Math.ceil(q.spareT)]) : undefined,
       p: list, e: this.events, o: orbMask, u: runeMask, z: this.holder, k: this.tickN, mp: this.map,
       ev: this.ev ? [this.ev.id, Math.ceil(this.ev.t), this.ev.gx ?? null, this.ev.gz ?? null, this.ev.taken ? 1 : 0] : null,
     };
@@ -859,7 +989,7 @@ class Room {
       if (!p.ws || p.ws.readyState !== 1) continue;
       if (p.ws.bufferedAmount > 65536) continue; // koneksi macet: lewati snapshot ini
       base.a = p.ack;
-      base.me = [p.x, p.z, p.dashT, p.dx, p.dz, p.skillCd, Math.floor(p.xp), r2(Math.max(0, p.respawnT)), r2(Math.max(0, p.dmgT)), r2(Math.max(0, p.spdT)), Math.floor(p.ult)];
+      base.me = [p.x, p.z, p.dashT, p.dx, p.dz, p.skillCd, Math.floor(p.xp), r2(Math.max(0, p.respawnT)), r2(Math.max(0, p.dmgT)), r2(Math.max(0, p.spdT)), Math.floor(p.ult), Object.entries(p.perks).map(([k, v]) => k + v).join(','), p.offer || 0, p.spare];
       p.ws.send(JSON.stringify(base));
     }
     this.events = [];
@@ -941,6 +1071,8 @@ wss.on('connection', (ws) => {
           y: num(m.y, -1e4, 1e4), f: m.f ? 1 : 0, k: m.k ? 1 : 0, u: m.u ? 1 : 0, vt: num(m.vt, 0, 1e9),
         });
       }
+    } else if (m.t === 'perk' && me && room?.pve) {
+      room.pickPerk(me, String(m.id || ''));
     } else if (m.t === 'spr' && me) {
       // balasan ping dari server: rtt diukur server sendiri, dipakai kompensasi lag dan catatan
       const v = Date.now() - num(m.c, 0, 1e15);
@@ -958,6 +1090,7 @@ wss.on('connection', (ws) => {
     setMap(room.map);
     room.removePlayer(me);
     room.balanceBots();
+    if (room.humans() === 0 && room.pve && room.state === 'play') room.logPve(true); // sesi Bertahan yang ditinggalkan tetap tercatat
     if (room.humans() === 0 && rooms.includes(room)) rooms.splice(rooms.indexOf(room), 1);
   });
   ws.on('error', () => {});

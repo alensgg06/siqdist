@@ -207,16 +207,43 @@ export const PVE = {
   cap: 22,                 // monster hidup maksimal sekaligus
   bossEvery: 5,
   winWave: 10,             // bertahan sampai gelombang 10 dihitung menang
-  diffMul: { easy: 0.7, normal: 1, hard: 1.45 },
+  diffMul: { easy: 0.55, normal: 0.75, hard: 1.15 }, // Normal baru kira-kira setara Mudah sebelumnya
 };
 // isi gelombang n untuk h pemain manusia
 export function wavePlan(n, h) {
-  const total = Math.round((2 + 1.5 * n) * (0.65 + 0.35 * Math.max(1, h)));
+  // gelombang 1-3 adalah pemanasan: sedikit monster, naik perlahan
+  const total = Math.round((1 + 1.2 * n + 0.08 * n * n) * (0.65 + 0.35 * Math.max(1, h)));
   const boss = n % PVE.bossEvery === 0;
   const casters = n >= 2 ? Math.round(total * 0.3) : 0;
   const list = [];
   if (boss) for (let i = 0; i < Math.max(1, Math.floor(n / PVE.bossEvery)); i++) list.push('brute');
   for (let i = 0; i < (boss ? Math.round(total * 0.4) : total) - (boss ? 0 : casters); i++) list.push('ghoul');
   for (let i = 0; i < (boss ? Math.round(casters * 0.5) : casters); i++) list.splice(Math.floor(Math.random() * (list.length + 1)), 0, 'caster');
-  return { list, hpMul: 1 + 0.12 * (n - 1) };
+  const warm = Math.min(1, 0.6 + 0.1 * n); // pemanasan: HP dan serangan monster x0,7 di gelombang 1, naik 0,1 per gelombang
+  return { list, hpMul: (1 + 0.12 * (n - 1)) * warm, dmgMul: warm };
 }
+
+// ---- D1: Bertahan Bersama lebih ramah ----
+Object.assign(PVE, {
+  windup: 0.45,            // aba-aba sebelum monster memukul (dtk); pemain bisa menghindar
+  reviveTime: 3,           // berdiri di dekat rekan yang tumbang selama 3 dtk untuk membangkitkannya
+  reviveR: 2.4,
+  spareDelay: 4,           // nyawa cadangan: bangkit sendiri setelah 4 dtk, sekali per gelombang
+  allies: 3,               // isi dengan bot sekutu sampai ada 3 petarung di pihak pemain
+  checkpointEvery: 5,      // setelah kalah, lanjut dari kelipatan 5 terakhir yang diselesaikan
+  perkBreak: 12,           // jeda lebih lama saat memilih berkah
+});
+// ---- Berkah: pilih 1 dari 3 setelah tiap gelombang ----
+export const PERKS = {
+  tajam: { name: 'Tajam', desc: 'Damage +15%' },
+  cepat: { name: 'Cepat', desc: 'Kecepatan tembak +12%' },
+  vampir: { name: 'Vampir', desc: 'Pulih 12% dari damage yang diberikan' },
+  kokoh: { name: 'Kokoh', desc: 'HP maksimal +25' },
+  lincah: { name: 'Lincah', desc: 'Kecepatan lari +10%' },
+  fokus: { name: 'Fokus', desc: 'Jeda skill -20%' },
+  amarah: { name: 'Amarah', desc: 'Pengukur pamungkas terisi 40% lebih cepat' },
+  ganda: { name: 'Ganda', desc: 'Tambahan 1 peluru setiap tembakan' },
+  ledak: { name: 'Ledak', desc: 'Musuh yang tumbang meledak (damage area)' },
+  pulih: { name: 'Pulih', desc: 'HP mulai pulih 1 dtk lebih cepat, +4 per dtk' },
+};
+export const PERK_KEYS = Object.keys(PERKS);

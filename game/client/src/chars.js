@@ -238,10 +238,14 @@ export class Monster {
     g.fillStyle = 'rgba(0,0,0,.7)'; g.fillRect(0, 0, 128, 16); g.fillStyle = this.kind === 'brute' ? '#ff8a2a' : '#ff5d5d'; g.fillRect(2, 2, 124 * f, 12);
     this.tagTex.needsUpdate = true;
   }
-  fireKick() { this.kick = 1; }
+  fireKick() { this.kick = 1; this.windT = 0; }
+  windup(t) { this.windT = t; this.windMax = t; }
   tipWorld(out) { return this.tip.getWorldPosition(out); }
   update(dt, x, z, yaw, flags, time) {
     const dead = flags & 1, g = this.group;
+    // aba-aba: lengan terangkat, tubuh membesar dan berkedip merah
+    this.windT = Math.max(0, (this.windT || 0) - dt);
+    const w = this.windT > 0 ? 1 - this.windT / this.windMax : 0;
     const sp = dt > 0 ? Math.min(30, Math.hypot(x - this.lastX, z - this.lastZ) / dt) : 0;
     this.speed += (sp - this.speed) * Math.min(1, dt * 10); this.lastX = x; this.lastZ = z;
     g.position.set(x, 0, z); g.rotation.y = yaw;
@@ -249,7 +253,9 @@ export class Monster {
     const sw = Math.sin(this.phase) * 0.7 * k;
     if (this.legL) { this.legL.rotation.x = sw; this.legR.rotation.x = -sw; }
     this.kick = Math.max(0, this.kick - dt * 4);
-    if (this.armL) { this.armL.rotation.x = (this.kind === 'ghoul' ? -0.5 : 0) - sw * 0.6 - this.kick * 1.6; this.armR.rotation.x = (this.kind === 'ghoul' ? -0.5 : 0) + sw * 0.6 - this.kick * 1.6; }
+    if (this.armL) { this.armL.rotation.x = (this.kind === 'ghoul' ? -0.5 : 0) - sw * 0.6 - this.kick * 1.6 - w * 2.4; this.armR.rotation.x = (this.kind === 'ghoul' ? -0.5 : 0) + sw * 0.6 - this.kick * 1.6 - w * 2.4; }
+    this.body.scale.setScalar(1 + w * 0.15);
+    this.body.traverse((o) => { if (o.material && o.material.emissive && !o.userData.glow) { o.userData.base ??= o.material.emissive.getHex(); o.material.emissive.setHex(w > 0 && Math.sin(time * 40) > 0 ? 0x661111 : o.userData.base); } });
     if (this.kind === 'caster') { this.body.position.y = 0.25 + Math.sin(time * 2.5) * 0.12; this.orb.position.y = 1.5 + Math.sin(time * 4) * 0.08; }
     else this.body.position.y = Math.abs(Math.sin(this.phase)) * 0.06 * k;
     this.deadT = dead ? Math.min(1, this.deadT + dt * 2) : 0;
