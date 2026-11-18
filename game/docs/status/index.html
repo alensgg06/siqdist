@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Status Arkana</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* VOICE work: laporan status proyek, padat dan jujur soal apa yang terbukti
+   IDEA papan rute ekspedisi di dunia Arkana: setiap stasiun dari kode sampai HP teman diberi tanda status
+   PICTURE jalur tujuh stasiun (kode, uji, image, dockerlab, tunnel, APK, teman) berwarna menurut bukti
+   COLOUR malam senja ungu tua, emas Arkana untuk judul, sian = terbukti, emas = laporanmu, jingga = belum terbukti, merah muda = perlu tindakan
+   TYPE Cinzel untuk judul (huruf logo game), Inter untuk teks dan angka
+   LAYOUT laptop: judul + kesimpulan di atas, rute penuh lebar di bawahnya, angka kunci; ponsel: rute menjadi daftar vertikal */
+:root{color-scheme:dark;--bg:#160d22;--panel:#20152f;--line:#3a2b52;--ink:#f3ecf9;--mute:#bfb1d3;--gold:#f2c66d;--ok:#58e6ff;--you:#f2c66d;--wait:#ff9a3d;--act:#ff5d8a}
+*{box-sizing:border-box;min-width:0}
+html{scroll-padding-top:72px}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 Inter,system-ui,sans-serif;overflow-x:clip}
+.band{padding-block:clamp(28px,4vw,56px);padding-left:max(5vw,16px,env(safe-area-inset-left,0px));padding-right:max(5vw,16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1240px;margin:0 auto}
+.hero{background:radial-gradient(120% 90% at 85% 0%,#4a2453 0%,#2a1638 45%,var(--bg) 80%)}
+h1{font-family:Cinzel,Georgia,serif;font-weight:700;font-size:clamp(30px,4.4vw,48px);line-height:1.08;letter-spacing:-.01em;color:var(--gold);margin:0 0 14px;text-wrap:balance;max-width:22ch}
+.lede{font-size:17px;max-width:68ch;margin:0 0 6px}
+.meta{color:var(--mute);font-size:14px;margin:0}
+h2{font-family:Cinzel,Georgia,serif;font-weight:600;font-size:clamp(22px,2.6vw,28px);line-height:1.15;margin:0 0 6px;color:var(--ink);text-wrap:balance}
+h2+p.sub{color:var(--mute);margin:0 0 18px;max-width:70ch}
+.legend{display:flex;flex-wrap:wrap;gap:8px 18px;margin:22px 0 14px;font-size:14px;color:var(--mute)}
+.legend span{display:inline-flex;align-items:center;gap:7px}
+.dot{width:12px;height:12px;border-radius:50%;flex:none;background:var(--c)}
+.route{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:0;position:relative}
+.route li{position:relative;padding:44px 10px 0 0}
+.route li::before{content:"";position:absolute;top:15px;left:0;right:0;height:4px;background:var(--c);opacity:.55}
+.route li:first-child::before{left:12px}
+.route li:last-child::before{right:auto;width:12px}
+.route .node{position:absolute;top:4px;left:0;width:26px;height:26px;border-radius:50%;background:var(--bg);border:4px solid var(--c);box-shadow:0 0 18px -2px var(--c)}
+.route b{display:block;font-size:15px;line-height:1.25;margin-bottom:4px}
+.route .st{display:inline-block;font-size:13px;font-weight:600;color:var(--c);margin-bottom:6px}
+.route p{margin:0;font-size:14px;line-height:1.45;color:var(--mute)}
+.figs{display:grid;grid-template-columns:repeat(auto-fit,minmax(10.5em,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-top:30px}
+.figs div{background:var(--panel);padding:14px 16px}
+.figs strong{display:block;font-size:clamp(22px,2.4vw,28px);font-weight:700;line-height:1.1;white-space:nowrap}
+.figs span{font-size:14px;color:var(--mute)}
+.alt{background:#1b1129}
+.grid2{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:clamp(20px,3vw,44px);align-items:start}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:15px}
+th{text-align:left;font-size:13px;font-weight:600;color:var(--mute);padding:8px 10px;border-bottom:1px solid var(--line)}
+td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top}
+td:first-child{font-weight:600;white-space:nowrap}
+.tag{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--c);white-space:nowrap}
+.acts{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.acts li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 14px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.acts .n{grid-row:span 2;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-weight:700;color:var(--bg);background:var(--c)}
+.acts b{font-size:16px}
+.acts p{margin:0;font-size:14px;color:var(--mute)}
+.acts code,td code,p code{font-size:13.5px;background:#2c1f40;padding:1px 6px;border-radius:5px;overflow-wrap:anywhere}
+figure{margin:0}
+figure img{display:block;width:100%;height:auto;border-radius:10px;border:1px solid var(--line)}
+figcaption{font-size:14px;color:var(--mute);margin-top:8px}
+.risk{display:grid;gap:12px}
+.risk div{border-left:3px solid var(--c);padding:2px 0 2px 14px}
+.risk b{display:block}
+.risk p{margin:2px 0 0;font-size:15px;color:var(--mute)}
+.cls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.cls div{background:var(--panel);border:1px solid var(--line);border-top:3px solid var(--c);border-radius:10px;padding:14px 16px}
+.cls b{display:block;font-family:Cinzel,Georgia,serif;font-size:17px;color:var(--c)}
+.cls p{margin:6px 0 0;font-size:14px;color:var(--mute)}
+.cls dl{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;margin:10px 0 0;font-size:14px}
+.cls dt{color:var(--mute)}.cls dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
+.log{list-style:none;margin:0;padding:0;border-left:2px solid var(--line)}
+.log li{position:relative;padding:0 0 14px 18px}
+.log li::before{content:"";position:absolute;left:-6px;top:7px;width:10px;height:10px;border-radius:50%;background:var(--gold)}
+.log code{font-size:13px;color:var(--mute)}
+footer{color:var(--mute);font-size:14px}
+@media(max-width:900px){.route{grid-template-columns:minmax(0,1fr);gap:0}.route li{padding:0 0 18px 42px}.route li::before{top:0;bottom:0;left:11px;right:auto;width:4px;height:auto}.route li:first-child::before{top:14px;left:11px}.route li:last-child::before{height:14px;width:4px;bottom:auto}.route .node{top:1px}.grid2{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:700px){.cls{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:600px){table{font-size:13px}.stack thead{display:none}.stack tr{display:grid;padding-block:10px;border-bottom:1px solid var(--line)}.stack td{display:block;border:0;padding:3px 0}.stack td::before{content:attr(data-l);display:block;font-size:12px;color:var(--mute);font-weight:500}td:first-child{white-space:normal}}
+@media(prefers-reduced-motion:no-preference){.route .node{animation:glow 2.6s ease-in-out infinite alternate}}
+@keyframes glow{from{box-shadow:0 0 6px -2px var(--c)}to{box-shadow:0 0 22px 0 var(--c)}}
+</style>
+</head>
+<body>
+
+<header class="band hero">
+  <div class="wrap">
+    <h1>Arkana jalan di jaringan rumah; jalur internet belum terbukti</h1>
+    <p class="lede">Game, server, uji otomatis, image Docker, dan APK sudah jadi. Server sudah berjalan di dockerlab pada port 18080. Yang belum terbukti adalah tunnel ke <code>arkana.idxsignal.com</code>, dan pengaturan Public Hostname terakhir yang kamu laporkan (<code>arkana:18080</code>) salah. Itu satu-satunya penghalang sebelum APK bisa dibagikan.</p>
+    <p class="meta">Per 18 November 2026 · branch <code>claude/practical-sagan-uin0e8</code> · PR #2 terbuka</p>
+
+    <div class="legend" aria-label="Keterangan status">
+      <span style="--c:var(--ok)"><i class="dot"></i>Terbukti oleh uji di sesi ini</span>
+      <span style="--c:var(--you)"><i class="dot"></i>Dilaporkan olehmu, belum saya lihat</span>
+      <span style="--c:var(--wait)"><i class="dot"></i>Belum terbukti</span>
+      <span style="--c:var(--act)"><i class="dot"></i>Perlu tindakan</span>
+    </div>
+
+    <ol class="route" id="route"></ol>
+
+    <div class="figs" id="figs"></div>
+  </div>
+</header>
+
+<section class="band">
+  <div class="wrap">
+    <h2>Satu perbaikan dan empat uji memisahkan game dari teman-temanmu</h2>
+    <p class="sub">Urut sesuai ketergantungan: langkah berikutnya tidak berarti apa-apa sebelum langkah sebelumnya lolos.</p>
+    <ol class="acts" id="acts"></ol>
+  </div>
+</section>
+
+<section class="band alt">
+  <div class="wrap">
+    <h2>Status per komponen</h2>
+    <p class="sub">Setiap baris menyebut bukti yang benar-benar ada, bukan yang diharapkan.</p>
+    <div class="scroll">
+      <table class="stack">
+        <thead><tr><th>Komponen</th><th>Status</th><th>Bukti</th><th>Catatan</th></tr></thead>
+        <tbody id="comp"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="band">
+  <div class="wrap grid2">
+    <div>
+      <h2>Yang sudah dibangun</h2>
+      <p class="sub">Deathmatch PvP orang-ketiga, mobile-first, maksimal 8 pemain per room, bot mengisi sampai 6. Pemenang: pertama mencapai 20 kill atau skor tertinggi setelah 5 menit.</p>
+      <div class="cls" id="cls"></div>
+      <p class="sub" style="margin-top:16px">Lapisan RPG: XP dari damage dan kill, level 1 sampai 5 (+8% damage dan +12 HP per level), bola penyembuh 40 HP, pemulihan HP setelah 5 detik tanpa terkena.</p>
+    </div>
+    <figure>
+      <img src="gameplay.jpg" alt="Penyihir Bara berdiri di lorong reruntuhan dengan rumput dan bola penyembuh hijau, HUD dengan joystick, tombol Nova dan tombol tembak" width="1200" height="555">
+      <figcaption>Tangkapan layar asli dari emulasi HP mendatar, kualitas Tinggi. Render perangkat lunak tanpa GPU, jadi angka fps di pojok bawah tidak mewakili HP.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="band alt">
+  <div class="wrap grid2">
+    <div>
+      <h2>Risiko dan batasan yang diketahui</h2>
+      <div class="risk" id="risk"></div>
+    </div>
+    <div>
+      <h2>Riwayat commit</h2>
+      <p class="sub">Enam commit di atas <code>main</code>, semuanya di PR #2.</p>
+      <ul class="log" id="log"></ul>
+    </div>
+  </div>
+</section>
+
+<footer class="band">
+  <div class="wrap">Angka kode dihitung dari baris file sumber; ukuran bundle dan APK dari file hasil build. Status "terbukti" berarti diuji di container sesi ini, bukan di dockerlab atau di HP.</div>
+</footer>
+
+<script>
+{
+const C={ok:'var(--ok)',you:'var(--you)',wait:'var(--wait)',act:'var(--act)'};
+const L={ok:'Terbukti',you:'Laporanmu',wait:'Belum terbukti',act:'Perlu tindakan'};
+
+const route=[
+  ['Kode game','ok','Klien Three.js, server Node otoritatif, peta dan fisika bersama.'],
+  ['Uji otomatis','ok','2 rangkaian uji jaringan lulus, dijalankan ulang hari ini.'],
+  ['Image Docker','ok','Dibangun dan diuji di sini: 240 MB, 18 MB RAM saat main.'],
+  ['Dockerlab :18080','you','Kamu melaporkan server jalan dan port 18080 aktif.'],
+  ['Tunnel Cloudflare','act','Public Hostname harus arkana:8080, bukan arkana:18080.'],
+  ['APK v0.1.1','wait','Tanda tangan valid, tapi belum pernah dipasang di HP.'],
+  ['HP teman','wait','Belum ada yang bermain dari luar jaringan rumah.']
+];
+document.getElementById('route').innerHTML=route.map(([n,s,d])=>`<li style="--c:${C[s]}"><i class="node"></i><b>${n}</b><span class="st">${L[s]}</span><p>${d}</p></li>`).join('');
+
+const figs=[
+  ['5 / 5','pemeriksaan uji lulus'],
+  ['2.113','baris kode sumber'],
+  ['571 KB','bundle klien'],
+  ['17 KB','APK v0.1.1'],
+  ['18 MB','RAM server saat main'],
+  ['0','pemain dari luar rumah']
+];
+document.getElementById('figs').innerHTML=figs.map(([v,l])=>`<div><strong>${v}</strong><span>${l}</span></div>`).join('');
+
+const acts=[
+  ['act','Ubah Public Hostname ke arkana:8080','Zero Trust > Networks > Tunnels > arkana > Edit > Public Hostname. Port 18080 hanya ada di host; container tunnel tersambung lewat jaringan Docker ke port 8080. Kecuali bila cloudflared berjalan di luar compose ini: lalu pakai <code>192.168.1.198:18080</code>.'],
+  ['act','Cabut token cfut_ yang tampil di chat','Dasbor Cloudflare > My Profile > API Tokens. Token itu tersimpan di riwayat percakapan.'],
+  ['wait','Buka /health dari HP dengan data seluler','<code>https://arkana.idxsignal.com/health</code> harus membalas <code>{"ok":true,...}</code>. Error 1033/530 berarti tunnel putus; 502/503 berarti hostname salah arah.'],
+  ['wait','Masuk arena dari browser HP','Membuktikan WebSocket ikut lewat tunnel. Tertahan di "Menghubungkan…" berarti WebSocket terblokir.'],
+  ['wait','Pasang APK dan main berdua dari dua HP','Keduanya harus saling terlihat di arena dan di papan skor. Setelah ini lolos, APK siap dibagikan.']
+];
+document.getElementById('acts').innerHTML=acts.map(([s,t,d],i)=>`<li style="--c:${C[s]}"><span class="n">${i+1}</span><b>${t}</b><p>${d}</p></li>`).join('');
+
+const comp=[
+  ['Server game','ok','Uji: gabung, gerak, damage, kill, input rusak','Otoritatif 30 tick/detik; bot mengisi room.'],
+  ['Akhir ronde','ok','Uji regresi dengan batas 1 kill','Bug crash saat ronde berakhir ditemukan dan diperbaiki.'],
+  ['Klien di emulasi HP','ok','Tangkapan layar, tanpa error konsol','Sentuh: joystick, bidik geser, tembak, skill.'],
+  ['Image Docker','ok','Build, /health, uji jaringan ke container','Healthcheck terlihat "starting", belum "healthy".'],
+  ['Server di dockerlab','you','Laporanmu: jalan, port 18080 aktif','Port host diatur ARKANA_PORT di .env.'],
+  ['Cloudflare Tunnel','act','Belum ada log atau uji dari luar','Hostname harus arkana:8080.'],
+  ['APK Android','wait','apksigner v2/v3 valid, zipalign OK','Belum dipasang di HP atau emulator.'],
+  ['Performa di HP nyata','wait','Tidak ada data','Preset kualitas turun otomatis bila fps rendah.'],
+  ['Kontrol desktop','wait','Ditulis, tidak diuji','WASD, mouse, Spasi, Tab.'],
+  ['iPhone','wait','Tidak diuji','Tidak bisa pasang APK; main lewat Safari di alamat HTTPS.'],
+  ['PR #2','ok','Bisa di-merge tanpa konflik, tanpa CI','Merge tidak memengaruhi server yang jalan.']
+];
+document.getElementById('comp').innerHTML=comp.map(([k,s,b,n])=>`<tr><td>${k}</td><td><span class="tag" style="--c:${C[s]}"><i class="dot"></i>${L[s]}</span></td><td>${b}</td><td>${n}</td></tr>`).join('');
+
+const cls=[
+  ['Pemanah Arkana','var(--ok)','Tembakan cepat jarak jauh. Skill Kilat: melesat ke arah gerak.',[['HP','100'],['Damage','9 / 0,16 dtk'],['Skill','5 dtk']]],
+  ['Penyihir Bara','var(--wait)','Bola api dengan ledakan area. Skill Nova: ledakan di sekeliling tubuh.',[['HP','90'],['Damage','34 / 0,7 dtk'],['Skill','9 dtk']]],
+  ['Penjaga Rune','#9dff6a','Sebaran rune jarak dekat. Skill Perisai: menahan 70% serangan 3 dtk.',[['HP','140'],['Damage','6 × 8 / 0,75 dtk'],['Skill','10 dtk']]]
+];
+document.getElementById('cls').innerHTML=cls.map(([n,c,d,st])=>`<div style="--c:${c}"><b>${n}</b><p>${d}</p><dl>${st.map(([a,b])=>`<dt>${a}</dt><dd>${b}</dd>`).join('')}</dl></div>`).join('');
+
+const risk=[
+  ['act','Kunci tanda tangan APK','File arkana.jks hanya ada di container sesi ini (akan dihapus) dan di salinan yang saya kirim kepadamu. Hilang berarti versi APK berikutnya tidak bisa menimpa yang lama.'],
+  ['wait','Tanpa kompensasi lag','Tembakan adalah proyektil yang disimulasikan server. Pada ping tinggi pemain harus membidik sedikit di depan lawan.'],
+  ['wait','Performa HP kelas bawah','Belum diukur. Efek bloom dan bayangan bisa menurunkan fps di bawah 30; preset turun otomatis ke Sedang atau Rendah.'],
+  ['wait','Kualitas visual','Setara indie stylized, bukan RPG AAA. Karakter berupa bentuk geometris dengan animasi prosedural; ini bagian terlemah.'],
+  ['you','Kata sandi kunci bawaan','Tertulis di skrip publik. Cukup untuk dibagikan antar teman, tidak untuk rilis publik.']
+];
+document.getElementById('risk').innerHTML=risk.map(([s,t,d])=>`<div style="--c:${C[s]}"><b>${t}</b><p>${d}</p></div>`).join('');
+
+const log=[
+  ['9abd16c','Port host bisa diatur lewat ARKANA_PORT (bawaan 18080)'],
+  ['f7de755','Versi APK naik ke 0.1.1'],
+  ['5be436d','Cloudflare Tunnel sebagai profil docker compose'],
+  ['6e2c76f','Pembungkus Android (APK) dan skrip build tanpa Gradle'],
+  ['024dd3b','Dockerfile dan docker-compose untuk deploy'],
+  ['eb6f4a6','Game Arkana: server, klien, uji']
+];
+document.getElementById('log').innerHTML=log.map(([h,t])=>`<li><code>${h}</code><br>${t}</li>`).join('');
+
+for(const c of document.querySelectorAll('.stack td')){let i=0,p=c;while(p=p.previousElementSibling)i+=p.colSpan;c.dataset.l=c.closest('table').rows[0].cells[i]?.textContent||''}
+}
+</script>
+</body>
+</html>
