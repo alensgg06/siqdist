@@ -54,6 +54,21 @@ game.domainmu.com {
 }
 ```
 
+## Aplikasi Android (APK)
+
+Folder `android/` berisi pembungkus tipis: aplikasi layar penuh yang membuka game dari
+server. APK tidak memuat game-nya, jadi server tetap harus menyala dan terjangkau dari HP.
+
+```bash
+ANDROID_HOME=/path/android-sdk ./android/build.sh http://ALAMAT-SERVER:8080
+# hasil: android/build/Arkana.apk
+```
+
+Butuh JDK 17+ dan Android SDK (platform 34, build-tools 35.0.0). Alamat server tertanam
+sebagai bawaan; pemain bisa menggantinya lewat tombol Kembali > "Ganti server".
+Simpan file kunci tanda tangan (`~/.arkana/arkana.jks`): versi baru hanya bisa menimpa
+versi lama bila ditandatangani kunci yang sama.
+
 ## Kontrol
 
 | | HP | Desktop |

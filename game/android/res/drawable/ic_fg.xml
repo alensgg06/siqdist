@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Kristal arkana di atas cincin rune -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:pathData="M54,54m-25,0a25,25 0,1 1,50 0a25,25 0,1 1,-50 0"
+        android:strokeColor="#F2C66D" android:strokeWidth="2.5" android:fillColor="#00000000" />
+    <path android:pathData="M54,28 L68,54 L54,80 L40,54 Z" android:fillColor="#58E6FF" />
+    <path android:pathData="M54,28 L68,54 L54,54 Z" android:fillColor="#B8F6FF" />
+    <path android:pathData="M54,54 L54,80 L40,54 Z" android:fillColor="#2AA9C9" />
+</vector>
