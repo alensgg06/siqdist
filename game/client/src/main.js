@@ -126,11 +126,9 @@ $('hint').textContent = isTouch
   ? 'Jempol kiri: gerak · geser sisi kanan: bidik · tombol merah: tembak. Lebih nyaman dalam posisi mendatar.'
   : 'WASD gerak · mouse bidik · klik tembak · Spasi skill · Tab papan skor';
 
+// Selalu server asal halaman ini; tidak ada cara mengganti server dari sisi pemain.
 function serverUrl() {
-  const q = new URLSearchParams(location.search).get('server');
-  if (q) { store.set('server', q); return q; }
-  const saved = store.get('server', '');
-  if (saved && !['localhost', '127.0.0.1'].includes(location.hostname)) return saved;
+  try { localStorage.removeItem('arkana.server'); } catch { /* mode privat */ } // bersihkan pilihan dari versi lama
   return (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
 }
 

@@ -23,8 +23,7 @@ Di layanan seperti Render, Railway, atau Fly.io:
 - Start command: `npm start`
 - Health check: `/health`
 
-Server yang sama menyajikan klien dan WebSocket (`/ws`). Jika klien disajikan dari tempat
-lain, arahkan ke server dengan `?server=wss://alamat-server/ws`.
+Server yang sama menyajikan klien dan WebSocket (`/ws`); klien selalu tersambung ke server asal halamannya.
 
 ## Menaruh di VPS dengan Docker
 
@@ -89,7 +88,7 @@ ANDROID_HOME=/path/android-sdk ./android/build.sh http://ALAMAT-SERVER:8080
 ```
 
 Butuh JDK 17+ dan Android SDK (platform 34, build-tools 35.0.0). Alamat server tertanam
-sebagai bawaan; pemain bisa menggantinya lewat tombol Kembali > "Ganti server".
+dan pemain tidak bisa menggantinya; alamat baru berarti APK baru.
 Simpan file kunci tanda tangan (`~/.arkana/arkana.jks`): versi baru hanya bisa menimpa
 versi lama bila ditandatangani kunci yang sama.
 

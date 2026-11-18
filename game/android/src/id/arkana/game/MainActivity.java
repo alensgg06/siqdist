@@ -4,9 +4,7 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.SharedPreferences;
 import android.graphics.Color;
-import android.net.Uri;
 import android.os.Bundle;
-import android.text.InputType;
 import android.util.Base64;
 import android.view.View;
 import android.view.WindowManager;
@@ -15,11 +13,10 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.widget.EditText;
 
 /**
  * Pembungkus tipis: membuka klien game dari server dalam WebView layar penuh.
- * Alamat server bawaan disimpan tersamar dan tidak pernah ditampilkan ke pemain.
+ * Alamat server tertanam saat build, disimpan tersamar, tidak ditampilkan, dan tidak bisa diganti pemain.
  */
 public class MainActivity extends Activity {
     private static final byte[] KEY = "arkana-senja".getBytes();
@@ -33,18 +30,15 @@ public class MainActivity extends Activity {
         return new String(d);
     }
 
-    /** Alamat yang dipakai: alamat pilihan pemain bila pernah diganti, selain itu alamat bawaan. */
-    private String serverUrl() {
-        String custom = prefs.getString("custom", "");
-        return custom.isEmpty() ? builtIn() : custom;
-    }
+    /** Selalu alamat bawaan; pemain tidak bisa menggantinya. */
+    private String serverUrl() { return builtIn(); }
 
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         prefs = getSharedPreferences("arkana", MODE_PRIVATE);
-        prefs.edit().remove("server").apply(); // versi lama menyimpan alamat bawaan sebagai teks biasa
+        prefs.edit().remove("server").remove("custom").apply(); // hapus alamat lama/pilihan pemain dari versi sebelumnya
         WebView.setWebContentsDebuggingEnabled(false);
         web = new WebView(this);
         web.setBackgroundColor(Color.parseColor("#120A1C"));
@@ -63,8 +57,7 @@ public class MainActivity extends Activity {
             }
         });
         setContentView(web);
-        String url = serverUrl();
-        if (url.isEmpty()) askServer(); else web.loadUrl(url);
+        web.loadUrl(serverUrl());
     }
 
     private void offline() {
@@ -75,26 +68,6 @@ public class MainActivity extends Activity {
             .setCancelable(false)
             .setPositiveButton("Coba lagi", (d, w) -> { dialogOpen = false; web.loadUrl(serverUrl()); })
             .setNegativeButton("Keluar", (d, w) -> finish())
-            .show();
-    }
-
-    private void askServer() {
-        if (dialogOpen || isFinishing()) return;
-        dialogOpen = true;
-        final EditText in = new EditText(this);
-        in.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
-        in.setHint("Kosongkan untuk server bawaan");
-        in.setText(prefs.getString("custom", ""));
-        new AlertDialog.Builder(this).setTitle("Ganti server").setView(in).setCancelable(false)
-            .setPositiveButton("Sambungkan", (d, w) -> {
-                dialogOpen = false;
-                String u = in.getText().toString().trim();
-                if (!u.isEmpty() && !u.contains("://")) u = "https://" + u;
-                if (!u.isEmpty() && Uri.parse(u).getHost() == null) { askServer(); return; }
-                prefs.edit().putString("custom", u).apply();
-                web.loadUrl(serverUrl());
-            })
-            .setNegativeButton("Batal", (d, w) -> dialogOpen = false)
             .show();
     }
 
@@ -114,7 +87,6 @@ public class MainActivity extends Activity {
     public void onBackPressed() {
         new AlertDialog.Builder(this).setMessage("Keluar dari Arkana?")
             .setPositiveButton("Keluar", (d, w) -> finish())
-            .setNeutralButton("Ganti server", (d, w) -> askServer())
             .setNegativeButton("Batal", null).show();
     }
 }
