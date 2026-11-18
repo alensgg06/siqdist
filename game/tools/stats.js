@@ -26,7 +26,7 @@ console.log(`FPS manusia          : median ${fps.length ? fps[fps.length >> 1] :
 
 console.log('\nKeseimbangan kelas (semua pemain termasuk bot):');
 console.log('kelas      main  kill/main  gugur/main  K/D   damage/main  menang');
-for (const cls of ['ranger', 'mage', 'guardian']) {
+for (const cls of ['ranger', 'mage', 'guardian', 'priest']) {
   const ps = all.filter((p) => p.cls === cls);
   const k = ps.reduce((s, p) => s + p.kills, 0), d = ps.reduce((s, p) => s + p.deaths, 0), dm = ps.reduce((s, p) => s + (p.dmg || 0), 0);
   const wins = matches.filter((m) => m.players.find((p) => p.name === m.winner)?.cls === cls).length;

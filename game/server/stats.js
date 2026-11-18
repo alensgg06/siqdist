@@ -53,6 +53,14 @@ export class Stats {
       fs.renameSync(tmp, this.file); // tulis atomik: file lama tidak pernah setengah tertulis
     } catch (err) { console.error('gagal menyimpan statistik:', err.message); }
   }
+  bump(pid, name, field, n = 1) { const s = this.touch(pid, name); if (!s) return; s[field] = (s[field] || 0) + n; this.save(); }
+  // gelombang Bertahan Bersama terbaik (sepanjang masa dan minggu ini)
+  wave(pid, name, cleared) {
+    const s = this.touch(pid, name); if (!s) return;
+    s.bestWave = Math.max(s.bestWave || 0, cleared); s.wk.wave = Math.max(s.wk.wave || 0, cleared);
+    this.save();
+  }
+
   // tantangan harian: 3 tantangan yang sama untuk semua pemain, dipilih dari tanggal (zona WIB)
   static today() { return new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10); }
   static daily(date = Stats.today()) {
@@ -95,6 +103,7 @@ export class Stats {
       .map((s) => ({ name: s.name, kills: s.wk.kills, wins: s.wk.wins }));
     const ever = all.filter((s) => s.wins || s.kills).sort((a, b) => b.wins - a.wins || b.kills - a.kills).slice(0, 10)
       .map((s) => ({ name: s.name, wins: s.wins, kills: s.kills }));
-    return { week: wk, top: week, ever };
+    const waves = all.filter((s) => s.week === wk && s.wk.wave).sort((a, b) => b.wk.wave - a.wk.wave).slice(0, 10).map((s) => ({ name: s.name, wave: s.wk.wave }));
+    return { week: wk, top: week, ever, waves };
   }
 }

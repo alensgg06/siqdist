@@ -39,6 +39,12 @@ export const CLASSES = {
     hp: 140, speed: 7, fireCd: 0.75, dmg: 8, projSpeed: 55, projLife: 0.32,
     pellets: 6, spread: 0.16, splash: 0, skill: 'shield', skillCd: 10, color: 0x9dff6a,
   },
+  priest: {
+    name: 'Pendeta Fajar', desc: 'Penyembuh: memulihkan diri dan rekan', skillName: 'Doa',
+    skillDesc: 'Pulihkan 35 HP untukmu dan rekan di dekatmu',
+    hp: 95, speed: 8, fireCd: 0.4, dmg: 13, projSpeed: 45, projLife: 0.8,
+    pellets: 1, spread: 0.02, splash: 0, skill: 'heal', skillCd: 9, color: 0xffe27a,
+  },
 };
 export const CLASS_KEYS = Object.keys(CLASSES);
 
@@ -173,6 +179,7 @@ export const ULT = {
   ranger: { name: 'Hujan Panah', desc: '11 panah menyebar sekaligus' },
   mage: { name: 'Meteor', desc: 'Meteor jatuh di depan, ledakan besar' },
   guardian: { name: 'Benteng Rune', desc: 'Perisai 5 dtk, pulih 50% HP, gelombang kejut' },
+  priest: { name: 'Cahaya Fajar', desc: 'Rekan pulih penuh dan yang tumbang bangkit; lawan di dekatmu terluka' },
 };
 export const CHALLENGES = [
   { id: 'kill10', text: '10 kill di arena', type: 'kill', n: 10 },
@@ -216,9 +223,11 @@ export function wavePlan(n, h) {
   const boss = n % PVE.bossEvery === 0;
   const casters = n >= 2 ? Math.round(total * 0.3) : 0;
   const list = [];
-  if (boss) for (let i = 0; i < Math.max(1, Math.floor(n / PVE.bossEvery)); i++) list.push('brute');
+  // bos bergantian: gelombang 5, 15, ... Golem Batu; gelombang 10, 20, ... Ratu Laba-laba
+  if (boss) for (let i = 0; i < Math.max(1, Math.ceil(n / 10)); i++) list.push(n % 10 === 0 ? 'queen' : 'brute');
   for (let i = 0; i < (boss ? Math.round(total * 0.4) : total) - (boss ? 0 : casters); i++) list.push('ghoul');
-  for (let i = 0; i < (boss ? Math.round(casters * 0.5) : casters); i++) list.splice(Math.floor(Math.random() * (list.length + 1)), 0, 'caster');
+  // sejak gelombang 4, sebagian dukun diganti Penyihir Es yang memperlambat
+  for (let i = 0; i < (boss ? Math.round(casters * 0.5) : casters); i++) list.splice(Math.floor(Math.random() * (list.length + 1)), 0, n >= 4 && i % 3 === 0 ? 'frost' : 'caster');
   const warm = Math.min(1, 0.6 + 0.1 * n); // pemanasan: HP dan serangan monster x0,7 di gelombang 1, naik 0,1 per gelombang
   return { list, hpMul: (1 + 0.12 * (n - 1)) * warm, dmgMul: warm };
 }
@@ -247,3 +256,36 @@ export const PERKS = {
   pulih: { name: 'Pulih', desc: 'HP mulai pulih 1 dtk lebih cepat, +4 per dtk' },
 };
 export const PERK_KEYS = Object.keys(PERKS);
+
+// ---- D2 ----
+export const HEAL_AMOUNT = 35, HEAL_R = 7;
+export const SLOW_TIME = 2.5, SLOW_MUL = 0.55;
+Object.assign(MONSTERS, {
+  frost: { name: 'Penyihir Es', hp: 34, speed: 5.2, color: 0x7fd8ff, range: 17, slow: true,
+    fireCd: 1.9, dmg: 10, projSpeed: 26, projLife: 1.7, pellets: 1, spread: 0.04, splash: 0, skill: 'none', skillCd: 99 },
+  spiderling: { name: 'Anak Laba-laba', hp: 14, speed: 8.2, color: 0xff5d7a, melee: { dmg: 4, cd: 0.9, r: 1.6 } },
+  queen: { name: 'Ratu Laba-laba', hp: 300, speed: 4.6, color: 0xff2e5a, boss: true,
+    melee: { dmg: 14, cd: 1.4, r: 2.8 }, summon: { cd: 7, n: 2, max: 6 } },
+});
+Object.assign(ALL_CLASSES, CLASSES, MONSTERS);
+// tong meledak (hanya di Pelabuhan): ditembak -> ledakan area, muncul lagi setelah 20 dtk
+MAPS.ruins.barrels = [];
+MAPS.harbor.barrels = [[19, 7], [-19, -7], [7, -19], [-7, 19], [26, 20], [-26, -20]];
+export const BARREL_R = 5, BARREL_DMG = 40, BARREL_RESPAWN = 20;
+// mode akhir pekan untuk room publik (Sabtu-Minggu WIB), bergilir tiap minggu
+export const MUTATORS = {
+  giant: { name: 'Raksasa', desc: 'Semua besar: HP +60%, gerak lebih lambat' },
+  meteor: { name: 'Hujan Meteor', desc: 'Meteor jatuh di dekat pemain; lihat lingkaran merah' },
+  oneshot: { name: 'Tembakan Maut', desc: 'Damage x3, tembakan lebih jarang' },
+  mage: { name: 'Hanya Penyihir', desc: 'Semua bermain sebagai Penyihir Bara' },
+};
+export const PINGS = ['Tolong!', 'Ke sini!', 'Bagus!'];
+export const ACHIEVEMENTS = [
+  { id: 'k100', name: 'Pembasmi', text: '100 kill', stat: 'kills', n: 100 },
+  { id: 'w10', name: 'Juara', text: 'Menang 10 ronde', stat: 'wins', n: 10 },
+  { id: 'wave5', name: 'Penakluk Golem', text: 'Selesaikan gelombang 5', stat: 'bestWave', n: 5 },
+  { id: 'wave10', name: 'Pembasmi Ratu', text: 'Selesaikan gelombang 10', stat: 'bestWave', n: 10 },
+  { id: 'rev10', name: 'Penolong', text: 'Tolong rekan 10 kali', stat: 'revives', n: 10 },
+  { id: 'bnt5', name: 'Pemburu Hadiah', text: 'Tumbangkan 5 buronan', stat: 'bounties', n: 5 },
+  { id: 'chal7', name: 'Rajin', text: 'Selesaikan 7 tantangan harian', stat: 'chal', n: 7 },
+];

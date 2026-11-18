@@ -3,7 +3,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { DT, CLASSES, CLASS_KEYS, ARENA, MAPS, XP_LV, MAX_LEVEL, NOVA_R, KILL_LIMIT, KOTH_R, RUNE_INFO, SPD_BUFF, INTERP, TEAMS, TEAM_MODES, SKINS, skinUnlocked, ULT, ULT_MAX, EVENTS, MONSTERS, ALL_CLASSES, PERKS, PVE } from '../../shared/config.js';
+import { DT, CLASSES, CLASS_KEYS, ARENA, MAPS, XP_LV, MAX_LEVEL, NOVA_R, KILL_LIMIT, KOTH_R, RUNE_INFO, SPD_BUFF, INTERP, TEAMS, TEAM_MODES, SKINS, skinUnlocked, ULT, ULT_MAX, EVENTS, MONSTERS, ALL_CLASSES, PERKS, PVE, MUTATORS, PINGS, ACHIEVEMENTS, SLOW_MUL } from '../../shared/config.js';
 import { stepPlayer, blocked, los, angDiff, setMap } from '../../shared/sim.js';
 import { buildWorld, buildExtras } from './world.js';
 import { buildHarbor } from './harbor.js';
@@ -145,7 +145,7 @@ function serverUrl() {
   return (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
 }
 
-const menuBtns = ['play', 'create', 'joinBtn', 'practice'];
+const menuBtns = ['play', 'create', 'joinBtn', 'practice', 'rejoin'];
 const cleanCode = (v) => String(v || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4);
 {
   const q = cleanCode(new URLSearchParams(location.search).get('room'));
@@ -212,7 +212,7 @@ function drawThreats() {
     if (vtmp.z < 0) { vtmp.set(p.x, 1.5, p.z).project(camera); if (Math.abs(vtmp.x) < 0.92 && Math.abs(vtmp.y) < 0.88) continue; }
     // arah panah dari sudut relatif terhadap arah hadap: 0 = depan (atas layar), kanan pemain = kanan layar
     const a = -angDiff(Math.atan2(p.x - G.rx, p.z - G.rz), input.yaw);
-    list.push({ a, d, boss: G.roster.get(p.id)?.cls === 'brute', wind: (winding.get(p.id) || 0) > G.time });
+    list.push({ a, d, boss: !!MONSTERS[G.roster.get(p.id)?.cls]?.boss, wind: (winding.get(p.id) || 0) > G.time });
   }
   list.sort((x, y) => x.d - y.d);
   for (let i = 0; i < 6; i++) {
@@ -250,6 +250,19 @@ function showPerks(offer) {
 }
 for (const ev of ['touchstart', 'touchmove']) $('perks').addEventListener(ev, (e) => e.stopPropagation());
 
+// ---------- D2: isyarat cepat dan kembali ke room terakhir ----------
+$('pingMenu').innerHTML = PINGS.map((t, i) => `<button data-k="${i}">${t}</button>`).join('');
+$('pingBtn').addEventListener('click', () => $('pingMenu').classList.toggle('hidden'));
+for (const b of $('pingMenu').children) b.addEventListener('click', () => { G.ws?.send(JSON.stringify({ t: 'ping', k: +b.dataset.k })); $('pingMenu').classList.add('hidden'); });
+for (const el of [$('pingBtn'), $('pingMenu')]) for (const ev of ['touchstart', 'touchmove', 'mousedown']) el.addEventListener(ev, (e) => e.stopPropagation());
+function showRejoin() {
+  const c = store.get('lastRoom', ''), b = $('rejoin');
+  b.classList.toggle('hidden', !c);
+  if (c) b.textContent = `Kembali ke room ${c}`;
+}
+$('rejoin').addEventListener('click', () => { const c = store.get('lastRoom', ''); if (c) start('join', c); });
+showRejoin();
+
 // ---------- peringkat dan jubah ----------
 const hex = (n) => '#' + n.toString(16).padStart(6, '0');
 async function openRanks() {
@@ -260,6 +273,9 @@ async function openRanks() {
     [top, mine] = await Promise.all([fetch('/api/top').then((r) => r.json()), fetch(`/api/stats?pid=${G.pid}`).then((r) => r.json())]);
   } catch { $('myStats').textContent = 'Peringkat belum bisa dimuat dari server, jadi semua jubah tampil terkunci. Coba tutup dan buka lagi.'; }
   const st = mine?.stats;
+  $('waveTable').innerHTML = (top?.waves || []).map((r, i) => `<tr><td>${i + 1}</td><td></td><td>gelombang ${r.wave}</td></tr>`).join('') || '<tr><td>Belum ada yang bermain Bertahan Bersama minggu ini.</td></tr>';
+  (top?.waves || []).forEach((r, i) => { $('waveTable').rows[i].cells[1].textContent = r.name; });
+  $('achv').innerHTML = ACHIEVEMENTS.map((a) => `<span class="${(st?.[a.stat] || 0) >= a.n ? 'on' : ''}" title="${a.text}">${a.name} · ${Math.min(st?.[a.stat] || 0, a.n)}/${a.n}</span>`).join('');
   $('daily').innerHTML = (mine?.daily || []).map((d) => `<li class="${d.done ? 'done' : ''}"><i style="width:${Math.round((d.p / d.n) * 100)}%"></i><span><b></b><em>${d.done ? 'Selesai' : `${d.p}/${d.n}`}</em></span></li>`).join('') || '<li><span>Tantangan belum bisa dimuat.</span></li>';
   (mine?.daily || []).forEach((d, i) => { $('daily').children[i].querySelector('b').textContent = d.text; });
   if (top) {
@@ -321,6 +337,8 @@ function leaveGame() {
   G.players.clear(); G.roster.clear(); G.pending.length = 0;
   for (const id of [...fx.projs.keys()]) fx.removeProj(id);
   G.phase = 'menu'; input.enabled = false; input.reset?.();
+  if (G.menuCls) G.clsKey = G.menuCls;
+  showRejoin();
   document.exitPointerLock?.();
   $('hud').classList.add('hidden'); $('menu').classList.remove('hidden');
   $('tutor').classList.add('hidden'); $('hitDir').textContent = '';
@@ -330,7 +348,9 @@ function leaveGame() {
 // ---------- jaringan ----------
 function onMessage(m) {
   if (m.t === 'w') {
-    G.myId = m.id; G.limit = m.limit || KILL_LIMIT; G.cls = CLASSES[G.clsKey]; G.phase = 'play'; G.ended = false;
+    G.myId = m.id; G.limit = m.limit || KILL_LIMIT; G.menuCls = G.clsKey; if (CLASSES[m.cls]) G.clsKey = m.cls; G.cls = CLASSES[G.clsKey]; G.phase = 'play'; G.ended = false;
+    G.mut = m.mut || null; if (G.mut) setTimeout(() => toast(`Mode akhir pekan: ${MUTATORS[G.mut].name}`), 2200);
+    if (m.code) { store.set('lastRoom', m.code); } G.barrelMask = 0;
     G.seq = 0; G.pending.length = 0; G.me.xp = 0; G.me.lvl = 1;
     $('menu').classList.add('hidden'); $('hud').classList.remove('hidden');
     $('menuMsg').textContent = '';
@@ -349,7 +369,7 @@ function onMessage(m) {
     if (G.practice && G.tut) { G.tut.show(); } else { G.tut = null; $('tutor').classList.add('hidden'); }
     if (!G.practice || !G.tut) toast(G.code ? `Room ${G.code}: ketuk kode untuk membagikan` : G.practice ? 'Arena latihan' : 'Pertarungan dimulai');
   } else if (m.t === 'e') {
-    G.joinErr = m.m;
+    G.joinErr = m.m; store.set('lastRoom', '');
   } else if (m.t === 'r') {
     G.roster.clear();
     for (const [id, name, cls, kills, deaths, bot, pts, team, skin] of m.l) G.roster.set(id, { id, name, cls, kills, deaths, bot, pts: pts || 0, team: team ?? -1, skin: skin || 'default' });
@@ -444,7 +464,7 @@ function onSnapshot(m) {
   if (!G.myId) return;
   const wasEnded = G.ended;
   if (m.mp && m.mp !== G.mapId) { useMap(m.mp); toast(`Peta: ${M.name}`); for (const id of [...fx.projs.keys()]) fx.removeProj(id); }
-  G.ended = !!m.st; G.tm = m.tm; G.orbMask = m.o; G.runeMask = m.u ?? 15; G.holder = m.z || 0;
+  G.ended = !!m.st; G.tm = m.tm; G.orbMask = m.o; G.runeMask = m.u ?? 15; G.holder = m.z || 0; G.barrelMask = m.bm || 0;
   G.ticks.push([now, m.k || 0]); if (G.ticks.length > 30) G.ticks.shift();
   G.snapN = (G.snapN || 0) + 1;
   for (const e of m.p) {
@@ -466,7 +486,7 @@ function onSnapshot(m) {
   G.me.xp = me[6]; G.me.respawnT = me[7]; G.me.dmgT = me[8] || 0; G.me.spdT = me[9] || 0; G.me.ult = me[10] || 0;
   G.ev = m.ev || null; G.wv = m.wv || null; G.rv = m.rv || null;
   G.me.perks = me[11] || ''; G.me.offer = me[12] || 0; G.me.spare = me[13] || 0;
-  pr.spd = G.me.spdT > 0 ? SPD_BUFF : 1;
+  pr.spd = me[14] || 1; // pengali kecepatan dari server (rune, berkah, lambat, mode)
   while (G.pending.length && G.pending[0].s <= m.a) G.pending.shift();
   pr.x = me[0]; pr.z = me[1]; pr.dashT = me[2]; pr.dx = me[3]; pr.dz = me[4]; pr.skillCd = me[5];
   if (!(G.me.flags & 1) && !G.ended) for (const inp of G.pending) stepPlayer(pr, inp, G.cls, DT);
@@ -573,7 +593,17 @@ function onEvent(e) {
       G.shake = Math.max(G.shake, 0.9 * vol(e[1], e[2]));
       break;
     }
-    case 'W': toast(e[2] ? `Gelombang ${e[1]}: Golem Batu datang!` : `Gelombang ${e[1]}`); sfx('level'); buzz([50, 50, 50]); $('perks').classList.add('hidden'); break;
+    case 'H': fx.ring(e[2], e[3], 0xffe27a, 7, 0.7); fx.pillar(e[2], e[3], 0xffe27a); sfx('orb', vol(e[2], e[3])); break;
+    case 'X': { const b = M.barrels?.[e[1]]; if (b) { fx.nova(b[0], b[1], 0xff7a2e, 5); fx.burst(b[0], 1, b[1], 0xffd27a, 50, 11, 1.8, 0.8, 8); sfx('boom', vol(b[0], b[1])); G.shake = Math.max(G.shake, 0.8 * vol(b[0], b[1])); } break; }
+    case 'q': {
+      if (e[1] !== G.myId && !ally(e[1])) break; // hanya isyarat rekan
+      const div = document.createElement('div'); div.className = 'ping'; div.textContent = `${nameOf(e[1])}: ${PINGS[e[2]]}`;
+      $('feed').appendChild(div); setTimeout(() => div.remove(), 5000);
+      fx.ring(e[3], e[4], 0x7dffb0, 3, 1.2); fx.pillar(e[3], e[4], 0x7dffb0); sfx('orb', 0.6);
+      (G.pings ||= []).push({ x: e[3], z: e[4], t: G.time + 5 });
+      break;
+    }
+    case 'W': toast(e[2] ? `Gelombang ${e[1]}: ${e[1] % 10 === 0 ? 'Ratu Laba-laba' : 'Golem Batu'} datang!` : `Gelombang ${e[1]}`); sfx('level'); buzz([50, 50, 50]); $('perks').classList.add('hidden'); break;
     case 'w': toast(e[2] === e[1] && e[1] > 0 ? `Gelombang ${e[1]} selesai! Titik simpan tercapai` : `Gelombang ${e[1]} selesai! Rekan bangkit, HP pulih`); sfx('level'); $('death').classList.add('hidden'); break;
     case 'A': {
       const p = G.players.get(e[1]); if (!p) break;
@@ -636,7 +666,7 @@ function updateScoreHud() {
   const list = sortedRoster(), me = G.roster.get(G.myId);
   if (!me) return;
   $('rank').textContent = '#' + (list.indexOf(me) + 1);
-  $('myScore').textContent = G.team >= 0 ? `${TEAMS[0].name} ${G.teamScore[0]} · ${G.teamScore[1]} ${TEAMS[1].name}` : G.gm === 'koth' ? `${me.pts} / ${G.limit} poin` : `${me.kills} / ${G.limit || KILL_LIMIT}`;
+  if (G.gm !== 'pve') $('myScore').textContent = G.team >= 0 ? `${TEAMS[0].name} ${G.teamScore[0]} · ${G.teamScore[1]} ${TEAMS[1].name}` : G.gm === 'koth' ? `${me.pts} / ${G.limit} poin` : `${me.kills} / ${G.limit || KILL_LIMIT}`;
   if (!$('score').classList.contains('hidden')) { fillScore(); if (!G.ended && G.team >= 0) $('scoreTitle').textContent = `${TEAMS[0].name} ${G.teamScore[0]} · ${G.teamScore[1]} ${TEAMS[1].name}`; }
 }
 function fillScore() {
@@ -695,6 +725,8 @@ drawMinimapBg();
 function drawMinimap() {
   const s = 132 / (ARENA * 2 + 6), c = 66;
   mg.clearRect(0, 0, 132, 132); mg.drawImage(mmBg, 0, 0);
+  G.pings = (G.pings || []).filter((q) => q.t > G.time);
+  for (const q of G.pings) { mg.strokeStyle = '#7dffb0'; mg.lineWidth = 2; mg.beginPath(); mg.arc(c - q.x * s, c - q.z * s, 4 + ((G.time * 6) % 4), 0, 7); mg.stroke(); }
   M.orbs.forEach(([x, z], i) => { if (G.orbMask & (1 << i)) { mg.fillStyle = '#59ff9c'; mg.fillRect(c - x * s - 1.5, c - z * s - 1.5, 3, 3); } });
   M.runes.forEach((r, i) => { if (G.runeMask & (1 << i)) { mg.fillStyle = r.type === 'dmg' ? '#ff3b4e' : '#4dc3ff'; mg.beginPath(); mg.arc(c - r.x * s, c - r.z * s, 3, 0, 7); mg.fill(); } });
   if (G.gm === 'koth') { mg.strokeStyle = G.holder === G.myId ? '#f2c66d' : G.holder === -1 ? '#b76bff' : G.holder ? '#ff4d5e' : 'rgba(255,242,208,.7)'; mg.lineWidth = 2; mg.beginPath(); mg.arc(c, c, KOTH_R * s, 0, 7); mg.stroke(); }
@@ -826,6 +858,8 @@ function frame(now) {
       }
       p.av.update(dt, p.x, p.z, p.yaw, p.flags, t);
       if (p.flags & 8 && Math.random() < 0.7) fx.particle(p.x, 1 + Math.random(), p.z, 0, 0.5, 0, ALL_CLASSES[p.cls].color, 1.3, 0.3, 0);
+      if (G.mut === 'giant') p.av.big = 1.4;
+      if (p.flags & 128 && Math.random() < 0.5) fx.particle(p.x + (Math.random() - 0.5), 0.3 + Math.random() * 1.6, p.z + (Math.random() - 0.5), 0, -0.5, 0, 0x7fd8ff, 0.9, 0.5, 0);
       if (!(p.flags & 1)) {
         if (p.flags & 16 && Math.random() < 0.5) fx.particle(p.x + (Math.random() - 0.5), 0.4 + Math.random() * 2, p.z + (Math.random() - 0.5), 0, 1.6, 0, RUNE_INFO.dmg.color, 0.9, 0.5, 0);
         if (p.flags & 32 && Math.random() < 0.5) fx.particle(p.x + (Math.random() - 0.5), 0.2 + Math.random() * 0.6, p.z + (Math.random() - 0.5), 0, 0.3, 0, RUNE_INFO.spd.color, 1.1, 0.4, 0);
@@ -833,19 +867,25 @@ function frame(now) {
     }
 
     // kamera orang ketiga dengan penghindar tembok
-    const fx_ = Math.sin(input.yaw), fz_ = Math.cos(input.yaw);
+    // saat tumbang di mode tim/Bertahan: kamera mengikuti rekan terdekat yang masih hidup
+    let spec = null;
+    if ((G.me.flags & 1) && G.team >= 0) { let bd = 1e9; for (const q of G.players.values()) { if (q.id === G.myId || (q.flags & 1) || !ally(q.id)) continue; const d = Math.hypot(q.x - G.pred.x, q.z - G.pred.z); if (d < bd) { bd = d; spec = q; } } }
+    $('specTag').classList.toggle('hidden', !spec);
+    if (spec) $('specTag').textContent = `Menonton ${nameOf(spec.id)}`;
+    const vx = spec ? spec.x : G.rx, vz = spec ? spec.z : G.rz, vyaw = spec ? spec.yaw : input.yaw;
+    const fx_ = Math.sin(vyaw), fz_ = Math.cos(vyaw);
     let want = CAM_D;
     for (let s = 0.15; s <= 1.001; s += 0.085) {
-      if (blocked(G.rx - fx_ * CAM_D * s, G.rz - fz_ * CAM_D * s, 0.5)) { want = Math.max(2.2, CAM_D * (s - 0.1)); break; }
+      if (blocked(vx - fx_ * CAM_D * s, vz - fz_ * CAM_D * s, 0.5)) { want = Math.max(2.2, CAM_D * (s - 0.1)); break; }
     }
     G.camDist += (want - G.camDist) * Math.min(1, dt * (want < G.camDist ? 16 : 4));
     G.shake = Math.max(0, G.shake - dt * 2.5);
     const sh = G.shake * G.shake * 0.6;
     const portrait = innerHeight > innerWidth;
-    camPos.set(G.rx - fx_ * G.camDist + (Math.random() - 0.5) * sh, (portrait ? 6.0 : 4.3) + (CAM_D - G.camDist) * 0.55 + (Math.random() - 0.5) * sh, G.rz - fz_ * G.camDist);
+    camPos.set(vx - fx_ * G.camDist + (Math.random() - 0.5) * sh, (portrait ? 6.0 : 4.3) + (CAM_D - G.camDist) * 0.55 + (Math.random() - 0.5) * sh, vz - fz_ * G.camDist);
     camera.position.copy(camPos);
     const ahead = 0.8 + 5.2 * (G.camDist / CAM_D);
-    camLook.set(G.rx + fx_ * ahead, 2.0, G.rz + fz_ * ahead); camera.lookAt(camLook);
+    camLook.set(vx + fx_ * ahead, 2.0, vz + fz_ * ahead); camera.lookAt(camLook);
 
     // bidikan diproyeksikan dari titik tembak
     tmpV.set(G.rx + fx_ * 20, 1.55, G.rz + fz_ * 20).project(camera);
@@ -901,7 +941,7 @@ function frame(now) {
       drawMinimap();
     }
     updateDmg(dt);
-    world.update(t, { x: G.rx, z: G.rz }, G.orbMask);
+    world.update(t, { x: G.rx, z: G.rz }, G.orbMask, G.barrelMask);
     drawThreats(t);
     drawDowned();
     extras.update(t, G.runeMask, G.gm, G.holder, G.myId);

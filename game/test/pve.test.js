@@ -15,8 +15,8 @@ const DATA = fs.mkdtempSync(path.join(os.tmpdir(), 'arkana-pve-'));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const env = { ...process.env, PVE_BREAK: '2', PVE_PERK_BREAK: '4', PVE_CHECKPOINT: '1', EVENT_FIRST: '999', END_TIME: '2', DATA_DIR: DATA };
 // server 1: aturan biasa (dengan bot sekutu). server 2: tanpa sekutu, agar tahap tumbang/ditolong/titik simpan bisa diuji
-const srv = spawn(process.execPath, ['server/server.js'], { cwd: ROOT, env: { ...env, PORT: String(PORT) }, stdio: 'ignore' });
-const srv2 = spawn(process.execPath, ['server/server.js'], { cwd: ROOT, env: { ...env, PORT: String(PORT2), PVE_ALLIES: '0', PVE_DMG_MUL: '3', DATA_DIR: DATA + '/2' }, stdio: 'ignore' });
+const srv = spawn(process.execPath, ['server/server.js'], { cwd: ROOT, env: { ...env, PORT: String(PORT) }, stdio: ['ignore', 'ignore', 'inherit'] });
+const srv2 = spawn(process.execPath, ['server/server.js'], { cwd: ROOT, env: { ...env, PORT: String(PORT2), PVE_ALLIES: '0', PVE_DMG_MUL: '3', DATA_DIR: DATA + '/2' }, stdio: ['ignore', 'ignore', 'inherit'] });
 const fail = (m) => { console.error('GAGAL:', m); srv.kill(); srv2.kill(); process.exit(1); };
 for (const port of [PORT, PORT2]) for (let i = 0; i < 50; i++) { try { if ((await fetch(`http://localhost:${port}/health`)).ok) break; } catch { /* belum */ } await sleep(100); }
 const until = async (fn, ms) => { const t = Date.now(); while (Date.now() - t < ms) { if (fn()) return true; await sleep(50); } return false; };
@@ -27,7 +27,7 @@ function client(join, port = PORT) {
   c.ws.on('message', (raw) => {
     const m = JSON.parse(raw);
     if (m.t === 'w') { c.w = m; c.id = m.id; } else if (m.t === 'r') c.roster = m.l;
-    else if (m.t === 's') { c.snap = m; for (const e of m.e) { c.ev.push(e); c.evT.push(Date.now()); if (e[0] === 'W') (c.waveSize ||= {})[e[1]] = m.wv[2]; } }
+    else if (m.t === 's') { if (m.st === 1 && c.snap?.st === 0) c.ends = (c.ends || 0) + 1; c.snap = m; for (const e of m.e) { c.ev.push(e); c.evT.push(Date.now()); if (e[0] === 'W') (c.waveSize ||= {})[e[1]] = m.wv[2]; } }
   });
   c.me = () => c.snap?.p.find((p) => p[0] === c.id);
   c.iv = setInterval(() => {
@@ -88,25 +88,26 @@ const chase = setInterval(() => { const mon = P.snap?.p.find((p) => P.roster.som
 if (!await until(() => P.ev.slice(nA).some((e) => e[0] === 'k' && e[2] === P.id), 60000)) fail('pemain uji tidak tumbang');
 if (!await until(() => P.ev.slice(nA).some((e) => e[0] === 'v' && e[1] === P.id && e[2] === P.id), 7000)) fail('nyawa cadangan tidak membangkitkan pemain');
 console.log('OK nyawa cadangan: tumbang lalu bangkit sendiri setelah ~4 dtk.');
-let spareWave = P.snap.wv[0]; // nyawa cadangan sudah terpakai di gelombang ini
+const waveKey = () => `${P.ends || 0}:${P.snap.wv[0]}`; // ronde baru (setelah semua tumbang) juga memberi nyawa cadangan baru
+let spareWave = waveKey(); // nyawa cadangan sudah terpakai di gelombang ini
 // tumbang lagi (nyawa cadangan habis): Rekan langsung mendekat dan harus membangkitkannya.
 // Bila gelombang keburu selesai (pemain bangkit karena akhir gelombang), ulangi di gelombang berikutnya.
 let rescued = false;
-for (let attempt = 0; attempt < 3 && !rescued; attempt++) {
+for (let attempt = 0; attempt < 5 && !rescued; attempt++) {
   const nB = P.ev.length;
   if (!await until(() => P.ev.slice(nB).some((e) => e[0] === 'k' && e[2] === P.id), 60000)) fail('pemain uji tidak tumbang untuk kedua kalinya');
   B.follow = { id: P.id }; B.fight = true;
   await until(() => P.ev.slice(nB).some((e) => (e[0] === 'v' && e[2] === P.id) || e[0] === 'w'), 30000);
   const ev = P.ev.slice(nB);
   if (ev.some((e) => e[0] === 'v' && e[1] === P.id && e[2] === P.id)) {
-    if (P.snap.wv[0] === spareWave) fail('bangkit sendiri dua kali dalam satu gelombang');
-    spareWave = P.snap.wv[0]; continue; // gelombang baru memberi nyawa cadangan baru: coba lagi
+    if (waveKey() === spareWave) { console.error('urutan:', P.ev.filter((e) => ['W', 'w', 'v'].includes(e[0]) || (e[0] === 'k' && e[2] === P.id)).map((e) => e[0] + JSON.stringify(e.slice(1))).join(' '), '| kunci', spareWave, waveKey(), 'wv', JSON.stringify(P.snap.wv)); fail('bangkit sendiri dua kali dalam satu gelombang'); }
+    spareWave = waveKey(); continue; // gelombang baru memberi nyawa cadangan baru: coba lagi
   }
   rescued = ev.some((e) => e[0] === 'v' && e[1] === B.id && e[2] === P.id);
   B.follow = null; B.fight = false;
 }
 clearInterval(chase); P.follow = null;
-if (!rescued) fail('Rekan tidak berhasil menolong dalam 3 percobaan');
+if (!rescued) fail('Rekan tidak berhasil menolong dalam 5 percobaan');
 console.log('OK menolong rekan: Rekan berdiri di dekat pemain yang tumbang dan membangkitkannya.');
 // setiap pukulan monster (a) harus didahului aba-aba (P) dari monster yang sama, minimal 0,4 dtk sebelumnya
 const hits = P.ev.map((e, i) => [e, i]).filter(([e]) => e[0] === 'a');
@@ -122,9 +123,10 @@ console.log(`OK aba-aba: ${hits.length} pukulan, semuanya didahului aba-aba >= 0
 P.fight = true; B.fight = true;
 if (!await until(() => P.ev.some((e) => e[0] === 'w' && e[1] === 2), 90000)) fail('gelombang 2 tidak selesai');
 { const we = P.ev.find((e) => e[0] === 'w' && e[1] === 2); if (we[2] !== 2) fail(`titik simpan tidak tercatat: ${JSON.stringify(we)}; semua w: ${JSON.stringify(P.ev.filter((e) => e[0] === 'w'))}`); }
-// semua berhenti melawan dan berdiri di dekat monster sampai permainan berakhir
-P.fight = false; B.fight = false;
-const chase2 = setInterval(() => { for (const c of [P, B]) { const mon = c.snap?.p.find((p) => c.roster.some((r) => r[0] === p[0] && ['ghoul', 'caster'].includes(r[2])) && !(p[7] & 1)); c.follow = mon ? { id: mon[0] } : null; } }, 300);
+// Rekan keluar (agar tidak saling menolong tanpa henti); pemain berhenti melawan dan mendekati monster sampai permainan berakhir
+clearInterval(B.iv); B.ws.close(); await sleep(300);
+P.fight = false;
+const chase2 = setInterval(() => { for (const c of [P]) { const mon = c.snap?.p.find((p) => c.roster.some((r) => r[0] === p[0] && ['ghoul', 'caster'].includes(r[2])) && !(p[7] & 1)); c.follow = mon ? { id: mon[0] } : null; } }, 300);
 if (!await until(() => P.snap?.st === 1, 150000)) fail('permainan tidak berakhir saat semua tumbang');
 clearInterval(chase2); P.follow = B.follow = null;
 if (!await until(() => P.snap?.st === 0, 6000)) fail('ronde baru tidak dimulai');

@@ -55,6 +55,14 @@ export class Avatar {
       weapon.add(mesh(new THREE.SphereGeometry(0.19, 12, 10), glow, 0, 1.32, 0));
       const claw = mesh(new THREE.TorusGeometry(0.22, 0.03, 6, 12, Math.PI * 1.4), metal, 0, 1.3, 0); claw.rotation.z = -0.7; weapon.add(claw);
       tipZ = 0; tipY = 1.32;
+    } else if (clsKey === 'priest') {
+      // pendeta: lingkaran cahaya di atas kepala, selendang, tongkat bermatahari
+      const halo = mesh(new THREE.TorusGeometry(0.27, 0.035, 8, 20), glow, 0, 2.55, 0); halo.rotation.x = Math.PI / 2; up.add(halo);
+      up.add(mesh(new THREE.BoxGeometry(0.16, 0.9, 0.05), glow, 0, 1.45, 0.3));
+      weapon.add(mesh(new THREE.CylinderGeometry(0.04, 0.05, 2.0, 8), wood, 0, 0.1, 0));
+      const sun = mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.05, 12), glow, 0, 1.25, 0); sun.rotation.x = Math.PI / 2; weapon.add(sun);
+      for (let i = 0; i < 8; i++) { const ray = mesh(new THREE.ConeGeometry(0.04, 0.16, 4), glow, Math.cos(i * 0.785) * 0.33, 1.25 + Math.sin(i * 0.785) * 0.33, 0); ray.rotation.z = i * 0.785 - Math.PI / 2; weapon.add(ray); }
+      tipZ = 0; tipY = 1.25;
     } else {
       up.add(mesh(new THREE.SphereGeometry(0.29, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.6), metal, 0, 2.18, 0));
       for (const s of [-1, 1]) {
@@ -150,7 +158,7 @@ export class Avatar {
     this.body.rotation.x = -e * 1.5;
     this.body.position.y += e * 0.25;
     const s = dead ? 1 : 0.4 + 1.5 * this.spawnT;
-    g.scale.setScalar(Math.min(1, s));
+    g.scale.setScalar(Math.min(1, s) * (this.big || 1));
     if (this.tag) this.tag.visible = !dead;
     this.blob.visible = !dead;
     if (this.ring) this.ring.visible = !dead;
@@ -198,16 +206,33 @@ export class Monster {
       this.legL = new THREE.Group(); this.legL.position.set(0.22, 0.75, 0); this.legR = new THREE.Group(); this.legR.position.set(-0.22, 0.75, 0);
       for (const l of [this.legL, this.legR]) { const leg = new THREE.Mesh(new THREE.CapsuleGeometry(0.12, 0.5, 3, 8), skin); leg.position.y = -0.38; leg.castShadow = true; l.add(leg); body.add(l); }
       this.tipY = 1.4;
-    } else if (kind === 'caster') {
+    } else if (kind === 'caster' || kind === 'frost') {
+      const cc = kind === 'frost' ? 0x7fd8ff : 0xc86bff;
       // dukun berjubah melayang dengan bola ungu
-      const robe = new THREE.MeshStandardMaterial({ color: 0x241a33, roughness: 0.8, side: THREE.DoubleSide });
+      const robe = new THREE.MeshStandardMaterial({ color: kind === 'frost' ? 0x1a2c44 : 0x241a33, roughness: 0.8, side: THREE.DoubleSide });
       m(new THREE.ConeGeometry(0.6, 1.8, 12, 1, true), robe, 0, 1.15, 0);
       const hood = m(new THREE.SphereGeometry(0.34, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.6), robe, 0, 2.05, 0); hood.rotation.x = -0.2;
-      for (const s of [-1, 1]) m(new THREE.SphereGeometry(0.05, 8, 6), eye(0xd87bff), s * 0.1, 1.98, 0.27);
-      this.orb = m(new THREE.SphereGeometry(0.2, 12, 10), eye(0xc86bff), 0.45, 1.5, 0.45);
-      const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0xc86bff, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.8 }));
+      for (const s of [-1, 1]) m(new THREE.SphereGeometry(0.05, 8, 6), eye(cc), s * 0.1, 1.98, 0.27);
+      this.orb = m(new THREE.SphereGeometry(0.2, 12, 10), eye(cc), 0.45, 1.5, 0.45);
+      const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: cc, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.8 }));
       s.scale.setScalar(1.6); this.orb.add(s);
       this.tipY = 1.5;
+    } else if (kind === 'spiderling' || kind === 'queen') {
+      // laba-laba: perut besar, kepala, delapan kaki; Ratu jauh lebih besar dengan corak merah
+      const q = kind === 'queen', sc = q ? 2.4 : 0.75; this.baseScale = sc;
+      const shell = new THREE.MeshStandardMaterial({ color: q ? 0x3a0f1c : 0x2a2230, roughness: 0.6 });
+      const ab = m(new THREE.SphereGeometry(0.55, 12, 10), shell, 0, 0.7, -0.45); ab.scale.set(1, 0.85, 1.25);
+      m(new THREE.SphereGeometry(0.32, 12, 10), shell, 0, 0.6, 0.3);
+      if (q) m(new THREE.BoxGeometry(0.5, 0.06, 0.7), eye(0xff2e5a), 0, 1.17, -0.45);
+      for (const sx of [-1, 1]) { m(new THREE.SphereGeometry(0.06, 8, 6), eye(0xff3b3b), sx * 0.12, 0.72, 0.56); m(new THREE.SphereGeometry(0.04, 8, 6), eye(0xff3b3b), sx * 0.22, 0.66, 0.5); }
+      this.spLegs = [];
+      for (const sx of [-1, 1]) for (let k = 0; k < 4; k++) {
+        const piv = new THREE.Group(); piv.position.set(sx * 0.25, 0.6, 0.25 - k * 0.22); piv.rotation.y = sx * (0.5 - k * 0.35);
+        const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.02, 0.9, 5), shell); leg.position.set(sx * 0.4, -0.12, 0); leg.rotation.z = sx * 1.0; leg.castShadow = true; piv.add(leg);
+        body.add(piv); this.spLegs.push(piv);
+      }
+      body.scale.setScalar(sc);
+      this.tipY = 0.7 * sc;
     } else {
       // golem batu raksasa dengan retakan menyala
       const rock = new THREE.MeshStandardMaterial({ color: 0x6b5d52, roughness: 1, flatShading: true });
@@ -223,19 +248,20 @@ export class Monster {
       this.tipY = 2.4;
     }
     this.tip = new THREE.Object3D(); this.tip.position.set(0, this.tipY, 0.6); body.add(this.tip);
-    const blob = new THREE.Mesh(new THREE.CircleGeometry(kind === 'brute' ? 1.6 : 0.75, 16), new THREE.MeshBasicMaterial({ color: 0, transparent: true, opacity: 0.35, depthWrite: false }));
+    const big = kind === 'brute' || kind === 'queen';
+    const blob = new THREE.Mesh(new THREE.CircleGeometry(big ? 1.6 : 0.75, 16), new THREE.MeshBasicMaterial({ color: 0, transparent: true, opacity: 0.35, depthWrite: false }));
     blob.rotation.x = -Math.PI / 2; blob.position.y = 0.03; g.add(blob); this.blob = blob;
     // batang HP di atas kepala
     const cv = this.tagCanvas = document.createElement('canvas'); cv.width = 128; cv.height = 16;
     this.tagTex = new THREE.CanvasTexture(cv);
     this.tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.tagTex, transparent: true, depthWrite: false, fog: false }));
-    this.tag.scale.set(kind === 'brute' ? 3.2 : 1.6, kind === 'brute' ? 0.4 : 0.2, 1); this.tag.position.y = kind === 'brute' ? 4.3 : 2.5; this.tag.renderOrder = 5; g.add(this.tag);
+    this.tag.scale.set(big ? 3.2 : 1.6, big ? 0.4 : 0.2, 1); this.tag.position.y = kind === 'brute' ? 4.3 : kind === 'queen' ? 3.4 : kind === 'spiderling' ? 1.3 : 2.5; this.tag.renderOrder = 5; g.add(this.tag);
     this.shown = -1;
   }
   setInfo(hp, maxHp) {
     const f = Math.max(0, hp / maxHp); if (Math.abs(f - this.shown) < 0.01) return; this.shown = f;
     const g = this.tagCanvas.getContext('2d'); g.clearRect(0, 0, 128, 16);
-    g.fillStyle = 'rgba(0,0,0,.7)'; g.fillRect(0, 0, 128, 16); g.fillStyle = this.kind === 'brute' ? '#ff8a2a' : '#ff5d5d'; g.fillRect(2, 2, 124 * f, 12);
+    g.fillStyle = 'rgba(0,0,0,.7)'; g.fillRect(0, 0, 128, 16); g.fillStyle = this.kind === 'brute' || this.kind === 'queen' ? '#ff8a2a' : '#ff5d5d'; g.fillRect(2, 2, 124 * f, 12);
     this.tagTex.needsUpdate = true;
   }
   fireKick() { this.kick = 1; this.windT = 0; }
@@ -254,9 +280,10 @@ export class Monster {
     if (this.legL) { this.legL.rotation.x = sw; this.legR.rotation.x = -sw; }
     this.kick = Math.max(0, this.kick - dt * 4);
     if (this.armL) { this.armL.rotation.x = (this.kind === 'ghoul' ? -0.5 : 0) - sw * 0.6 - this.kick * 1.6 - w * 2.4; this.armR.rotation.x = (this.kind === 'ghoul' ? -0.5 : 0) + sw * 0.6 - this.kick * 1.6 - w * 2.4; }
-    this.body.scale.setScalar(1 + w * 0.15);
+    this.body.scale.setScalar((this.baseScale || 1) * (1 + w * 0.15));
+    if (this.spLegs) this.spLegs.forEach((l, i) => { l.rotation.x = Math.sin(this.phase * 2 + i * 1.7) * 0.35 * k; });
     this.body.traverse((o) => { if (o.material && o.material.emissive && !o.userData.glow) { o.userData.base ??= o.material.emissive.getHex(); o.material.emissive.setHex(w > 0 && Math.sin(time * 40) > 0 ? 0x661111 : o.userData.base); } });
-    if (this.kind === 'caster') { this.body.position.y = 0.25 + Math.sin(time * 2.5) * 0.12; this.orb.position.y = 1.5 + Math.sin(time * 4) * 0.08; }
+    if (this.orb) { this.body.position.y = 0.25 + Math.sin(time * 2.5) * 0.12; this.orb.position.y = 1.5 + Math.sin(time * 4) * 0.08; }
     else this.body.position.y = Math.abs(Math.sin(this.phase)) * 0.06 * k;
     this.deadT = dead ? Math.min(1, this.deadT + dt * 2) : 0;
     this.body.rotation.x = -this.deadT * 1.4; this.body.position.y -= this.deadT * 0.3;

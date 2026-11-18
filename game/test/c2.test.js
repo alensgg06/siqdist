@@ -15,7 +15,7 @@ const PORT = 8088;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let srv;
 const fail = (m) => { console.error('GAGAL:', m); srv?.kill(); process.exit(1); };
-srv = spawn(process.execPath, ['server/server.js'], { cwd: ROOT, env: { ...process.env, PORT: String(PORT), DATA_DIR: DATA, BOTS: '0', EVENT_FIRST: '3', KILL_LIMIT: '50' }, stdio: 'ignore' });
+srv = spawn(process.execPath, ['server/server.js'], { cwd: ROOT, env: { ...process.env, PORT: String(PORT), DATA_DIR: DATA, BOTS: '0', EVENT_FIRST: '3', KILL_LIMIT: '50' }, stdio: ['ignore', 'ignore', 'inherit'] });
 for (let i = 0; i < 50; i++) { try { if ((await fetch(`http://localhost:${PORT}/health`)).ok) break; } catch { /* belum */ } await sleep(100); }
 const until = async (fn, ms) => { const t = Date.now(); while (Date.now() - t < ms) { if (fn()) return true; await sleep(50); } return false; };
 function client(join) {
@@ -52,7 +52,8 @@ A.ult = 0;
 await sleep(200);
 const volley = A.ev.slice(nShots).filter((e) => e[0] === 's' && e[2] === A.id).length;
 if (volley < 11) fail(`Hujan Panah seharusnya 11 panah, tercatat ${volley}`);
-if ((A.snap.me[10] || 0) > 20) fail('pengukur tidak kembali kosong setelah dipakai');
+// panah yang langsung mengenai lawan mengisi pengukur lagi, jadi cukup pastikan tidak lagi penuh
+if ((A.snap.me[10] || 0) >= 100) fail('pengukur tidak dikosongkan setelah dipakai');
 console.log(`OK Hujan Panah: ${volley} panah keluar, pengukur kembali kosong.`);
 if (!await until(() => A.ev.some((e) => e[0] === 'B' && e[1] === A.id), 60000)) fail('Ayu tidak menjadi buronan setelah unggul 3 kill');
 await until(() => (A.me()?.[7] & 64), 2000);

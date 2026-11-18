@@ -13,6 +13,7 @@ import {
   DMG_SCALE, REGEN_DELAY, REGEN_RATE, BOT_DIFF, MERCY_DEATHS,
   BOUNTY_MIN, BOUNTY_LEAD, BOUNTY_XP, EVENT_FIRST, EVENT_EVERY, EVENTS, ULT_MAX,
   MONSTERS, PVE, wavePlan, ARENA, PERKS, PERK_KEYS,
+  HEAL_AMOUNT, HEAL_R, SLOW_TIME, SLOW_MUL, BARREL_R, BARREL_DMG, BARREL_RESPAWN, MUTATORS, PINGS,
   MODES, KOTH_R, KOTH_LIMIT, RUNES, RUNE_TIME, RUNE_RESPAWN, DMG_BUFF, SPD_BUFF, LAG_MAX,
 } from '../shared/config.js';
 import { stepPlayer, blocked, los, angDiff, setMap, collide } from '../shared/sim.js';
@@ -24,6 +25,14 @@ const LIMIT = Number(process.env.KILL_LIMIT) || KILL_LIMIT;       // bisa diubah
 const END_T = Number(process.env.END_TIME) || END_TIME;
 const DATA_DIR = process.env.DATA_DIR || path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'data');
 const PRACTICE_BOTS = 2;
+// Mode akhir pekan (Sabtu-Minggu WIB) untuk room publik, bergilir tiap minggu. MUTATOR=... memaksa untuk uji.
+function currentMutator() {
+  if (process.env.MUTATOR !== undefined) return MUTATORS[process.env.MUTATOR] ? process.env.MUTATOR : null;
+  const d = new Date(Date.now() + 7 * 3600e3), day = d.getUTCDay();
+  if (day !== 6 && day !== 0) return null;
+  const keys = Object.keys(MUTATORS);
+  return keys[Math.floor((d.getTime() - (day === 0 ? 86400e3 : 0)) / (7 * 86400e3)) % keys.length];
+}
 const stats = new Stats(DATA_DIR);
 const FILL = process.env.BOTS !== undefined ? Number(process.env.BOTS) : BOT_FILL; // jumlah pengisi bot (bisa 0 untuk uji)
 const KOTH_WIN = Number(process.env.KOTH_LIMIT) || KOTH_LIMIT;
@@ -77,6 +86,8 @@ class Room {
   constructor(opts = {}) {
     this.code = opts.code || null;          // room privat: hanya bisa dimasuki dengan kode
     this.practice = !!opts.practice;        // room latihan: satu pemain, bot boneka tidak menyerang
+    this.mut = !this.code && !this.practice ? currentMutator() : null;
+    this.mutT = 4;
     this.mode = MODES[opts.mode] ? opts.mode : 'dm';
     this.diff = BOT_DIFF[opts.diff] ? opts.diff : 'normal'; // room publik: Normal
     this.D = BOT_DIFF[this.diff];
@@ -92,6 +103,7 @@ class Room {
     this.pve = this.mode === 'pve';
     this.wave = 0; this.wavePhase = 0; this.waveT = PVE_BREAK; this.spawnQ = []; this.spawnT = 0; this.hpMul = 1; this.flow = null; this.flowT = 0;
     this.waveDmg = 1; this.checkpoint = 0; this.deathLog = []; this.stuckN = 0; this.logged = false;
+    if (process.env.PVE_START) this.wave = Number(process.env.PVE_START) - 1; // hanya untuk uji tampilan
     this.teamScore = [0, 0];
     this.bounty = 0;                         // id buronan saat ini
     this.evT = EV_FIRST; this.ev = null;     // kejadian di tengah ronde
@@ -104,6 +116,7 @@ class Room {
     this.nextId = 1;
     this.nextPid = 1;
     this.orbT = this.M.orbs.map(() => 0);
+    this.barrelT = this.M.barrels.map(() => 0);
     this.timeLeft = MATCH_T;
     this.state = 'play';
     this.endT = 0;
@@ -113,6 +126,7 @@ class Room {
   humans() { let n = 0; for (const p of this.players.values()) if (!p.bot) n++; return n; }
 
   addPlayer(name, clsKey, ws) {
+    if (this.mut === 'mage' && CLASSES[clsKey]) clsKey = 'mage';
     const cls = CLASSES[clsKey] || MONSTERS[clsKey];
     const team = this.teams ? this.pickTeam(!ws) : -1;
     const p = {
@@ -142,7 +156,7 @@ class Room {
     this.rosterDirty = true;
   }
 
-  maxHpOf(p) { return levelHp(p.cls, p.lvl) + 25 * (p.perks?.kokoh || 0); }
+  maxHpOf(p) { return Math.round((levelHp(p.cls, p.lvl) + 25 * (p.perks?.kokoh || 0)) * (this.mut === 'giant' ? 1.6 : 1)); }
   perk(p, k) { return p.perks?.[k] || 0; }
 
   pickTeam(bot) {
@@ -286,7 +300,7 @@ class Room {
           for (const q of this.players.values()) if (!q.dead && this.foes(att, q) && Math.hypot(q.x - t.x, q.z - t.z) < 4) this.damage(q, 22 * this.perk(att, 'ledak'), att);
         }
         this.track(att, { type: 'kill', cls: att.clsKey });
-        if (t.id === this.bounty) { this.addXp(att, BOUNTY_XP); this.events.push(['b', att.id, t.id]); this.track(att, { type: 'bounty' }); this.bounty = 0; }
+        if (t.id === this.bounty) { this.addXp(att, BOUNTY_XP); this.events.push(['b', att.id, t.id]); this.track(att, { type: 'bounty' }); if (att.pid) stats.bump(att.pid, att.name, 'bounties'); this.bounty = 0; }
         if (this.teams && !this.pve) { this.teamScore[att.team]++; if (this.teamScore[att.team] >= TEAM_WIN) this.endMatch(); } // Bertahan: tanpa batas kill
       }
       this.events.push(['k', att ? att.id : 0, t.id]);
@@ -342,6 +356,11 @@ class Room {
     if (ev.t <= 0) this.ev = null;
   }
 
+  // diri sendiri dan kawan seregu (bukan monster) dalam jarak r
+  friends(p, r) {
+    return [...this.players.values()].filter((q) => !q.monster && (q === p || (this.teams && q.team === p.team)) && Math.hypot(q.x - p.x, q.z - p.z) < r);
+  }
+
   // Jurus pamungkas
   ultimate(p) {
     if (p.ult < ULT_MAX || p.dead || p.monster) return;
@@ -363,6 +382,17 @@ class Room {
       for (let d = 1; d <= 16; d += 0.5) { const nx = p.x + Math.sin(p.yaw) * d, nz = p.z + Math.cos(p.yaw) * d; if (blocked(nx, nz, 0.5)) break; x = nx; z = nz; }
       this.meteors.push({ o: p.id, x, z, t: 0.8, dmg: 90 * buff });
       this.events.push(['M', r2(x), r2(z)]);
+    } else if (p.clsKey === 'priest') {
+      this.events.push(['H', p.id, r2(p.x), r2(p.z)]);
+      for (const q of this.friends(p, 10)) {
+        if (q.dead) { if (this.pve && !q.bot) this.revive(q, p); else continue; }
+        q.hp = q.maxHp;
+      }
+      for (const t of this.players.values()) {
+        if (t.dead || !this.foes(p, t)) continue;
+        const d = Math.hypot(t.x - p.x, t.z - p.z);
+        if (d < 7) this.damage(t, 30 * buff * (1 - 0.4 * d / 7), p);
+      }
     } else {
       p.shieldT = 5; p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.5);
       for (const t of this.players.values()) {
@@ -429,6 +459,7 @@ class Room {
     p.dead = false; p.hp = Math.round(p.maxHp * 0.5); p.protT = 2; p.hurtT = 0; p.reviveP = 0; p.spareT = 0; p.respawnT = 0;
     p.queue.length = 0;
     this.events.push(['v', by ? by.id : p.id, p.id]);
+    if (by && by !== p && by.pid) stats.bump(by.pid, by.name, 'revives');
     this.rosterDirty = true;
   }
 
@@ -467,9 +498,11 @@ class Room {
       wave: this.wave, cleared: this.wavePhase === 0 ? this.wave : this.wave - 1, checkpoint: this.checkpoint,
       secs: Math.round((Date.now() - this.startedAt) / 1000), players: ps, left: this.left, deaths: this.deathLog, stuck: this.stuckN,
     });
+    const cleared = this.wavePhase === 0 ? this.wave : this.wave - 1;
+    for (const p of this.players.values()) if (!p.bot && p.pid) stats.wave(p.pid, p.name, cleared);
   }
 
-  addMonster(key) {
+  addMonster(key, at) {
     const m = MONSTERS[key];
     const p = this.addPlayer(m.name, key, null);
     p.monster = true; p.team = 1;
@@ -480,7 +513,8 @@ class Room {
     const hs = [...this.players.values()].filter((q) => !q.bot && !q.dead);
     const spots = this.M.spawns.map(([x, z]) => ({ x, z, d: Math.min(...hs.map((h) => Math.hypot(h.x - x, h.z - z)), 999) })).sort((a, b) => b.d - a.d);
     const s = spots[Math.floor(Math.random() * Math.min(4, spots.length))];
-    p.x = s.x + (Math.random() - 0.5) * 2; p.z = s.z + (Math.random() - 0.5) * 2; p.protT = 0;
+    p.x = (at ? at.x : s.x) + (Math.random() - 0.5) * 2; p.z = (at ? at.z : s.z) + (Math.random() - 0.5) * 2; p.protT = 0; p.sumCd = 4;
+    collide(p, PLAYER_R);
     this.events.push(['r', p.id, r2(p.x), r2(p.z)]);
     this.rosterDirty = true;
   }
@@ -530,7 +564,7 @@ class Room {
       }
       if (bi || bj) { const tx = i + bi - GN - p.x, tz = j + bj - GN - p.z, l = Math.hypot(tx, tz) || 1; mx = tx / l; mz = tz / l; } else goDirect();
     };
-    if (p.clsKey === 'caster' && see && td < m.range) {
+    if (m.range && see && td < m.range) {
       // dukun menjaga jarak dan menembak
       p.ai.strT -= DT;
       if (p.ai.strT <= 0) { p.ai.strT = 1 + Math.random(); p.ai.strDir = -p.ai.strDir || 1; }
@@ -554,6 +588,15 @@ class Room {
         }
       } else if (td < m.melee.r + PLAYER_R * 0.5 && p.meleeCd <= 0) { p.windT = PVE.windup; this.events.push(['A', p.id]); mx = 0; mz = 0; }
     }
+    if (m.summon) { // Ratu memanggil anak laba-laba
+      p.sumCd -= DT;
+      if (p.sumCd <= 0) {
+        p.sumCd = m.summon.cd;
+        const n = [...this.players.values()].filter((q) => q.clsKey === 'spiderling' && !q.dead).length;
+        for (let i = 0; i < m.summon.n && n + i < m.summon.max; i++) this.addMonster('spiderling', p);
+        this.events.push(['A', p.id]);
+      }
+    }
     if (m.slam) {
       p.slamCd -= DT;
       if (p.slamT > 0) {
@@ -568,11 +611,11 @@ class Room {
     p.stk ||= { t: 6, x: p.x, z: p.z };
     p.stk.t -= DT;
     if (p.stk.t <= 0) {
-      const busy = td < 3 || (p.clsKey === 'caster' && see);
+      const busy = td < 3 || (m.range && see);
       if (!busy && Math.hypot(p.x - p.stk.x, p.z - p.stk.z) < 1.5) this.unstick(p, t);
       p.stk = { t: 6, x: p.x, z: p.z };
     }
-    const want = face + (p.clsKey === 'caster' ? (Math.random() - 0.5) * 0.12 : 0);
+    const want = face + (m.range ? (Math.random() - 0.5) * 0.12 : 0);
     const turn = 6 * DT, yaw = p.yaw + Math.max(-turn, Math.min(turn, angDiff(want, p.yaw)));
     return { s: 0, mx, mz, y: yaw, f, k: 0 };
   }
@@ -621,7 +664,7 @@ class Room {
       this.map = MAP_KEYS[(MAP_KEYS.indexOf(this.map) + 1) % MAP_KEYS.length];
       this.M = MAPS[this.map]; setMap(this.map);
     }
-    this.orbT = this.M.orbs.map(() => 0); this.runeT = this.M.runes.map(() => 0);
+    this.orbT = this.M.orbs.map(() => 0); this.runeT = this.M.runes.map(() => 0); this.barrelT = this.M.barrels.map(() => 0);
     this.holder = 0; this.teamScore = [0, 0]; this.bounty = 0; this.evT = EV_FIRST; this.ev = null; this.meteors = [];
     if (this.pve) {
       for (const p of [...this.players.values()]) if (p.monster) this.players.delete(p.id);
@@ -642,7 +685,7 @@ class Room {
 
   shoot(p) {
     const c = p.cls;
-    p.fireCd = c.fireCd * (p.bot ? this.dOf(p).cd : 1) * 0.88 ** this.perk(p, 'cepat');
+    p.fireCd = c.fireCd * (p.bot ? this.dOf(p).cd : 1) * 0.88 ** this.perk(p, 'cepat') * (this.mut === 'oneshot' ? 1.8 : 1);
     const ox = p.x + Math.sin(p.yaw) * 0.9, oz = p.z + Math.cos(p.yaw) * 0.9;
     const extra = this.perk(p, 'ganda') * (c.pellets > 1 ? 2 : 1), n = c.pellets + extra;
     for (let i = 0; i < n; i++) {
@@ -650,7 +693,7 @@ class Room {
       const a = p.yaw + (Math.random() - 0.5) * 2 * c.spread + (i >= c.pellets ? ((i - c.pellets) % 2 ? -1 : 1) * 0.07 * (1 + Math.floor((i - c.pellets) / 2)) : 0);
       const pr = {
         id: this.nextPid++, o: p.id, tm: p.team, x: ox, z: oz, dx: Math.sin(a), dz: Math.cos(a),
-        sp: c.projSpeed, life: c.projLife, dmg: c.dmg * DMG_SCALE * levelDmg(p.lvl) * (p.dmgT > 0 ? DMG_BUFF : 1) * (p.monster ? PVE.diffMul[this.diff] * this.waveDmg : 1) * (1 + 0.15 * this.perk(p, 'tajam')), splash: c.splash,
+        sp: c.projSpeed, life: c.projLife, dmg: c.dmg * DMG_SCALE * levelDmg(p.lvl) * (p.dmgT > 0 ? DMG_BUFF : 1) * (p.monster ? PVE.diffMul[this.diff] * this.waveDmg : 1) * (1 + 0.15 * this.perk(p, 'tajam')) * (this.mut === 'oneshot' ? 3 : 1), splash: c.splash, slow: !!c.slow,
       };
       this.events.push(['s', pr.id, p.id, r2(ox), r2(oz), Math.round(a * 1000) / 1000]);
       if (this.pointBlank(pr, p)) continue;
@@ -721,7 +764,18 @@ class Room {
       }
     } else if (hitId) {
       const t = this.players.get(hitId);
-      if (t) this.damage(t, pr.dmg, owner);
+      if (t) { this.damage(t, pr.dmg, owner); if (pr.slow && !t.dead && !(t.protT > 0)) t.slowT = SLOW_TIME; }
+    }
+  }
+
+  blowBarrel(i, owner) {
+    const [bx, bz] = this.M.barrels[i];
+    this.barrelT[i] = BARREL_RESPAWN;
+    this.events.push(['X', i]);
+    for (const t of this.players.values()) {
+      if (t.dead) continue;
+      const d = Math.hypot(t.x - bx, t.z - bz);
+      if (d < BARREL_R) this.damage(t, BARREL_DMG * DMG_SCALE * (1 - 0.5 * d / BARREL_R), owner);
     }
   }
 
@@ -735,6 +789,9 @@ class Room {
       for (let k = 0; k < n && !done; k++) {
         pr.x += pr.dx * st; pr.z += pr.dz * st;
         if (blocked(pr.x, pr.z, 0.15)) { this.explode(pr, 0); done = true; break; }
+        let hitB = -1;
+        for (let b = 0; b < this.barrelT.length; b++) if (this.barrelT[b] <= 0 && Math.hypot(pr.x - this.M.barrels[b][0], pr.z - this.M.barrels[b][1]) < 0.9) { hitB = b; break; }
+        if (hitB >= 0) { this.explode(pr, 0); this.blowBarrel(hitB, this.players.get(pr.o)); done = true; break; }
         for (const t of this.players.values()) {
           if (t.dead || t.id === pr.o || (pr.tm >= 0 && t.team === pr.tm)) continue;
           const dx = t.x - pr.x, dz = t.z - pr.z;
@@ -792,6 +849,7 @@ class Room {
       if (p.clsKey === 'ranger' && p.hurtT < 0.2 && Math.random() < 0.15) k = 1;
       if (p.clsKey === 'mage' && d < NOVA_R - 1.5) k = 1;
       if (p.clsKey === 'guardian' && p.hp < p.maxHp * 0.5 && p.hurtT < 0.5) k = 1;
+      if (p.clsKey === 'priest' && p.hp < p.maxHp * 0.6) k = 1;
       if (p.ult >= ULT_MAX && d < 14 && ai.seenT >= react && Math.random() < 0.05) ai.ult = 1;
       if (this.practice) { f = 0; k = 0; mx = -nz * ai.strDir * 0.25; mz = nx * ai.strDir * 0.25; } // bot boneka: bergeser pelan ke samping, tidak menyerang dan tidak kabur
     } else {
@@ -837,6 +895,9 @@ class Room {
         }
       } else if (p.cls.skill === 'shield') {
         p.shieldT = SHIELD_TIME;
+      } else if (p.cls.skill === 'heal') {
+        this.events.push(['H', p.id, r2(p.x), r2(p.z)]);
+        for (const q of this.friends(p, HEAL_R)) if (!q.dead) q.hp = Math.min(q.maxHp, q.hp + HEAL_AMOUNT);
       }
     }
   }
@@ -863,7 +924,8 @@ class Room {
           if (p.respawnT <= 0) { if (p.monster) this.removePlayer(p); else this.spawn(p); }
           continue;
         }
-        p.spd = (p.spdT > 0 ? SPD_BUFF : 1) * (1 + 0.1 * this.perk(p, 'lincah'));
+        if (p.slowT > 0) p.slowT -= DT;
+        p.spd = (p.spdT > 0 ? SPD_BUFF : 1) * (1 + 0.1 * this.perk(p, 'lincah')) * (p.slowT > 0 ? SLOW_MUL : 1) * (this.mut === 'giant' ? 0.8 : 1);
         let inp;
         if (p.monster) { inp = this.monsterThink(p); this.applyInput(p, inp); } else if (p.bot) { inp = this.botThink(p); this.applyInput(p, inp); } else {
           inp = p.queue.shift();
@@ -910,6 +972,16 @@ class Room {
       this.stepProjs();
       this.stepMeteors();
       this.stepEvent();
+      for (let b = 0; b < this.barrelT.length; b++) if (this.barrelT[b] > 0) this.barrelT[b] -= DT;
+      if (this.mut === 'meteor') {
+        this.mutT -= DT;
+        if (this.mutT <= 0) {
+          this.mutT = 4;
+          const alive = [...this.players.values()].filter((q) => !q.dead);
+          const t = alive[Math.floor(Math.random() * alive.length)];
+          if (t) { const x = t.x + (Math.random() - 0.5) * 6, z = t.z + (Math.random() - 0.5) * 6; this.meteors.push({ o: 0, x, z, t: 1.3, dmg: 45 * DMG_SCALE }); this.events.push(['M', r2(x), r2(z)]); }
+        }
+      }
       for (let i = 0; i < this.M.runes.length; i++) {
         if (this.runeT[i] > 0) { this.runeT[i] -= DT; continue; }
         const r = this.M.runes[i];
@@ -970,7 +1042,7 @@ class Room {
     }
     const list = [];
     for (const p of this.players.values()) {
-      const fl = (p.dead ? 1 : 0) | (p.shieldT > 0 ? 2 : 0) | (p.protT > 0 ? 4 : 0) | (p.dashT > 0 ? 8 : 0) | (p.dmgT > 0 ? 16 : 0) | (p.spdT > 0 ? 32 : 0) | (p.id === this.bounty ? 64 : 0);
+      const fl = (p.dead ? 1 : 0) | (p.shieldT > 0 ? 2 : 0) | (p.protT > 0 ? 4 : 0) | (p.dashT > 0 ? 8 : 0) | (p.dmgT > 0 ? 16 : 0) | (p.spdT > 0 ? 32 : 0) | (p.id === this.bounty ? 64 : 0) | (p.slowT > 0 ? 128 : 0);
       list.push([p.id, r2(p.x), r2(p.z), Math.round(p.yaw * 1000) / 1000, Math.ceil(p.hp), p.maxHp, p.lvl, fl]);
     }
     let orbMask = 0;
@@ -982,14 +1054,14 @@ class Room {
       tm: Math.ceil(this.state === 'end' ? this.endT : this.pve ? Math.max(0, this.waveT) : this.timeLeft),
       wv: this.pve ? [this.wave, this.wavePhase, this.spawnQ.length + [...this.players.values()].filter((q) => q.monster && !q.dead).length, this.checkpoint] : undefined,
       rv: this.pve ? [...this.players.values()].filter((q) => q.dead && !q.bot).map((q) => [q.id, Math.round((q.reviveP / PVE.reviveTime) * 100), Math.ceil(q.spareT)]) : undefined,
-      p: list, e: this.events, o: orbMask, u: runeMask, z: this.holder, k: this.tickN, mp: this.map,
+      p: list, e: this.events, o: orbMask, u: runeMask, z: this.holder, k: this.tickN, mp: this.map, bm: this.barrelT.reduce((a, t, i) => a | (t <= 0 ? 1 << i : 0), 0),
       ev: this.ev ? [this.ev.id, Math.ceil(this.ev.t), this.ev.gx ?? null, this.ev.gz ?? null, this.ev.taken ? 1 : 0] : null,
     };
     for (const p of this.players.values()) {
       if (!p.ws || p.ws.readyState !== 1) continue;
       if (p.ws.bufferedAmount > 65536) continue; // koneksi macet: lewati snapshot ini
       base.a = p.ack;
-      base.me = [p.x, p.z, p.dashT, p.dx, p.dz, p.skillCd, Math.floor(p.xp), r2(Math.max(0, p.respawnT)), r2(Math.max(0, p.dmgT)), r2(Math.max(0, p.spdT)), Math.floor(p.ult), Object.entries(p.perks).map(([k, v]) => k + v).join(','), p.offer || 0, p.spare];
+      base.me = [p.x, p.z, p.dashT, p.dx, p.dz, p.skillCd, Math.floor(p.xp), r2(Math.max(0, p.respawnT)), r2(Math.max(0, p.dmgT)), r2(Math.max(0, p.spdT)), Math.floor(p.ult), Object.entries(p.perks).map(([k, v]) => k + v).join(','), p.offer || 0, p.spare, p.spd];
       p.ws.send(JSON.stringify(base));
     }
     this.events = [];
@@ -1063,7 +1135,7 @@ wss.on('connection', (ws) => {
       me.skin = skin && skinUnlocked(skin, stats.get(me.pid)) ? skin.id : 'default'; // jubah terkunci ditolak di server
       room.rosterDirty = true;
       room.balanceBots();
-      ws.send(JSON.stringify({ t: 'w', id: me.id, team: me.team, limit: room.mode === 'koth' ? KOTH_WIN : room.teams ? TEAM_WIN : LIMIT, code: room.code, practice: room.practice, gm: room.mode, map: room.map, diff: room.diff }));
+      ws.send(JSON.stringify({ t: 'w', id: me.id, team: me.team, limit: room.mode === 'koth' ? KOTH_WIN : room.teams ? TEAM_WIN : LIMIT, code: room.code, cls: me.clsKey, mut: room.mut, practice: room.practice, gm: room.mode, map: room.map, diff: room.diff }));
     } else if (m.t === 'in' && me) {
       if (me.queue.length < 12) {
         me.queue.push({
@@ -1071,6 +1143,10 @@ wss.on('connection', (ws) => {
           y: num(m.y, -1e4, 1e4), f: m.f ? 1 : 0, k: m.k ? 1 : 0, u: m.u ? 1 : 0, vt: num(m.vt, 0, 1e9),
         });
       }
+    } else if (m.t === 'ping' && me && !me.dead) {
+      // isyarat cepat ke seluruh room (klien hanya menampilkan milik rekan); dibatasi 1 per 1,5 dtk
+      const now = Date.now(), k = num(m.k, 0, PINGS.length - 1) | 0;
+      if (now - (me.pingAt || 0) > 1500) { me.pingAt = now; room.events.push(['q', me.id, k, r2(me.x), r2(me.z)]); }
     } else if (m.t === 'perk' && me && room?.pve) {
       room.pickPerk(me, String(m.id || ''));
     } else if (m.t === 'spr' && me) {
@@ -1088,6 +1164,7 @@ wss.on('connection', (ws) => {
   ws.on('close', () => {
     if (!room || !me) return;
     setMap(room.map);
+    if (room.pve && room.state === 'play' && room.humans() === 1) room.logPve(true); // catat sebelum pemain terakhir dihapus
     room.removePlayer(me);
     room.balanceBots();
     if (room.humans() === 0 && room.pve && room.state === 'play') room.logPve(true); // sesi Bertahan yang ditinggalkan tetap tercatat

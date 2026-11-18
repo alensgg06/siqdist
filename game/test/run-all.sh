@@ -2,6 +2,7 @@
 # Menjalankan semua uji: menyalakan server uji yang dibutuhkan, lalu mematikannya lagi.
 #   bash test/run-all.sh
 set -u
+export MUTATOR=none   # uji tidak boleh terpengaruh mode akhir pekan
 cd "$(dirname "$0")/.."
 T=$(mktemp -d)
 pids=()
@@ -15,7 +16,9 @@ srv 8094 env BOTS=0 LAGCOMP=1
 srv 8093 env BOTS=0 LAGCOMP=0
 sleep 1
 fail=0
-run() { local name=$1; shift; local out; out=$("$@" 2>&1); local rc=$?; echo "$out" | grep -E "^(OK|GAGAL|   )" | sed "s/^/[$name] /"; [ $rc -eq 0 ] && echo "[$name] LULUS" || { echo "[$name] GAGAL"; fail=1; }; }
+run() { local name=$1; shift; local out; out=$("$@" 2>&1); local rc=$?; echo "$out" | grep -E "^(OK|GAGAL|   )" | sed "s/^/[$name] /"; # galat tick server yang tertelan juga dihitung gagal
+  echo "$out" | grep -q "tick gagal" && { echo "$out" | grep -m3 -A2 "tick gagal" | sed "s/^/[$name] /"; rc=1; }
+  [ $rc -eq 0 ] && echo "[$name] LULUS" || { echo "[$name] GAGAL"; fail=1; }; }
 run jaringan env WS_URL=ws://localhost:8099/ws node test/net.test.js
 run akhir-ronde env WS_URL=ws://localhost:8098/ws EXPECT_END=1 node test/net.test.js
 run room env WS_URL=ws://localhost:8098/ws DATA_DIR=$T/8098 node test/rooms.test.js
@@ -25,5 +28,6 @@ run statistik node test/stats.test.js
 run peta node test/maps.test.js
 run c2 node test/c2.test.js
 run bertahan node test/pve.test.js
-for f in "$T"/*.log; do grep -H -i "error\|gagal" "$f" | head -3; done
+run d2 node test/d2.test.js
+for f in "$T"/*.log; do if grep -q -i "error\|gagal" "$f"; then grep -H -i -m3 "error\|gagal" "$f"; fail=1; fi; done
 exit $fail

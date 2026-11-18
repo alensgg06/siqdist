@@ -148,6 +148,21 @@ Tingkat bot (Mudah/Normal/Sulit) mengatur kekuatan monster.
 - **Tantangan harian**: 3 tantangan yang sama untuk semua pemain, berganti tiap hari (WIB);
   menyelesaikannya membuka jubah Bintang Fajar dan Bayangan Malam.
 
+## Tambahan D2
+
+- **Pendeta Fajar** (kelas keempat): skill Doa memulihkan 35 HP untuk diri dan rekan di dekatnya;
+  jurus Cahaya Fajar memulihkan rekan sepenuhnya dan membangkitkan yang tumbang.
+- **Monster baru**: Penyihir Es (memperlambat, sejak gelombang 4), Ratu Laba-laba (bos gelombang
+  10, memanggil anak laba-laba). Golem Batu tetap bos gelombang 5 dan 15.
+- **Tong meledak** di Pelabuhan Bulan: ditembak, meledak melukai lawan di sekitarnya (dan penembak
+  bila terlalu dekat), muncul lagi setelah 20 detik.
+- **Isyarat cepat** (tombol `!`): Tolong!, Ke sini!, Bagus!, tampil ke rekan dan di peta mini.
+- **Menonton rekan** saat tumbang di mode tim dan Bertahan Bersama.
+- **Kembali ke room terakhir** dari menu dengan satu tombol.
+- **Mode akhir pekan** (room publik, Sabtu-Minggu WIB, bergilir tiap minggu): Raksasa, Hujan
+  Meteor, Tembakan Maut, Hanya Penyihir.
+- **Peringkat Bertahan mingguan** dan **pencapaian** di panel Peringkat.
+
 ## Peta
 
 - **Reruntuhan Senja**: reruntuhan batu di bawah langit senja, altar kristal di tengah.

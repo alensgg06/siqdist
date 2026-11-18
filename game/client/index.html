@@ -29,6 +29,9 @@
   <div id="feed"></div>
   <div id="net"></div>
   <button id="pauseBtn" aria-label="Menu">☰</button>
+  <button id="pingBtn" aria-label="Isyarat cepat">!</button>
+  <div id="pingMenu" class="hidden"></div>
+  <div id="specTag" class="hidden"></div>
   <div id="toast"></div>
 
   <div id="zoneTag" class="hidden"></div>
@@ -85,6 +88,7 @@
     <input id="name" maxlength="14" placeholder="Nama pengembara" autocomplete="off" spellcheck="false">
     <div id="classes"></div>
     <button id="play">Masuk Arena</button>
+    <button id="rejoin" class="sec hidden"></button>
     <div id="rooms">
       <div class="modes" role="radiogroup" aria-label="Mode room privat">
         <button class="mode on" data-gm="dm" role="radio" aria-checked="true">Deathmatch</button>
@@ -117,8 +121,8 @@
     <p id="myStats" class="hint"></p>
     <div class="rgrid">
       <section><h4 id="weekTitle">Minggu ini</h4><table id="weekTable"></table></section>
-      <section><h4>Tantangan hari ini</h4><ul id="daily"></ul></section>
-      <section><h4>Jubah</h4><div id="skins"></div><p id="skinMsg" class="skinmsg" aria-live="polite"></p><p class="hint">Jubah terbuka dari statistikmu: selesaikan ronde di arena (bukan latihan). Jubah yang dipilih dipakai mulai ronde berikutnya.</p></section>
+      <section><h4>Tantangan hari ini</h4><ul id="daily"></ul><h4>Bertahan Bersama minggu ini</h4><table id="waveTable"></table></section>
+      <section><h4>Jubah</h4><div id="skins"></div><p id="skinMsg" class="skinmsg" aria-live="polite"></p><h4>Pencapaian</h4><div id="achv"></div><p class="hint">Jubah terbuka dari statistikmu: selesaikan ronde di arena (bukan latihan). Jubah yang dipilih dipakai mulai ronde berikutnya.</p></section>
     </div>
   </div>
 </div>

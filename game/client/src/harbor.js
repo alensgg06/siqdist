@@ -206,7 +206,16 @@ export function buildHarbor(scene, glowTex) {
   }));
   flies.frustumCulled = false; root.add(flies); world.flies = flies;
 
-  world.update = (t, focus, orbMask) => {
+  // tong meledak: tong merah dengan tanda menyala
+  world.barrels = MAPS.harbor.barrels.map(([x, z]) => {
+    const g = new THREE.Group();
+    const b = sh(new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.5, 1.3, 12), new THREE.MeshStandardMaterial({ color: 0x9c2b22, roughness: 0.6 }))); b.position.y = 0.65; g.add(b);
+    for (const y of [0.3, 1.0]) { const r = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.04, 6, 16), metal); r.rotation.x = Math.PI / 2; r.position.y = y; g.add(r); }
+    const mark = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), new THREE.MeshStandardMaterial({ color: 0xffc23a, emissive: 0xff8a1a, emissiveIntensity: 3 })); mark.position.set(0, 1.42, 0); g.add(mark);
+    g.position.set(x, 0, z); root.add(g); return g;
+  });
+  world.update = (t, focus, orbMask, barrelMask = 0) => {
+    world.barrels.forEach((b, i) => { b.visible = !!(barrelMask & (1 << i)); });
     moon.target.position.set(focus.x, 0, focus.z);
     moon.position.copy(moon.target.position).addScaledVector(MOON_DIR, 80);
     sky.position.set(focus.x, 0, focus.z);

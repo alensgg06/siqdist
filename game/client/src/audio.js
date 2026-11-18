@@ -41,6 +41,8 @@ export function sfx(name, vol = 1) {
     case 'level': [523, 659, 784, 1047].forEach((f, i) => tone('triangle', f, f, 0.2, 0.18, i * 0.08)); break;
     case 'dash': noise(0.2, 0.2 * vol, 1800, 0.4); break;
     case 'nova': noise(0.5, 0.3 * vol, 400, 0.4); tone('sine', 90, 400, 0.35, 0.22 * vol); break;
+    case 'heal': tone('sine', 520, 1040, 0.35, 0.2 * vol); break;
+    case 'priest': tone('triangle', 900, 500, 0.12, 0.14 * vol); break;
     case 'shield': tone('sine', 330, 660, 0.3, 0.2 * vol); break;
     case 'orb': tone('sine', 700, 1400, 0.2, 0.18 * vol); break;
   }
