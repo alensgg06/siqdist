@@ -7,7 +7,9 @@ services:
     container_name: arkana
     restart: unless-stopped
     ports:
-      - "8080:8080"      # akses dari Wi-Fi yang sama; ubah angka kiri bila 8080 terpakai
+      # port di host untuk akses dari Wi-Fi yang sama; atur lewat ARKANA_PORT di .env
+      # (tunnel tidak memakai port ini, ia tersambung langsung ke arkana:8080 di jaringan Docker)
+      - "${ARKANA_PORT:-18080}:8080"
     environment:
       - PORT=8080
     mem_limit: 256m

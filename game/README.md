@@ -35,9 +35,10 @@ docker compose up -d --build
 docker compose ps          # status harus "healthy"
 ```
 
-Game lalu tersedia di `http://IP-VPS:8080`. Buka port itu di firewall VPS
-(mis. `ufw allow 8080/tcp`) dan di firewall panel penyedia VPS bila ada.
-Bila port 8080 sudah dipakai, ubah angka kiri pada `ports` di `docker-compose.yml`.
+Game lalu tersedia di `http://IP-VPS:18080`. Port host diatur lewat `ARKANA_PORT` di file
+`.env` (bawaan 18080); ganti bila sudah dipakai container lain. Untuk akses langsung dari
+luar, buka port itu di firewall (mis. `ufw allow 18080/tcp`). Lewat Cloudflare Tunnel
+port ini tidak perlu dibuka.
 
 Memperbarui setelah ada perubahan kode: `git pull && docker compose up -d --build`.
 Melihat log: `docker compose logs -f arkana`.
