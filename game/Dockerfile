@@ -18,7 +18,7 @@ COPY --from=build /app/node_modules/ws ./node_modules/ws
 COPY --from=build /app/shared ./shared
 COPY --from=build /app/server ./server
 COPY --from=build /app/tools ./tools
-COPY --from=build /app/client/index.html /app/client/style.css ./client/
+COPY --from=build /app/client/index.html /app/client/suara.html /app/client/style.css ./client/
 COPY --from=build /app/client/dist ./client/dist
 # folder catatan pertandingan; volume bernama mewarisi pemilik ini saat pertama dibuat
 RUN mkdir -p /app/data && chown node:node /app/data

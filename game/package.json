@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Arena shooter PvP fantasi, mobile-first, multiplayer online",
   "scripts": {
-    "build": "esbuild client/src/main.js --bundle --minify --format=esm --outfile=client/dist/bundle.js",
+    "build": "esbuild client/src/main.js --bundle --minify --format=esm --outfile=client/dist/bundle.js && esbuild client/src/soundtest.js --bundle --minify --format=esm --outfile=client/dist/suara.js",
     "postinstall": "npm run build",
     "start": "node server/server.js",
     "test": "bash test/run-all.sh",

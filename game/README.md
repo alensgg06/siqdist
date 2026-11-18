@@ -237,6 +237,10 @@ docker compose exec arkana node tools/stats.js     # di server Docker
 npm run stats                                       # tanpa Docker
 ```
 
+## Suara
+
+Semua bunyi disintesis di perangkat pemain (`client/src/audio.js`), tanpa berkas audio. Tiap bunyi berlapis (hentakan, badan, ekor) dengan nada yang sedikit diacak, dan tembakan pemain lain diredam sesuai jarak. Buka `/suara.html` di server game untuk mendengar tiap bunyi tanpa bermain.
+
 ## Kontrol
 
 | | HP | Desktop |

@@ -536,7 +536,7 @@ function onEvent(e) {
       fx.spawnProj(e[1], cls, e[3], e[4], e[5]);
       if (e[2] !== G.myId && owner && G.lastShotTick.get(e[2]) !== G.snapN) {
         G.lastShotTick.set(e[2], G.snapN);
-        owner.av.fireKick(); fx.muzzle(owner.av.tipWorld(tmpV), cls, e[5]); sfx(cls, vol(e[3], e[4]) * 0.7);
+        owner.av.fireKick(); fx.muzzle(owner.av.tipWorld(tmpV), cls, e[5]); sfx(cls, vol(e[3], e[4]) * 0.8, true);
       }
       break;
     }
