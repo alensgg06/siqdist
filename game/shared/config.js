@@ -40,7 +40,7 @@ export const CLASSES = {
     pellets: 6, spread: 0.16, splash: 0, skill: 'shield', skillCd: 10, color: 0x9dff6a,
   },
   priest: {
-    name: 'Pendeta Fajar', desc: 'Penyembuh: memulihkan diri dan rekan', skillName: 'Doa',
+    name: 'Haji Toriq', desc: 'Penyembuh: memulihkan diri dan rekan', skillName: 'Doa',
     skillDesc: 'Pulihkan 35 HP untukmu dan rekan di dekatmu',
     hp: 95, speed: 8, fireCd: 0.4, dmg: 13, projSpeed: 45, projLife: 0.8,
     pellets: 1, spread: 0.02, splash: 0, skill: 'heal', skillCd: 9, color: 0xffe27a,

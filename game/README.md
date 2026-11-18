@@ -150,7 +150,7 @@ Tingkat bot (Mudah/Normal/Sulit) mengatur kekuatan monster.
 
 ## Tambahan D2
 
-- **Pendeta Fajar** (kelas keempat): skill Doa memulihkan 35 HP untuk diri dan rekan di dekatnya;
+- **Haji Toriq** (kelas keempat): skill Doa memulihkan 35 HP untuk diri dan rekan di dekatnya;
   jurus Cahaya Fajar memulihkan rekan sepenuhnya dan membangkitkan yang tumbang.
 - **Monster baru**: Penyihir Es (memperlambat, sejak gelombang 4), Ratu Laba-laba (bos gelombang
   10, memanggil anak laba-laba). Golem Batu tetap bos gelombang 5 dan 15.

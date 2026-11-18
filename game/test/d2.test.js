@@ -1,4 +1,4 @@
-// Uji D2: Pendeta Fajar (Doa), isyarat cepat, tong meledak, mode akhir pekan, dan peringkat gelombang.
+// Uji D2: Haji Toriq (Doa), isyarat cepat, tong meledak, mode akhir pekan, dan peringkat gelombang.
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -38,7 +38,7 @@ await server(8083, { MUTATOR: 'mage' });
 setMap('harbor');
 const A = client(8085, { name: 'Pendeta', cls: 'priest', mode: 'create', gm: 'pve', map: 'harbor' });
 await until(() => A.w && A.me(), 3000);
-if (A.w.cls !== 'priest') fail('kelas Pendeta Fajar tidak diterima');
+if (A.w.cls !== 'priest') fail('kelas Haji Toriq tidak diterima');
 const B = client(8085, { name: 'Rekan', mode: 'join', code: A.w.code });
 await until(() => B.w, 3000);
 const [bx, bz] = MAPS.harbor.barrels[0], nav = {};
