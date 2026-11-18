@@ -62,6 +62,7 @@
     <label class="row"><input id="autoFire" type="checkbox"> Tembak otomatis saat bidikan mengenai lawan</label>
     <label class="row"><input id="aimAssist" type="checkbox"> Bantuan bidik</label>
     <label class="row"><input id="vibrate" type="checkbox"> Getar saat terkena dan menumbangkan lawan</label>
+    <label class="row"><input id="music" type="checkbox"> Musik latar</label>
     <label class="row"><input id="mute" type="checkbox"> Matikan suara</label>
     <div class="btns"><button id="resume">Lanjut</button><button id="leave" class="ghost">Keluar ke menu</button></div>
   </div>
@@ -78,6 +79,8 @@
       <div class="modes" role="radiogroup" aria-label="Mode room privat">
         <button class="mode on" data-gm="dm" role="radio" aria-checked="true">Deathmatch</button>
         <button class="mode" data-gm="koth" role="radio" aria-checked="false">Rebut Altar</button>
+        <button class="mode" data-gm="tdm" role="radio" aria-checked="false">Tim</button>
+        <button class="mode" data-gm="coop" role="radio" aria-checked="false">Lawan Bot</button>
       </div>
       <button id="create" class="sec">Buat room privat</button>
       <div class="join"><input id="code" maxlength="4" placeholder="KODE" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Kode room"><button id="joinBtn" class="sec">Gabung</button></div>

@@ -24,17 +24,26 @@ export function setupInput(el) {
   addEventListener('blur', () => { for (const k in keys) keys[k] = false; kb(); input.fire = false; });
 
   // mouse (pointer lock)
-  el.canvas.addEventListener('mousedown', (e) => {
-    if (!input.enabled || input.touch) return;
-    if (document.pointerLockElement !== el.canvas) { el.canvas.requestPointerLock?.(); return; }
+  let dragX = null; // posisi mouse terakhir saat membidik dengan menyeret (tanpa pointer lock)
+  // HUD (lapisan sentuh) menutupi kanvas, jadi mouse didengarkan di lapisan itu, bukan di kanvas.
+  // Tidak memeriksa input.touch: laptop layar sentuh juga memakai mouse; sentuhan sudah preventDefault sehingga tidak memicu event mouse.
+  el.touchLayer.addEventListener('mousedown', (e) => {
+    if (!input.enabled) return;
+    if (document.pointerLockElement !== el.canvas) {
+      // minta pointer lock, tetapi jangan bergantung padanya: bila ditolak, bidik dengan menyeret mouse
+      try { const r = el.canvas.requestPointerLock?.(); r?.catch?.(() => {}); } catch { /* ditolak */ }
+    }
+    dragX = e.clientX;
     if (e.button === 0) input.fire = true;
     if (e.button === 2) input.skillQueued = true;
   });
-  addEventListener('mouseup', (e) => { if (e.button === 0 && !input.touch) input.fire = false; });
+  addEventListener('mouseup', (e) => { if (e.button === 0 && dragX !== null) input.fire = false; if (e.button === 0) dragX = null; });
   addEventListener('mousemove', (e) => {
-    if (document.pointerLockElement === el.canvas && input.enabled) input.yaw -= e.movementX * 0.0026 * input.sens;
+    if (!input.enabled) return;
+    if (document.pointerLockElement === el.canvas) input.yaw -= e.movementX * 0.0026 * input.sens;
+    else if (e.buttons && dragX !== null) { input.yaw -= (e.clientX - dragX) * 0.0045 * input.sens; dragX = e.clientX; }
   });
-  el.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+  el.touchLayer.addEventListener('contextmenu', (e) => e.preventDefault());
 
   // ---- sentuh ----
   const stick = el.stick, knob = el.knob;

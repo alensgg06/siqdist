@@ -160,16 +160,22 @@ async function hitRate(port, label) {
   const ivB = setInterval(() => {
     const a = B.of(A.id), b = B.me(); if (!a || !b) return;
     const dx = a[1] - b[1], dz = a[2] - b[2], d = Math.hypot(dx, dz) || 1;
-    if (phase === 1) { if (d < 9 && los(a[1], a[2], b[1], b[2])) phase = 2; else return steer(B, a[1], a[2], t0); }
+    if (phase === 1) { if (d < 7.5 && los(a[1], a[2], b[1], b[2])) phase = 2; else return steer(B, a[1], a[2], t0); }
     if (Date.now() > flipT) { flipT = Date.now() + 550 + Math.random() * 300; dir = -dir; }
-    B.send({ t: 'in', s: ++B.seq, mx: (-dz / d) * dir, mz: (dx / d) * dir, y: 0, f: 0, k: 0 });
+    // berbalik sebelum menabrak sesuatu atau keluar dari garis tembak penembak
+    const nx = b[1] + (-dz / d) * dir * 1.6, nz = b[2] + (dx / d) * dir * 1.6;
+    if (blocked(nx, nz, PLAYER_R) || !los(a[1], a[2], nx, nz)) { dir = -dir; flipT = Date.now() + 550; }
+    // jaga jarak 6-7,5 langkah agar waktu terbang peluru kecil dan sama di setiap putaran
+    const rad = d > 7.5 ? 0.5 : d < 6 ? -0.5 : 0;
+    B.send({ t: 'in', s: ++B.seq, mx: (-dz / d) * dir + (dx / d) * rad, mz: (dx / d) * dir + (dz / d) * rad, y: 0, f: 0, k: 0 });
   }, 1000 / 30);
   await until(() => phase === 2, 15000);
   await sleep(1800); // biarkan rtt terukur dan perlindungan spawn habis
   const shotIds = new Set();
   const ivA = setInterval(() => {
     const me = A.me(), seen = A.seen(B.id); if (!me || !seen) return;
-    A.send({ t: 'in', s: ++A.seq, mx: 0, mz: 0, y: Math.atan2(seen[0] - me[1], seen[1] - me[2]), f: 1, k: 0, vt: Math.round(seen[2] * 10) / 10 });
+    const open = los(me[1], me[2], seen[0], seen[1]); // seperti pemain: hanya menembak bila lawan terlihat
+    A.send({ t: 'in', s: ++A.seq, mx: 0, mz: 0, y: Math.atan2(seen[0] - me[1], seen[1] - me[2]), f: open ? 1 : 0, k: 0, vt: Math.round(seen[2] * 10) / 10 });
   }, 1000 / 30);
   const n0 = B.ev.length;
   const stat = () => {

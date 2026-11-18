@@ -9,6 +9,7 @@ import {
   TICK, DT, PLAYER_R, CLASSES, CLASS_KEYS, SPAWNS, ORBS, MATCH_TIME, KILL_LIMIT, END_TIME,
   RESPAWN_TIME, PROTECT_TIME, MAX_HUMANS, BOT_FILL, MAX_LEVEL, XP_LV, NOVA_R, NOVA_DMG,
   SHIELD_TIME, ORB_HEAL, ORB_RESPAWN, levelDmg, levelHp,
+  TEAM_MODES, TEAM_LIMIT, TEAMS,
   MODES, KOTH_R, KOTH_LIMIT, RUNES, RUNE_TIME, RUNE_RESPAWN, DMG_BUFF, SPD_BUFF, LAG_MAX,
 } from '../shared/config.js';
 import { stepPlayer, blocked, los, angDiff } from '../shared/sim.js';
@@ -22,6 +23,7 @@ const PRACTICE_BOTS = 2;
 const FILL = process.env.BOTS !== undefined ? Number(process.env.BOTS) : BOT_FILL; // jumlah pengisi bot (bisa 0 untuk uji)
 const KOTH_WIN = Number(process.env.KOTH_LIMIT) || KOTH_LIMIT;
 const LAGCOMP = process.env.LAGCOMP !== '0';
+const TEAM_WIN = Number(process.env.TEAM_LIMIT) || TEAM_LIMIT;
 const HIST = 16; // riwayat posisi per pemain, dalam tick (~0,53 dtk)
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // tanpa I dan O agar tidak tertukar dengan 1 dan 0
 
@@ -53,6 +55,8 @@ class Room {
     this.tickN = 0;
     this.runeT = RUNES.map(() => 0);
     this.holder = 0;                         // Rebut Altar: id penguasa, 0 kosong, -1 diperebutkan
+    this.teams = TEAM_MODES.includes(this.mode); // Tim: dua regu seimbang; Lawan Bot: semua manusia satu regu
+    this.teamScore = [0, 0];
     this.startedAt = Date.now();
     this.left = [];                          // pemain manusia yang keluar di tengah ronde
     this.players = new Map();
@@ -71,8 +75,9 @@ class Room {
 
   addPlayer(name, clsKey, ws) {
     const cls = CLASSES[clsKey];
+    const team = this.teams ? this.pickTeam(!ws) : -1;
     const p = {
-      id: this.nextId++, name, clsKey, cls, bot: !ws, ws,
+      id: this.nextId++, name, clsKey, cls, bot: !ws, ws, team,
       x: 0, z: 0, yaw: 0, dashT: 0, dx: 0, dz: 0, skillCd: 0,
       hp: cls.hp, maxHp: cls.hp, lvl: 1, xp: 0, kills: 0, deaths: 0, dmg: 0,
       pingSum: 0, pingN: 0, fpsSum: 0, fpsN: 0, joinedAt: Date.now(),
@@ -93,7 +98,18 @@ class Room {
     this.rosterDirty = true;
   }
 
+  pickTeam(bot) {
+    if (this.mode === 'coop') return bot ? 1 : 0;
+    const n = [0, 0], h = [0, 0];
+    for (const p of this.players.values()) { n[p.team]++; if (!p.bot) h[p.team]++; }
+    if (!bot && h[0] !== h[1]) return h[0] < h[1] ? 0 : 1; // manusia dibagi rata dulu
+    return n[0] <= n[1] ? 0 : 1;
+  }
+
+  foes(a, b) { return a !== b && (!this.teams || a.team !== b.team); }
+
   balanceBots() {
+    if (this.teams) return this.balanceTeams();
     const humans = this.humans();
     let bots = this.players.size - humans;
     const want = humans === 0 ? 0 : this.practice ? PRACTICE_BOTS : Math.max(0, FILL - humans);
@@ -108,6 +124,25 @@ class Room {
         if (bots <= want) break;
         if (p.bot) { this.removePlayer(p); bots--; }
       }
+    }
+  }
+
+  addBot(team) {
+    const used = new Set([...this.players.values()].map((p) => p.name));
+    const name = BOT_NAMES.find((n) => !used.has(n)) || 'Bot' + this.nextId;
+    const p = this.addPlayer(name, CLASS_KEYS[Math.floor(Math.random() * CLASS_KEYS.length)], null);
+    if (p.team !== team) { p.team = team; this.spawn(p); }
+  }
+
+  // Tim: kedua regu sama besar, minimal FILL/2 per regu. Lawan Bot: regu bot = manusia + 2 (minimal 3).
+  balanceTeams() {
+    const humans = this.humans();
+    const count = (t, bot) => [...this.players.values()].filter((p) => p.team === t && (bot === undefined || p.bot === bot)).length;
+    const want = humans === 0 ? [0, 0] : this.mode === 'coop' ? [count(0, false), Math.max(3, humans + 2)]
+      : (() => { const per = Math.max(Math.ceil(FILL / 2), count(0, false), count(1, false)); return [per, per]; })();
+    for (const t of [0, 1]) {
+      while (count(t) < want[t]) this.addBot(t);
+      for (const p of [...this.players.values()]) { if (count(t) <= want[t]) break; if (p.bot && p.team === t) this.removePlayer(p); }
     }
   }
 
@@ -137,7 +172,7 @@ class Room {
     const scored = SPAWNS.map(([x, z]) => {
       let min = 1e9;
       for (const q of this.players.values()) {
-        if (q === p || q.dead) continue;
+        if (q.dead || !this.foes(p, q)) continue; // di mode tim, jauhi lawan saja
         min = Math.min(min, Math.hypot(q.x - x, q.z - z));
       }
       return { x, z, min };
@@ -165,6 +200,7 @@ class Room {
 
   damage(t, amount, att) {
     if (t.dead || t.protT > 0 || this.state !== 'play') return;
+    if (att && att !== t && !this.foes(att, t)) return; // tanpa tembak kawan
     if (t.shieldT > 0) amount *= 0.3;
     amount = Math.max(1, Math.round(amount));
     t.hp -= amount; t.hurtT = 0;
@@ -173,7 +209,10 @@ class Room {
     if (att && att !== t) this.addXp(att, amount * 0.5);
     if (t.hp <= 0) {
       t.hp = 0; t.dead = true; t.respawnT = RESPAWN_TIME; t.deaths++; t.dashT = 0;
-      if (att && att !== t) { att.kills++; this.addXp(att, 100); }
+      if (att && att !== t) {
+        att.kills++; this.addXp(att, 100);
+        if (this.teams) { this.teamScore[att.team]++; if (this.teamScore[att.team] >= TEAM_WIN) this.endMatch(); }
+      }
       this.events.push(['k', att ? att.id : 0, t.id]);
       this.rosterDirty = true;
       if (this.mode === 'dm' && att && att.kills >= LIMIT) this.endMatch();
@@ -182,7 +221,7 @@ class Room {
 
   playerRecord(p) {
     return {
-      name: p.name, cls: p.clsKey, bot: p.bot, kills: p.kills, deaths: p.deaths, dmg: p.dmg, lvl: p.lvl, pts: p.pts,
+      name: p.name, cls: p.clsKey, bot: p.bot, team: p.team, kills: p.kills, deaths: p.deaths, dmg: p.dmg, lvl: p.lvl, pts: p.pts,
       ping: p.pingN ? Math.round(p.pingSum / p.pingN) : null, fps: p.fpsN ? Math.round(p.fpsSum / p.fpsN) : null,
       secs: Math.round((Date.now() - p.joinedAt) / 1000),
     };
@@ -195,7 +234,9 @@ class Room {
       const win = ps.slice().sort((a, b) => (this.mode === 'koth' ? b.pts - a.pts : 0) || b.kills - a.kills)[0];
       logMatch({
         at: new Date().toISOString(), room: this.code ? 'privat' : 'publik', mode: this.mode,
-        secs: Math.round((Date.now() - this.startedAt) / 1000), winner: win ? win.name : null,
+        secs: Math.round((Date.now() - this.startedAt) / 1000),
+        winner: this.teams ? (this.teamScore[0] === this.teamScore[1] ? 'seri' : TEAMS[this.teamScore[0] > this.teamScore[1] ? 0 : 1].name) : win ? win.name : null,
+        teamScore: this.teams ? this.teamScore : undefined,
         players: ps, left: this.left,
       });
     }
@@ -206,7 +247,7 @@ class Room {
   resetMatch() {
     this.state = 'play'; this.timeLeft = MATCH_TIME; this.projs.length = 0;
     this.startedAt = Date.now(); this.left = [];
-    this.orbT.fill(0); this.runeT.fill(0); this.holder = 0;
+    this.orbT.fill(0); this.runeT.fill(0); this.holder = 0; this.teamScore = [0, 0];
     for (const p of this.players.values()) {
       p.kills = 0; p.deaths = 0; p.xp = 0; p.lvl = 1; p.dmg = 0; p.pts = 0; p.ptsAcc = 0;
       p.pingSum = p.pingN = p.fpsSum = p.fpsN = 0; p.joinedAt = Date.now();
@@ -222,7 +263,7 @@ class Room {
     for (let i = 0; i < c.pellets; i++) {
       const a = p.yaw + (Math.random() - 0.5) * 2 * c.spread;
       const pr = {
-        id: this.nextPid++, o: p.id, x: ox, z: oz, dx: Math.sin(a), dz: Math.cos(a),
+        id: this.nextPid++, o: p.id, tm: p.team, x: ox, z: oz, dx: Math.sin(a), dz: Math.cos(a),
         sp: c.projSpeed, life: c.projLife, dmg: c.dmg * levelDmg(p.lvl) * (p.dmgT > 0 ? DMG_BUFF : 1), splash: c.splash,
       };
       this.events.push(['s', pr.id, p.id, r2(ox), r2(oz), Math.round(a * 1000) / 1000]);
@@ -255,7 +296,7 @@ class Room {
       if (blocked(pr.x, pr.z, 0.15)) { this.explode(pr, 0); return true; }
       const tf = this.tickN - (lag - (k / n) * lag) * TICK;
       for (const t of this.players.values()) {
-        if (t.dead || t.id === pr.o) continue;
+        if (t.dead || t.id === pr.o || (pr.tm >= 0 && t.team === pr.tm)) continue;
         const [tx, tz] = this.posAt(t, tf), dx = tx - pr.x, dz = tz - pr.z;
         if (dx * dx + dz * dz < hitR2) { this.explode(pr, t.id); return true; }
       }
@@ -270,7 +311,7 @@ class Room {
     this.events.push(['h', pr.id, r2(pr.x), r2(pr.z), hitId]);
     if (pr.splash > 0) {
       for (const t of this.players.values()) {
-        if (t.dead || t.id === pr.o) continue;
+        if (t.dead || t.id === pr.o || (pr.tm >= 0 && t.team === pr.tm)) continue;
         const d = Math.hypot(t.x - pr.x, t.z - pr.z);
         if (t.id === hitId) this.damage(t, pr.dmg, owner);
         else if (d < pr.splash) this.damage(t, pr.dmg * (1 - 0.6 * d / pr.splash), owner);
@@ -292,7 +333,7 @@ class Room {
         pr.x += pr.dx * st; pr.z += pr.dz * st;
         if (blocked(pr.x, pr.z, 0.15)) { this.explode(pr, 0); done = true; break; }
         for (const t of this.players.values()) {
-          if (t.dead || t.id === pr.o) continue;
+          if (t.dead || t.id === pr.o || (pr.tm >= 0 && t.team === pr.tm)) continue;
           const dx = t.x - pr.x, dz = t.z - pr.z;
           if (dx * dx + dz * dz < hitR2) { this.explode(pr, t.id); done = true; break; }
         }
@@ -311,7 +352,7 @@ class Room {
     if (ai.retT <= 0) {
       ai.retT = 0.3; ai.tgt = 0; let best = 45;
       for (const q of this.players.values()) {
-        if (q === p || q.dead) continue;
+        if (q.dead || !this.foes(p, q)) continue;
         const d = Math.hypot(q.x - p.x, q.z - p.z);
         if (d < best && los(p.x, p.z, q.x, q.z)) { best = d; ai.tgt = q.id; }
       }
@@ -468,7 +509,8 @@ class Room {
       this.rosterDirty = false;
       const msg = JSON.stringify({
         t: 'r',
-        l: [...this.players.values()].map((p) => [p.id, p.name, p.clsKey, p.kills, p.deaths, p.bot ? 1 : 0, p.pts]),
+        l: [...this.players.values()].map((p) => [p.id, p.name, p.clsKey, p.kills, p.deaths, p.bot ? 1 : 0, p.pts, p.team]),
+        ts: this.teams ? this.teamScore : null,
         gm: this.mode,
       });
       for (const p of this.players.values()) if (p.ws && p.ws.readyState === 1) p.ws.send(msg);
@@ -546,7 +588,7 @@ wss.on('connection', (ws) => {
       }
       me = room.addPlayer(name, clsKey, ws);
       room.balanceBots();
-      ws.send(JSON.stringify({ t: 'w', id: me.id, limit: room.mode === 'koth' ? KOTH_WIN : LIMIT, code: room.code, practice: room.practice, gm: room.mode }));
+      ws.send(JSON.stringify({ t: 'w', id: me.id, team: me.team, limit: room.mode === 'koth' ? KOTH_WIN : room.teams ? TEAM_WIN : LIMIT, code: room.code, practice: room.practice, gm: room.mode }));
     } else if (m.t === 'in' && me) {
       if (me.queue.length < 12) {
         me.queue.push({

@@ -3,13 +3,13 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { DT, CLASSES, CLASS_KEYS, ARENA, OBST, ORBS, XP_LV, MAX_LEVEL, NOVA_R, KILL_LIMIT, KOTH_R, RUNES, RUNE_INFO, SPD_BUFF, INTERP } from '../../shared/config.js';
+import { DT, CLASSES, CLASS_KEYS, ARENA, OBST, ORBS, XP_LV, MAX_LEVEL, NOVA_R, KILL_LIMIT, KOTH_R, RUNES, RUNE_INFO, SPD_BUFF, INTERP, TEAMS, TEAM_MODES } from '../../shared/config.js';
 import { stepPlayer, blocked, los, angDiff } from '../../shared/sim.js';
 import { buildWorld, buildExtras } from './world.js';
 import { Avatar } from './chars.js';
 import { Fx } from './fx.js';
 import { input, setupInput, isTouch } from './input.js';
-import { initAudio, sfx, setMuted } from './audio.js';
+import { initAudio, sfx, setMuted, setMusic, step } from './audio.js';
 
 const $ = (id) => document.getElementById(id);
 const store = { get: (k, d) => { try { return localStorage.getItem('arkana.' + k) ?? d; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem('arkana.' + k, v); } catch { /* mode privat */ } } };
@@ -70,7 +70,7 @@ const G = {
   autoFire: store.get('autoFire', isTouch ? '1' : '') === '1', aimAssist: store.get('aimAssist', isTouch ? '1' : '') === '1',
   lastShotTick: new Map(), shake: 0, time: 0,
   vibrate: store.get('vibrate', '1') === '1', code: null, practice: false, joinErr: '', buzzT: 0,
-  tut: null, gm: 'dm', runeMask: 15, holder: 0, ticks: [], createGm: store.get('gm', 'dm'),
+  tut: null, music: store.get('music', '1') === '1', stepT: 0, team: -1, teamScore: [0, 0], gm: 'dm', runeMask: 15, holder: 0, ticks: [], createGm: store.get('gm', 'dm'),
 };
 window.__arkana = G; // dipakai uji otomatis
 
@@ -113,6 +113,7 @@ $('code').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('joinBtn
 
 function start(mode, code) {
   initAudio();
+  setMusic(G.music);
   const name = $('name').value.trim() || 'Pengembara';
   store.set('name', name);
   for (const b of menuBtns) $(b).disabled = true;
@@ -183,17 +184,20 @@ function onMessage(m) {
     $('death').classList.add('hidden'); $('score').classList.add('hidden'); $('pause').classList.add('hidden');
     input.enabled = true;
     G.code = m.code || null; G.practice = !!m.practice; G.gm = m.gm || 'dm'; G.ticks.length = 0;
+    G.team = TEAM_MODES.includes(G.gm) ? m.team : -1; G.teamScore = [0, 0];
     $('zoneTag').classList.toggle('hidden', G.gm !== 'koth');
     const pill = $('roomPill');
     pill.classList.toggle('hidden', !G.code && !G.practice);
-    pill.textContent = G.code ? `${G.gm === 'koth' ? 'Altar' : 'Room'} ${G.code} ⤴` : 'Latihan';
+    pill.textContent = G.code ? `${{ koth: 'Altar', tdm: 'Tim', coop: 'Lawan Bot' }[G.gm] || 'Room'} ${G.code} ⤴` : 'Latihan';
+    if (G.team >= 0) setTimeout(() => toast(`Kamu di regu ${TEAMS[G.team].name}`), 1900);
     if (G.practice && G.tut) { G.tut.show(); } else { G.tut = null; $('tutor').classList.add('hidden'); }
     if (!G.practice || !G.tut) toast(G.code ? `Room ${G.code}: ketuk kode untuk membagikan` : G.practice ? 'Arena latihan' : 'Pertarungan dimulai');
   } else if (m.t === 'e') {
     G.joinErr = m.m;
   } else if (m.t === 'r') {
     G.roster.clear();
-    for (const [id, name, cls, kills, deaths, bot, pts] of m.l) G.roster.set(id, { id, name, cls, kills, deaths, bot, pts: pts || 0 });
+    for (const [id, name, cls, kills, deaths, bot, pts, team] of m.l) G.roster.set(id, { id, name, cls, kills, deaths, bot, pts: pts || 0, team: team ?? -1 });
+    if (m.ts) G.teamScore = m.ts;
     updateScoreHud();
   } else if (m.t === 's') onSnapshot(m);
   else if (m.t === 'pg') G.ping = Math.round(performance.now() - m.c);
@@ -272,7 +276,7 @@ function getPlayer(id) {
   if (p) return p;
   const r = G.roster.get(id);
   if (!r) return null;
-  const av = new Avatar(r.cls, r.name, id === G.myId, world.glowTex);
+  const av = new Avatar(r.cls, r.name, id === G.myId, world.glowTex, r.team >= 0 ? TEAMS[r.team].color : null);
   scene.add(av.group);
   p = { id, av, buf: [], x: 0, z: 0, yaw: 0, flags: 0, hp: 1, maxHp: 1, lvl: 1, cls: r.cls, seen: 0 };
   G.players.set(id, p);
@@ -416,24 +420,32 @@ function updateDmg(dt) {
   }
 }
 
-function sortedRoster() { return [...G.roster.values()].sort((a, b) => (G.gm === 'koth' ? b.pts - a.pts : 0) || b.kills - a.kills || a.deaths - b.deaths); }
+function sortedRoster() { return [...G.roster.values()].sort((a, b) => (G.team >= 0 ? a.team - b.team : 0) || (G.gm === 'koth' ? b.pts - a.pts : 0) || b.kills - a.kills || a.deaths - b.deaths); }
+const ally = (id) => G.team >= 0 && G.roster.get(id)?.team === G.team;
 function updateScoreHud() {
   const list = sortedRoster(), me = G.roster.get(G.myId);
   if (!me) return;
   $('rank').textContent = '#' + (list.indexOf(me) + 1);
-  $('myScore').textContent = G.gm === 'koth' ? `${me.pts} / ${G.limit} poin` : `${me.kills} / ${G.limit || KILL_LIMIT}`;
-  if (!$('score').classList.contains('hidden')) fillScore();
+  $('myScore').textContent = G.team >= 0 ? `${TEAMS[0].name} ${G.teamScore[0]} · ${G.teamScore[1]} ${TEAMS[1].name}` : G.gm === 'koth' ? `${me.pts} / ${G.limit} poin` : `${me.kills} / ${G.limit || KILL_LIMIT}`;
+  if (!$('score').classList.contains('hidden')) { fillScore(); if (!G.ended && G.team >= 0) $('scoreTitle').textContent = `${TEAMS[0].name} ${G.teamScore[0]} · ${G.teamScore[1]} ${TEAMS[1].name}`; }
 }
 function fillScore() {
   const k = G.gm === 'koth';
   const rows = sortedRoster().map((r, i) => `<tr class="${r.id === G.myId ? 'me' : ''}"><td>${i + 1}</td><td></td>${k ? `<td>${r.pts}</td>` : ''}<td>${r.kills}</td><td>${r.deaths}</td></tr>`).join('');
   $('scoreTable').innerHTML = `<tr><th>#</th><th>Pengembara</th>${k ? '<th>Poin</th>' : ''}<th>Kill</th><th>Gugur</th></tr>${rows}`;
-  sortedRoster().forEach((r, i) => { $('scoreTable').rows[i + 1].cells[1].textContent = r.name + (r.bot ? ' (bot)' : '') + ' · ' + CLASSES[r.cls].name; });
+  sortedRoster().forEach((r, i) => {
+    const cell = $('scoreTable').rows[i + 1].cells[1];
+    cell.textContent = r.name + (r.bot ? ' (bot)' : '') + ' · ' + CLASSES[r.cls].name;
+    if (r.team >= 0) { const d = document.createElement('i'); d.className = 'tdot'; d.style.background = '#' + TEAMS[r.team].color.toString(16).padStart(6, '0'); cell.prepend(d); }
+  });
 }
 function showScore(end) {
   fillScore();
   const top = sortedRoster()[0];
-  $('scoreTitle').textContent = end ? (top?.id === G.myId ? 'Kamu Menang!' : `${top?.name || ''} Menang`) : 'Papan Skor';
+  const ts = G.teamScore, win = ts[0] === ts[1] ? -1 : ts[0] > ts[1] ? 0 : 1;
+  $('scoreTitle').textContent = !end ? (G.team >= 0 ? `${TEAMS[0].name} ${ts[0]} · ${ts[1]} ${TEAMS[1].name}` : 'Papan Skor')
+    : G.team >= 0 ? (win < 0 ? 'Seri' : win === G.team ? `Regu ${TEAMS[win].name} Menang!` : `Regu ${TEAMS[win].name} Menang`)
+    : top?.id === G.myId ? 'Kamu Menang!' : `${top?.name || ''} Menang`;
   $('score').classList.remove('hidden');
 }
 $('top').addEventListener('click', () => { if (G.ended) return; if ($('score').classList.contains('hidden')) showScore(false); else $('score').classList.add('hidden'); });
@@ -450,6 +462,8 @@ $('autoFire').checked = G.autoFire; $('aimAssist').checked = G.aimAssist;
 $('autoFire').addEventListener('change', (e) => { G.autoFire = e.target.checked; store.set('autoFire', G.autoFire ? '1' : ''); });
 $('aimAssist').addEventListener('change', (e) => { G.aimAssist = e.target.checked; store.set('aimAssist', G.aimAssist ? '1' : ''); });
 $('mute').addEventListener('change', (e) => setMuted(e.target.checked));
+$('music').checked = G.music;
+$('music').addEventListener('change', (e) => { G.music = e.target.checked; store.set('music', G.music ? '1' : ''); setMusic(G.music); });
 $('vibrate').checked = G.vibrate;
 $('vibrate').addEventListener('change', (e) => { G.vibrate = e.target.checked; store.set('vibrate', G.vibrate ? '1' : ''); if (G.vibrate) buzz(40); });
 for (const el of [pauseEl]) for (const ev of ['touchstart', 'touchmove']) el.addEventListener(ev, (e) => e.stopPropagation());
@@ -473,8 +487,9 @@ function drawMinimap() {
   if (G.gm === 'koth') { mg.strokeStyle = G.holder === G.myId ? '#f2c66d' : G.holder === -1 ? '#b76bff' : G.holder ? '#ff4d5e' : 'rgba(255,242,208,.7)'; mg.lineWidth = 2; mg.beginPath(); mg.arc(c, c, KOTH_R * s, 0, 7); mg.stroke(); }
   for (const p of G.players.values()) {
     if (p.id === G.myId || (p.flags & 1)) continue;
-    if (Math.hypot(p.x - G.rx, p.z - G.rz) > 32) continue;
-    mg.fillStyle = '#ff5a4a'; mg.beginPath(); mg.arc(c - p.x * s, c - p.z * s, 3, 0, 7); mg.fill();
+    const isAlly = ally(p.id);
+    if (!isAlly && Math.hypot(p.x - G.rx, p.z - G.rz) > 32) continue;
+    mg.fillStyle = isAlly ? '#' + TEAMS[G.team].color.toString(16).padStart(6, '0') : '#ff5a4a'; mg.beginPath(); mg.arc(c - p.x * s, c - p.z * s, 3, 0, 7); mg.fill();
   }
   // peta: +x dunia ke kiri layar agar cocok dengan arah pandang awal (kanan pemain = -x)
   mg.save(); mg.translate(c - G.rx * s, c - G.rz * s); mg.rotate(input.yaw);
@@ -490,7 +505,7 @@ function findTarget() {
   let best = null, bestScore = 1e9;
   const range = G.cls.projSpeed * G.cls.projLife;
   for (const p of G.players.values()) {
-    if (p.id === G.myId || (p.flags & 1)) continue;
+    if (p.id === G.myId || (p.flags & 1) || ally(p.id)) continue;
     const dx = p.x - G.rx, dz = p.z - G.rz, d = Math.hypot(dx, dz);
     if (d > range + 2 || d < 0.5) continue;
     const diff = angDiff(Math.atan2(dx, dz), input.yaw);
@@ -575,7 +590,10 @@ function frame(now) {
     const pr = G.pred;
     const err = Math.hypot(pr.x - G.rx, pr.z - G.rz);
     const a = err > 6 ? 1 : Math.min(1, dt * 22);
+    const ox = G.rx, oz = G.rz;
     G.rx += (pr.x - G.rx) * a; G.rz += (pr.z - G.rz) * a;
+    const mv = dt > 0 ? Math.hypot(G.rx - ox, G.rz - oz) / dt : 0;
+    if (mv > 2 && mv < 20 && !(G.me.flags & 1)) { G.stepT -= dt * mv / 8.5; if (G.stepT <= 0) { G.stepT = 0.36; step(); } }
 
     const rt = now - 110;
     for (const p of G.players.values()) {

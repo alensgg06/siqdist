@@ -45,3 +45,46 @@ export function sfx(name, vol = 1) {
     case 'orb': tone('sine', 700, 1400, 0.2, 0.18 * vol); break;
   }
 }
+
+// ---- musik latar: pad senja yang pelan, disintesis langsung ----
+let music = null;
+const CHORDS = [[146.8, 174.6, 220.0], [116.5, 146.8, 174.6], [130.8, 164.8, 196.0], [110.0, 130.8, 164.8]]; // Dm Bb C Am
+const BELL = [293.7, 349.2, 392.0, 440.0, 523.3, 587.3];
+export function setMusic(on) {
+  if (!ctx) return;
+  if (on && !music) {
+    const out = ctx.createGain(); out.connect(master);
+    out.gain.setValueAtTime(0, ctx.currentTime); out.gain.linearRampToValueAtTime(0.09, ctx.currentTime + 3);
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900; lp.connect(out);
+    let i = 0;
+    const play = () => {
+      const t = ctx.currentTime, ch = CHORDS[i++ % CHORDS.length];
+      for (const f of ch) for (const det of [-4, 4]) {
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = 'sawtooth'; o.frequency.value = f; o.detune.value = det;
+        g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.05, t + 2); g.gain.linearRampToValueAtTime(0, t + 7.5);
+        o.connect(g); g.connect(lp); o.start(t); o.stop(t + 7.6);
+      }
+      for (let k = 0; k < 3; k++) { // lonceng lembut acak
+        const bt = t + 1 + Math.random() * 5, o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = 'sine'; o.frequency.value = BELL[Math.floor(Math.random() * BELL.length)];
+        g.gain.setValueAtTime(0, bt); g.gain.linearRampToValueAtTime(0.06, bt + 0.02); g.gain.exponentialRampToValueAtTime(0.001, bt + 2.5);
+        o.connect(g); g.connect(out); o.start(bt); o.stop(bt + 2.6);
+      }
+    };
+    play();
+    music = { out, timer: setInterval(play, 6000) };
+  } else if (!on && music) {
+    clearInterval(music.timer);
+    const gn = music.out.gain; gn.cancelScheduledValues(ctx.currentTime); gn.setValueAtTime(gn.value, ctx.currentTime); gn.linearRampToValueAtTime(0, ctx.currentTime + 0.8);
+    const m = music; setTimeout(() => m.out.disconnect(), 900);
+    music = null;
+  }
+}
+export function step(vol = 1) {
+  if (!ctx || muted) return;
+  const t = ctx.currentTime, s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+  s.buffer = noiseBuf; f.type = 'bandpass'; f.frequency.value = 700 + Math.random() * 500; f.Q.value = 1.4;
+  g.gain.setValueAtTime(0.07 * vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
+  s.connect(f); f.connect(g); g.connect(master); s.start(t, Math.random() * 0.3); s.stop(t + 0.08);
+}

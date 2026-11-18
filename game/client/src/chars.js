@@ -15,9 +15,10 @@ const geo = {
 function mesh(g, m, x = 0, y = 0, z = 0) { const o = new THREE.Mesh(g, m); o.position.set(x, y, z); o.castShadow = true; return o; }
 
 export class Avatar {
-  constructor(clsKey, name, isMe, glowTex) {
+  constructor(clsKey, name, isMe, glowTex, teamColor = null) {
     const c = CLASSES[clsKey], color = new THREE.Color(c.color);
     this.clsKey = clsKey; this.isMe = isMe; this.name = name;
+    this.tagColor = teamColor !== null ? '#' + teamColor.toString(16).padStart(6, '0') : '#ffe9c4';
     this.phase = 0; this.kick = 0; this.deadT = 0; this.spawnT = 0.4; this.lastX = 0; this.lastZ = 0; this.speed = 0;
     this.shown = { hp: -1, maxHp: -1, lvl: -1 };
     const root = this.group = new THREE.Group();
@@ -78,6 +79,10 @@ export class Avatar {
 
     const blob = new THREE.Mesh(new THREE.CircleGeometry(0.75, 16), new THREE.MeshBasicMaterial({ color: 0, transparent: true, opacity: 0.35, depthWrite: false }));
     blob.rotation.x = -Math.PI / 2; blob.position.y = 0.03; root.add(blob); this.blob = blob;
+    if (teamColor !== null) { // cincin warna regu di kaki
+      this.ring = new THREE.Mesh(new THREE.RingGeometry(0.8, 1.0, 32), new THREE.MeshBasicMaterial({ color: teamColor, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+      this.ring.rotation.x = -Math.PI / 2; this.ring.position.y = 0.05; root.add(this.ring);
+    }
 
     if (!isMe) {
       const cv = this.tagCanvas = document.createElement('canvas'); cv.width = 256; cv.height = 64;
@@ -96,7 +101,7 @@ export class Avatar {
     g.font = '600 24px Georgia, serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.lineWidth = 4; g.strokeStyle = 'rgba(0,0,0,0.85)';
     const label = `${this.name}  Lv${lvl}`;
-    g.strokeText(label, 128, 20); g.fillStyle = '#ffe9c4'; g.fillText(label, 128, 20);
+    g.strokeText(label, 128, 20); g.fillStyle = this.tagColor; g.fillText(label, 128, 20);
     g.fillStyle = 'rgba(0,0,0,0.7)'; g.fillRect(38, 40, 180, 14);
     const f = Math.max(0, hp / maxHp);
     g.fillStyle = f > 0.5 ? '#ff5d5d' : f > 0.25 ? '#ff9a3d' : '#ffd23d'; g.fillRect(40, 42, 176 * f, 10);
@@ -147,6 +152,7 @@ export class Avatar {
     g.scale.setScalar(Math.min(1, s));
     if (this.tag) this.tag.visible = !dead;
     this.blob.visible = !dead;
+    if (this.ring) this.ring.visible = !dead;
     const shield = flags & 2, prot = flags & 4;
     this.bubble.visible = !!(shield || prot) && !dead;
     if (this.bubble.visible) {

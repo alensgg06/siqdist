@@ -93,3 +93,13 @@ export const RUNES = [
 ];
 export const INTERP = 0.11;         // klien menampilkan lawan 110 ms di belakang
 export const LAG_MAX = 0.45;        // batas putar-mundur kompensasi lag (detik), setara RTT ~340 ms + interpolasi
+
+// ---- Mode tim ----
+MODES.tdm = 'Tim';
+MODES.coop = 'Lawan Bot';
+export const TEAM_MODES = ['tdm', 'coop'];
+export const TEAM_LIMIT = 30;       // kill tim untuk menang
+export const TEAMS = [
+  { name: 'Fajar', color: 0xf2c66d },
+  { name: 'Senja', color: 0xa06bff },
+];

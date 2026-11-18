@@ -107,6 +107,10 @@ versi lama bila ditandatangani kunci yang sama.
 - **Rebut Altar** (pilih saat membuat room privat): berdiri sendirian di lingkaran altar memberi
   1 poin per detik; dua pemain atau lebih di dalam berarti diperebutkan dan tidak ada yang dapat
   poin. Pertama mencapai 60 poin menang. Warna lingkaran: emas = kamu, merah = lawan, ungu = diperebutkan.
+- **Tim** (room privat): dua regu, Fajar (emas) dan Senja (ungu), dibagi rata dan diisi bot sampai
+  3 lawan 3. Tanpa tembak kawan. Regu pertama mencapai 30 kill menang.
+- **Lawan Bot** (room privat): semua teman satu regu melawan bot; jumlah bot = jumlah teman + 2
+  (minimal 3).
 - **Rune** muncul di empat titik peta dan kembali 25 detik setelah diambil:
   Rune Amarah (merah) damage +50% selama 10 detik, Rune Angin (biru) kecepatan +35% selama 10 detik.
 
@@ -134,7 +138,7 @@ npm run stats                                       # tanpa Docker
 |---|---|---|
 | Gerak | jempol kiri (joystick muncul di titik sentuh) | WASD |
 | Bidik | geser sisi kanan layar, atau geser sambil menahan tombol tembak | mouse |
-| Tembak | tombol merah | klik kiri |
+| Tembak | tombol merah | klik kiri (tahan); bila pointer lock ditolak browser, bidik dengan menyeret mouse |
 | Skill | tombol ungu | Spasi / klik kanan |
 | Papan skor | ketuk skor di atas | Tab |
 

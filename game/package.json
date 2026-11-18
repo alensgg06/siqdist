@@ -8,7 +8,7 @@
     "build": "esbuild client/src/main.js --bundle --minify --format=esm --outfile=client/dist/bundle.js",
     "postinstall": "npm run build",
     "start": "node server/server.js",
-    "test": "node test/net.test.js && node test/rooms.test.js",
+    "test": "node test/net.test.js && node test/rooms.test.js && node test/modes.test.js && node test/teams.test.js",
     "stats": "node tools/stats.js"
   },
   "engines": { "node": ">=18" },

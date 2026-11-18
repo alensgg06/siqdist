@@ -145,7 +145,7 @@ body:not(.touch) #skillBtn{display:grid;right:24px;bottom:24px}
 @media (prefers-reduced-motion:reduce){.arc{animation-duration:1.2s}}
 
 /* ---------- Paket B ---------- */
-.modes{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.modes{grid-column:1/-1;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border:1px solid var(--line);border-radius:9px;overflow:hidden}
 .mode{padding:9px 6px;min-height:40px;font-size:13px;font-weight:600;background:transparent;color:#cdb9e6}
 .mode.on{background:rgba(242,198,109,.18);color:var(--gold)}
 #zoneTag{position:absolute;top:calc(42px + var(--st));left:50%;transform:translateX(-50%);padding:3px 12px;border-radius:999px;font-size:12.5px;font-weight:700;
@@ -153,3 +153,6 @@ body:not(.touch) #skillBtn{display:grid;right:24px;bottom:24px}
 #buffs{position:absolute;left:calc(12px + var(--sl));bottom:calc(58px + var(--sb));display:flex;gap:6px}
 .buff{display:flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:700;background:rgba(15,8,24,.75);border:1px solid var(--c);color:var(--c)}
 .buff i{width:9px;height:9px;border-radius:50%;background:var(--c);box-shadow:0 0 8px var(--c)}
+@media (max-width:520px){.modes{grid-template-columns:repeat(2,minmax(0,1fr))}}
+#scoreTable td.tm{font-weight:700}
+.tdot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle}
