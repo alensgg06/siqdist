@@ -217,14 +217,15 @@ export const PVE = {
   diffMul: { easy: 0.55, normal: 0.75, hard: 1.15 }, // Normal baru kira-kira setara Mudah sebelumnya
 };
 // isi gelombang n untuk h pemain manusia
-export function wavePlan(n, h) {
+export function wavePlan(n, h, opts = {}) {
   // gelombang 1-3 adalah pemanasan: sedikit monster, naik perlahan
   const total = Math.round((1 + 1.2 * n + 0.08 * n * n) * (0.65 + 0.35 * Math.max(1, h)));
-  const boss = n % PVE.bossEvery === 0;
+  const be = opts.bossEvery || PVE.bossEvery; // event bisa memperapat bos
+  const boss = n % be === 0;
   const casters = n >= 2 ? Math.round(total * 0.3) : 0;
   const list = [];
   // bos bergantian: gelombang 5, 15, ... Golem Batu; gelombang 10, 20, ... Ratu Laba-laba
-  if (boss) for (let i = 0; i < Math.max(1, Math.ceil(n / 10)); i++) list.push(n % 10 === 0 ? 'queen' : 'brute');
+  if (boss) for (let i = 0; i < Math.max(1, Math.ceil(n / (be * 2))); i++) list.push((n / be) % 2 === 0 ? 'queen' : 'brute');
   for (let i = 0; i < (boss ? Math.round(total * 0.4) : total) - (boss ? 0 : casters); i++) list.push('ghoul');
   // sejak gelombang 4, sebagian dukun diganti Penyihir Es yang memperlambat
   for (let i = 0; i < (boss ? Math.round(casters * 0.5) : casters); i++) list.splice(Math.floor(Math.random() * (list.length + 1)), 0, n >= 4 && i % 3 === 0 ? 'frost' : 'caster');
@@ -289,3 +290,30 @@ export const ACHIEVEMENTS = [
   { id: 'bnt5', name: 'Pemburu Hadiah', text: 'Tumbangkan 5 buronan', stat: 'bounties', n: 5 },
   { id: 'chal7', name: 'Rajin', text: 'Selesaikan 7 tantangan harian', stat: 'chal', n: 7 },
 ];
+
+// ---- Event ----
+MODES.king = 'Perburuan Raja';
+export const KING_LIMIT = 60;       // poin (detik menjadi raja) untuk menang
+export const KING_HP = 2.2;         // pengali HP sang raja
+// Jenis event. target.type: 'wave' = gelombang terbaik, 'points' = jumlah poin selama event berlangsung.
+export const EVENT_TYPES = {
+  golem: {
+    name: 'Malam Golem', mode: 'pve', rules: ['bossRush', 'doublePerk'],
+    desc: 'Bertahan Bersama: bos setiap 3 gelombang, dua berkah tiap gelombang',
+    target: { type: 'wave', n: 6, text: 'Selesaikan gelombang 6' }, skin: 'golem',
+  },
+  raja: {
+    name: 'Perburuan Raja', mode: 'king', rules: [],
+    desc: 'Tumbangkan sang raja untuk merebut mahkota; raja mendapat poin tiap detik',
+    target: { type: 'points', n: 45, text: 'Kumpulkan 45 poin sebagai raja' }, skin: 'mahkota',
+  },
+};
+export const EVENT_RULES = {
+  bossRush: 'Bos setiap 3 gelombang', doublePerk: 'Dua berkah tiap gelombang',
+  giant: MUTATORS.giant.name, meteor: MUTATORS.meteor.name, oneshot: MUTATORS.oneshot.name, mage: MUTATORS.mage.name,
+};
+SKINS.push(
+  { id: 'golem', name: 'Batu Golem', accent: 0x6b5d52, glow: 0xff8a2a, req: { stat: 'ev_golem', n: 1, text: 'Capai target event Malam Golem' } },
+  { id: 'mahkota', name: 'Jubah Mahkota', accent: 0x5a1030, glow: 0xffd24a, req: { stat: 'ev_raja', n: 1, text: 'Capai target event Perburuan Raja' } },
+);
+ACHIEVEMENTS.push({ id: 'ev3', name: 'Tamu Setia', text: 'Hadir di 3 event', stat: 'evAttend', n: 3 });

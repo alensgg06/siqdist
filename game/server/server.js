@@ -13,11 +13,13 @@ import {
   DMG_SCALE, REGEN_DELAY, REGEN_RATE, BOT_DIFF, MERCY_DEATHS,
   BOUNTY_MIN, BOUNTY_LEAD, BOUNTY_XP, EVENT_FIRST, EVENT_EVERY, EVENTS, ULT_MAX,
   MONSTERS, PVE, wavePlan, ARENA, PERKS, PERK_KEYS,
+  KING_LIMIT, KING_HP, EVENT_RULES, SKINS as SKIN_LIST,
   HEAL_AMOUNT, HEAL_R, SLOW_TIME, SLOW_MUL, BARREL_R, BARREL_DMG, BARREL_RESPAWN, MUTATORS, PINGS,
   MODES, KOTH_R, KOTH_LIMIT, RUNES, RUNE_TIME, RUNE_RESPAWN, DMG_BUFF, SPD_BUFF, LAG_MAX,
 } from '../shared/config.js';
 import { stepPlayer, blocked, los, angDiff, setMap, collide } from '../shared/sim.js';
 import { Stats } from './stats.js';
+import { Events } from './events.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'client');
 const PORT = Number(process.env.PORT) || 8080;
@@ -34,6 +36,8 @@ function currentMutator() {
   return keys[Math.floor((d.getTime() - (day === 0 ? 86400e3 : 0)) / (7 * 86400e3)) % keys.length];
 }
 const stats = new Stats(DATA_DIR);
+const events = new Events(DATA_DIR);
+const KING_WIN = Number(process.env.KING_LIMIT) || KING_LIMIT;
 const FILL = process.env.BOTS !== undefined ? Number(process.env.BOTS) : BOT_FILL; // jumlah pengisi bot (bisa 0 untuk uji)
 const KOTH_WIN = Number(process.env.KOTH_LIMIT) || KOTH_LIMIT;
 const LAGCOMP = process.env.LAGCOMP !== '0';
@@ -86,7 +90,11 @@ class Room {
   constructor(opts = {}) {
     this.code = opts.code || null;          // room privat: hanya bisa dimasuki dengan kode
     this.practice = !!opts.practice;        // room latihan: satu pemain, bot boneka tidak menyerang
-    this.mut = !this.code && !this.practice ? currentMutator() : null;
+    // room event: aturan dari event menggantikan mode akhir pekan
+    this.event = opts.event || null;
+    this.rules = this.event ? this.event.rules : [];
+    this.mut = this.event ? this.rules.find((k) => MUTATORS[k]) || null : !this.code && !this.practice ? currentMutator() : null;
+    this.king = 0; this.kingT = 4;
     this.mutT = 4;
     this.mode = MODES[opts.mode] ? opts.mode : 'dm';
     this.diff = BOT_DIFF[opts.diff] ? opts.diff : 'normal'; // room publik: Normal
@@ -148,6 +156,7 @@ class Room {
   }
 
   removePlayer(p) {
+    if (p.id === this.king) { this.king = 0; this.kingT = 3; }
     if (!p.bot && this.state === 'play' && !this.practice) {
       this.left.push(this.playerRecord(p));
       if (p.pid) stats.add(p.pid, p.name, { kills: p.kills, deaths: p.deaths, dmg: p.dmg, cls: p.clsKey, finished: false, win: false });
@@ -156,7 +165,7 @@ class Room {
     this.rosterDirty = true;
   }
 
-  maxHpOf(p) { return Math.round((levelHp(p.cls, p.lvl) + 25 * (p.perks?.kokoh || 0)) * (this.mut === 'giant' ? 1.6 : 1)); }
+  maxHpOf(p) { return Math.round((levelHp(p.cls, p.lvl) + 25 * (p.perks?.kokoh || 0)) * (this.mut === 'giant' ? 1.6 : 1) * (p.id === this.king ? KING_HP : 1)); }
   perk(p, k) { return p.perks?.[k] || 0; }
 
   pickTeam(bot) {
@@ -304,6 +313,7 @@ class Room {
         if (this.teams && !this.pve) { this.teamScore[att.team]++; if (this.teamScore[att.team] >= TEAM_WIN) this.endMatch(); } // Bertahan: tanpa batas kill
       }
       this.events.push(['k', att ? att.id : 0, t.id]);
+      if (this.mode === 'king' && t.id === this.king) { this.king = 0; if (att && att !== t && !att.dead) this.crown(att); else this.kingT = 3; }
       this.updateBounty();
       this.rosterDirty = true;
       if (this.mode === 'dm' && att && att.kills >= LIMIT) this.endMatch();
@@ -317,8 +327,50 @@ class Room {
   }
 
   // Buronan: pemimpin kill (minimal BOUNTY_MIN) yang unggul BOUNTY_LEAD atas pemain kedua
+  // ---------- event & Perburuan Raja ----------
+  crown(p) {
+    this.king = p.id;
+    p.maxHp = this.maxHpOf(p); p.hp = p.maxHp; p.protT = Math.max(p.protT, 1);
+    this.events.push(['K', p.id]);
+    this.rosterDirty = true;
+  }
+  kingTick() {
+    const k = this.players.get(this.king);
+    if (!k || k.dead) {
+      this.king = 0; this.kingT -= DT;
+      if (this.kingT > 0) return;
+      const alive = [...this.players.values()].filter((p) => !p.dead);
+      // utamakan manusia agar pemain cepat merasakan menjadi raja
+      const pool = alive.filter((p) => !p.bot).length ? alive.filter((p) => !p.bot) : alive;
+      if (pool.length) this.crown(pool[Math.floor(Math.random() * pool.length)]);
+      return;
+    }
+    k.ptsAcc += DT;
+    if (k.ptsAcc >= 1) {
+      k.ptsAcc -= 1; k.pts++; this.addXp(k, 6); this.rosterDirty = true;
+      this.eventScore(k, 'add', 1);
+      if (k.pts >= KING_WIN) this.endMatch();
+    }
+  }
+  eventScore(p, how, v) {
+    if (!this.event || p.bot || !p.pid) return;
+    if (stats.eventScore(p.pid, p.name, this.event, how, v)) {
+      const skin = SKIN_LIST.find((k) => k.id === this.event.skin);
+      this.events.push(['C', p.id, `target event ${this.event.name} tercapai, hadiah ${skin ? skin.name : ''} terbuka`]);
+    }
+  }
+  eventTick() {
+    if (!this.event) return;
+    // baca jadwal terbaru: event bisa dihentikan lebih awal atau diperpanjang lewat tools/event.js
+    const cur = events.list.find((e) => e.id === this.event.id);
+    if (cur && Date.now() < cur.end) return;
+    this.events.push(['Z', this.event.name]);
+    this.event = null; this.rules = [];
+    this.endMatch(); // event selesai: ronde ditutup; room lanjut sebagai room biasa
+  }
+
   updateBounty() {
-    if (this.practice || this.pve) return;
+    if (this.practice || this.pve || this.mode === 'king') return;
     const top = [...this.players.values()].sort((a, b) => b.kills - a.kills);
     const lead = top[0], second = top[1];
     const id = lead && lead.kills >= BOUNTY_MIN && lead.kills - (second?.kills || 0) >= BOUNTY_LEAD ? lead.id : 0;
@@ -426,7 +478,7 @@ class Room {
       this.waveT -= DT;
       if (this.waveT > 0) return;
       this.wave++; this.wavePhase = 1;
-      const plan = wavePlan(this.wave, humans.length);
+      const plan = wavePlan(this.wave, humans.length, { bossEvery: this.rules.includes('bossRush') ? 3 : 0 });
       this.spawnQ = plan.list; this.hpMul = plan.hpMul * PVE.diffMul[this.diff]; this.waveDmg = plan.dmgMul * TEST_DMG; this.spawnT = 0;
       for (const h of this.players.values()) {
         if (h.offer) this.pickPerk(h, h.offer[Math.floor(Math.random() * h.offer.length)]); // belum memilih: dipilihkan acak
@@ -449,6 +501,7 @@ class Room {
         this.offerPerks(h);
       }
       this.events.push(['w', this.wave, this.checkpoint]);
+      for (const h of humans) { h.perkLeft = this.rules.includes('doublePerk') ? 1 : 0; this.eventScore(h, 'max', this.wave); }
       for (const h of humans) this.track(h, { type: 'round' });
     }
     // semua tumbang dan tak ada yang akan bangkit sendiri: permainan berakhir
@@ -486,6 +539,7 @@ class Room {
     p.perks[k] = (p.perks[k] || 0) + 1;
     if (k === 'kokoh') { p.maxHp = this.maxHpOf(p); p.hp = Math.min(p.maxHp, p.hp + 25); }
     if (!p.bot) this.events.push(['p', p.id, k]);
+    if (!p.bot && p.perkLeft > 0 && this.wavePhase === 0) { p.perkLeft--; this.offerPerks(p); } // aturan Dua Berkah
   }
 
   // catatan sesi Bertahan: dipanggil saat semua tumbang, dan juga saat room ditinggalkan
@@ -633,7 +687,7 @@ class Room {
     if (!this.practice && this.humans() > 0) {
       // siapa yang menang: kill terbanyak (Deathmatch), poin terbanyak (Rebut Altar), atau seluruh regu pemenang
       const all = [...this.players.values()];
-      const best = all.slice().sort((a, b) => (this.mode === 'koth' ? b.pts - a.pts : 0) || b.kills - a.kills)[0];
+      const best = all.slice().sort((a, b) => (this.mode === 'koth' || this.mode === 'king' ? b.pts - a.pts : 0) || b.kills - a.kills)[0];
       const winTeam = this.teams && this.teamScore[0] !== this.teamScore[1] ? (this.teamScore[0] > this.teamScore[1] ? 0 : 1) : -1;
       const won = (p) => (this.pve ? this.wave > PVE.winWave : this.teams ? p.team === winTeam : p === best && (p.kills > 0 || p.pts > 0));
       for (const p of all) if (!p.bot && p.pid) { // (monster adalah bot)
@@ -643,7 +697,7 @@ class Room {
       }
       if (this.pve) { this.logPve(false); } else {
       const ps = all.map((p) => this.playerRecord(p));
-      const win = ps.slice().sort((a, b) => (this.mode === 'koth' ? b.pts - a.pts : 0) || b.kills - a.kills)[0];
+      const win = ps.slice().sort((a, b) => (this.mode === 'koth' || this.mode === 'king' ? b.pts - a.pts : 0) || b.kills - a.kills)[0];
       logMatch({
         at: new Date().toISOString(), room: this.code ? 'privat' : 'publik', mode: this.mode, map: this.map,
         secs: Math.round((Date.now() - this.startedAt) / 1000),
@@ -659,6 +713,7 @@ class Room {
 
   resetMatch() {
     this.state = 'play'; this.timeLeft = MATCH_T; this.projs.length = 0;
+    this.king = 0; this.kingT = 4;
     this.startedAt = Date.now(); this.left = [];
     if (this.rotate && !this.practice) {
       this.map = MAP_KEYS[(MAP_KEYS.indexOf(this.map) + 1) % MAP_KEYS.length];
@@ -822,7 +877,7 @@ class Room {
         if (q.dead || !this.foes(p, q)) continue;
         const d = Math.hypot(q.x - p.x, q.z - p.z);
         // target lama diberi keuntungan 8 agar bot tidak berganti-ganti target (dan jeda reaksinya tidak terus mulai ulang)
-        const score = d + (hunted.get(q.id) || 0) * D.spread + (q.bot ? 0 : D.humanPenalty) - (q.id === prev ? 8 : 0);
+        const score = d + (hunted.get(q.id) || 0) * D.spread + (q.bot ? 0 : D.humanPenalty) - (q.id === prev ? 8 : 0) - (q.id === this.king ? 14 : 0);
         const sight = this.ev?.id === 'eclipse' ? 18 : 45; // saat Gerhana bot hanya melihat dekat
         if (score < best && d < sight && los(p.x, p.z, q.x, q.z)) { best = score; ai.tgt = q.id; }
       }
@@ -1021,6 +1076,8 @@ class Room {
           }
         }
       }
+      this.eventTick();
+      if (this.mode === 'king' && this.state === 'play') this.kingTick();
       if (this.pve) this.pveTick(); else {
         this.timeLeft -= DT;
         if (this.timeLeft <= 0) this.endMatch();
@@ -1042,7 +1099,7 @@ class Room {
     }
     const list = [];
     for (const p of this.players.values()) {
-      const fl = (p.dead ? 1 : 0) | (p.shieldT > 0 ? 2 : 0) | (p.protT > 0 ? 4 : 0) | (p.dashT > 0 ? 8 : 0) | (p.dmgT > 0 ? 16 : 0) | (p.spdT > 0 ? 32 : 0) | (p.id === this.bounty ? 64 : 0) | (p.slowT > 0 ? 128 : 0);
+      const fl = (p.dead ? 1 : 0) | (p.shieldT > 0 ? 2 : 0) | (p.protT > 0 ? 4 : 0) | (p.dashT > 0 ? 8 : 0) | (p.dmgT > 0 ? 16 : 0) | (p.spdT > 0 ? 32 : 0) | (p.id === this.bounty || p.id === this.king ? 64 : 0) | (p.slowT > 0 ? 128 : 0);
       list.push([p.id, r2(p.x), r2(p.z), Math.round(p.yaw * 1000) / 1000, Math.ceil(p.hp), p.maxHp, p.lvl, fl]);
     }
     let orbMask = 0;
@@ -1075,6 +1132,17 @@ const MIME = {
 };
 const server = http.createServer((req, res) => {
   const url = decodeURIComponent((req.url || '/').split('?')[0]);
+  if (url === '/api/event') {
+    const now = Date.now(), a = events.active(now), n = events.next(now), l = events.last(now);
+    const skinName = (e) => SKIN_LIST.find((k) => k.id === e.skin)?.name || '';
+    const body = {
+      active: a && { id: a.id, name: a.name, desc: a.desc, left: Math.round((a.end - now) / 1000), target: a.target.text, skin: skinName(a), rules: a.rules.map((r) => EVENT_RULES[r]), top: stats.eventTop(a.id, 5), unit: a.target.type === 'wave' ? 'gelombang' : 'poin' },
+      next: !a && n ? { name: n.name, desc: n.desc, in: Math.round((n.start - now) / 1000) } : null,
+      last: !a && l ? { name: l.name, top: stats.eventTop(l.id, 3), unit: l.target.type === 'wave' ? 'gelombang' : 'poin' } : null,
+    };
+    res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+    res.end(JSON.stringify(body)); return;
+  }
   if (url === '/api/top' || url === '/api/stats') {
     const q = new URL(req.url, 'http://x').searchParams;
     const body = url === '/api/top' ? stats.top() : { stats: stats.get(q.get('pid')), daily: stats.dailyFor(q.get('pid')) };
@@ -1113,7 +1181,7 @@ wss.on('connection', (ws) => {
     if (m.t === 'join' && !me) {
       const clsKey = CLASS_KEYS.includes(m.cls) ? m.cls : 'ranger';
       const name = String(m.name || '').replace(/[^\p{L}\p{N} _\-]/gu, '').trim().slice(0, 14) || 'Pengembara';
-      const mode = ['public', 'create', 'join', 'practice'].includes(m.mode) ? m.mode : 'public';
+      const mode = ['public', 'create', 'join', 'practice', 'event'].includes(m.mode) ? m.mode : 'public';
       const fail = (msg) => { ws.send(JSON.stringify({ t: 'e', m: msg })); ws.close(); };
       if (mode === 'join') {
         const code = String(m.code || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4);
@@ -1122,20 +1190,25 @@ wss.on('connection', (ws) => {
         if (room.humans() >= MAX_HUMANS) { room = null; return fail('Room itu sudah penuh (8 pemain).'); }
       } else if (mode === 'create') {
         room = new Room({ code: newCode(), mode: m.gm, map: MAPS[m.map] ? m.map : 'rotate', diff: m.diff }); rooms.push(room);
+      } else if (mode === 'event') {
+        const ev = events.active();
+        if (!ev) return fail('Tidak ada event yang sedang berjalan.');
+        room = rooms.find((r) => r.event && r.event.id === ev.id && r.humans() < MAX_HUMANS);
+        if (!room) { room = new Room({ mode: ev.mode, event: ev, map: 'rotate', diff: 'normal' }); rooms.push(room); }
       } else if (mode === 'practice') {
         room = new Room({ practice: true, map: 'ruins' }); rooms.push(room);
       } else {
-        room = rooms.find((r) => !r.code && !r.practice && r.humans() < MAX_HUMANS);
+        room = rooms.find((r) => !r.code && !r.practice && !r.event && r.humans() < MAX_HUMANS);
         if (!room) { room = new Room(); rooms.push(room); }
       }
       setMap(room.map);
       me = room.addPlayer(name, clsKey, ws);
-      if (stats.validId(m.pid)) { me.pid = m.pid; stats.touch(m.pid, name); }
+      if (stats.validId(m.pid)) { me.pid = m.pid; stats.touch(m.pid, name); if (room.event) stats.eventAttend(m.pid, name, room.event); }
       const skin = SKINS.find((k) => k.id === m.skin);
       me.skin = skin && skinUnlocked(skin, stats.get(me.pid)) ? skin.id : 'default'; // jubah terkunci ditolak di server
       room.rosterDirty = true;
       room.balanceBots();
-      ws.send(JSON.stringify({ t: 'w', id: me.id, team: me.team, limit: room.mode === 'koth' ? KOTH_WIN : room.teams ? TEAM_WIN : LIMIT, code: room.code, cls: me.clsKey, mut: room.mut, practice: room.practice, gm: room.mode, map: room.map, diff: room.diff }));
+      ws.send(JSON.stringify({ t: 'w', id: me.id, team: me.team, ev: room.event ? { name: room.event.name, left: Math.round((room.event.end - Date.now()) / 1000), target: room.event.target.text } : null, limit: room.mode === 'koth' ? KOTH_WIN : room.mode === 'king' ? KING_WIN : room.teams ? TEAM_WIN : LIMIT, code: room.code, cls: me.clsKey, mut: room.mut, practice: room.practice, gm: room.mode, map: room.map, diff: room.diff }));
     } else if (m.t === 'in' && me) {
       if (me.queue.length < 12) {
         me.queue.push({

@@ -138,6 +138,35 @@ Pemain yang tumbang juga bangkit saat gelombang selesai; semua pulih penuh di an
 Permainan berakhir bila semua tumbang bersamaan. Bertahan melewati gelombang 10 dihitung menang.
 Tingkat bot (Mudah/Normal/Sulit) mengatur kekuatan monster.
 
+## Event
+
+Event adalah acara berjangka waktu yang kamu mulai sendiri. Selama event berjalan, menu menampilkan spanduk dengan hitung mundur dan tombol **Ikut event**; semua yang menekan tombol itu masuk ke room event yang sama (sampai penuh, lalu room berikutnya).
+
+| Tipe | Isi | Target | Hadiah |
+|---|---|---|---|
+| `golem` (Malam Golem) | Bertahan Bersama, bos tiap 3 gelombang, dua Berkah tiap gelombang | Selesaikan gelombang 6 | jubah Batu Golem |
+| `raja` (Perburuan Raja) | Satu pemain menjadi raja (HP 2,2 kali, 1 poin per detik); yang menumbangkannya merebut mahkota | Kumpulkan 45 poin sebagai raja | Jubah Mahkota |
+
+Hadir di event tercatat (pencapaian Tamu Setia setelah 3 event). Skor terbaik tiap pemain masuk papan event, dan setelah event selesai menu menampilkan tiga besar selama 7 hari. Perburuan Raja juga bisa dimainkan kapan saja sebagai mode biasa lewat room privat, tanpa hadiah event.
+
+Mengatur event (server membaca perubahan dalam sekitar 5 detik, tanpa restart):
+
+```bash
+docker compose exec arkana node tools/event.js mulai golem 60          # mulai sekarang, 60 menit
+docker compose exec arkana node tools/event.js mulai raja 90 Malam Minggu
+docker compose exec arkana node tools/event.js jadwal raja 2026-11-21T20:00 2026-11-21T22:00
+docker compose exec arkana node tools/event.js daftar
+docker compose exec arkana node tools/event.js hentikan
+```
+
+Waktu tanpa zona dibaca sebagai WIB. Jadwal disimpan di `data/events.json` (ikut volume data, jadi bertahan saat container dibangun ulang) dan boleh disunting tangan:
+
+```json
+[{ "id": "golem-sabtu", "tipe": "golem", "mulai": "2026-11-21T20:00", "selesai": "2026-11-21T23:00", "nama": "Malam Golem", "target": 6 }]
+```
+
+`nama`, `target`, dan `aturan` (`bossRush`, `doublePerk`) opsional. Entri yang salah dilewati dan alasannya ditulis ke log; `node tools/event.js cek` memeriksanya.
+
 ## Selama ronde
 
 - **Buronan**: pemimpin kill (minimal 3, unggul 2) bermahkota dan tampil di peta mini;

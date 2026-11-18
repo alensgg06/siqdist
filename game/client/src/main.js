@@ -145,7 +145,7 @@ function serverUrl() {
   return (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
 }
 
-const menuBtns = ['play', 'create', 'joinBtn', 'practice', 'rejoin'];
+const menuBtns = ['play', 'create', 'joinBtn', 'practice', 'rejoin', 'evJoin'];
 const cleanCode = (v) => String(v || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4);
 {
   const q = cleanCode(new URLSearchParams(location.search).get('room'));
@@ -263,6 +263,33 @@ function showRejoin() {
 $('rejoin').addEventListener('click', () => { const c = store.get('lastRoom', ''); if (c) start('join', c); });
 showRejoin();
 
+// ---------- event ----------
+const dur = (s) => (s >= 3600 ? `${Math.floor(s / 3600)} j ${Math.floor((s % 3600) / 60)} mnt` : s >= 60 ? `${Math.floor(s / 60)} mnt` : `${Math.max(0, s)} dtk`);
+let evData = null, evAt = 0;
+function drawEvent() {
+  const b = $('eventBanner'), d = evData, gone = Math.floor((Date.now() - evAt) / 1000);
+  const a = d?.active && d.active.left - gone > 0 ? d.active : null, n = d?.next, l = d?.last;
+  b.classList.toggle('hidden', !a && !n && !l?.top?.length);
+  $('evJoin').classList.toggle('hidden', !a);
+  if (a) {
+    $('evName').textContent = `Event: ${a.name} · sisa ${dur(a.left - gone)}`;
+    $('evInfo').textContent = `${a.desc}. Target: ${a.target} Hadiah: ${a.skin}.${a.top.length ? ` Terdepan: ${a.top[0].name} (${a.top[0].score} ${a.unit}).` : ''}`;
+  } else if (n) {
+    $('evName').textContent = `Event berikutnya: ${n.name}`;
+    $('evInfo').textContent = n.in - gone > 0 ? `Mulai dalam ${dur(n.in - gone)}. ${n.desc}.` : 'Segera dimulai…';
+  } else if (l?.top?.length) {
+    $('evName').textContent = `Event ${l.name} selesai`;
+    $('evInfo').textContent = `Juara: ${l.top.map((t, i) => `${i + 1}. ${t.name} (${t.score} ${l.unit})`).join(' · ')}`;
+  }
+}
+async function loadEvent() {
+  if (G.phase !== 'menu') return;
+  try { evData = await fetch('/api/event').then((r) => r.json()); evAt = Date.now(); } catch { /* server belum terjangkau */ }
+  drawEvent();
+}
+loadEvent(); setInterval(loadEvent, 20000); setInterval(() => { if (G.phase === 'menu') drawEvent(); }, 1000);
+$('evJoin').addEventListener('click', () => start('event'));
+
 // ---------- peringkat dan jubah ----------
 const hex = (n) => '#' + n.toString(16).padStart(6, '0');
 async function openRanks() {
@@ -360,10 +387,11 @@ function onMessage(m) {
     G.code = m.code || null; G.practice = !!m.practice; G.gm = m.gm || 'dm'; G.ticks.length = 0;
     if (m.map && m.map !== G.mapId) useMap(m.map);
     G.team = TEAM_MODES.includes(G.gm) ? m.team : -1; G.teamScore = [0, 0];
-    $('zoneTag').classList.toggle('hidden', G.gm !== 'koth');
+    $('zoneTag').classList.toggle('hidden', G.gm !== 'koth' && G.gm !== 'king');
+    G.event = m.ev || null; if (G.event) setTimeout(() => toast(`Event ${G.event.name}: ${G.event.target}`), 2400);
     const pill = $('roomPill');
-    pill.classList.toggle('hidden', !G.code && !G.practice);
-    pill.textContent = G.code ? `${{ koth: 'Altar', tdm: 'Tim', coop: 'Lawan Bot', pve: 'Bertahan' }[G.gm] || 'Room'} ${G.code} ⤴` : 'Latihan';
+    pill.classList.toggle('hidden', !G.code && !G.practice && !m.ev);
+    pill.textContent = G.code ? `${{ koth: 'Altar', tdm: 'Tim', coop: 'Lawan Bot', pve: 'Bertahan', king: 'Raja' }[G.gm] || 'Room'} ${G.code} ⤴` : G.event ? 'Event' : 'Latihan';
     if (G.gm === 'pve') G.team = 0;
     if (G.team >= 0 && G.gm !== 'pve') setTimeout(() => toast(`Kamu di regu ${TEAMS[G.team].name}`), 1900);
     if (G.practice && G.tut) { G.tut.show(); } else { G.tut = null; $('tutor').classList.add('hidden'); }
@@ -603,6 +631,8 @@ function onEvent(e) {
       (G.pings ||= []).push({ x: e[3], z: e[4], t: G.time + 5 });
       break;
     }
+    case 'K': toast(e[1] === G.myId ? 'Kamu dinobatkan menjadi RAJA!' : `${nameOf(e[1])} menjadi raja: buru dia!`); { const p = G.players.get(e[1]); if (p) fx.pillar(p.x, p.z, 0xffd24a); } if (e[1] === G.myId) { sfx('level'); buzz([80, 50, 120]); } break;
+    case 'Z': setTimeout(() => toast(`Event ${e[1]} selesai. Terima kasih sudah ikut!`), 600); G.event = null; break;
     case 'W': toast(e[2] ? `Gelombang ${e[1]}: ${e[1] % 10 === 0 ? 'Ratu Laba-laba' : 'Golem Batu'} datang!` : `Gelombang ${e[1]}`); sfx('level'); buzz([50, 50, 50]); $('perks').classList.add('hidden'); break;
     case 'w': toast(e[2] === e[1] && e[1] > 0 ? `Gelombang ${e[1]} selesai! Titik simpan tercapai` : `Gelombang ${e[1]} selesai! Rekan bangkit, HP pulih`); sfx('level'); $('death').classList.add('hidden'); break;
     case 'A': {
@@ -660,17 +690,17 @@ function updateDmg(dt) {
   }
 }
 
-function sortedRoster() { return [...G.roster.values()].filter((r) => !MONSTERS[r.cls]).sort((a, b) => (G.team >= 0 ? a.team - b.team : 0) || (G.gm === 'koth' ? b.pts - a.pts : 0) || b.kills - a.kills || a.deaths - b.deaths); }
+function sortedRoster() { return [...G.roster.values()].filter((r) => !MONSTERS[r.cls]).sort((a, b) => (G.team >= 0 ? a.team - b.team : 0) || (G.gm === 'koth' || G.gm === 'king' ? b.pts - a.pts : 0) || b.kills - a.kills || a.deaths - b.deaths); }
 const ally = (id) => G.team >= 0 && G.roster.get(id)?.team === G.team;
 function updateScoreHud() {
   const list = sortedRoster(), me = G.roster.get(G.myId);
   if (!me) return;
   $('rank').textContent = '#' + (list.indexOf(me) + 1);
-  if (G.gm !== 'pve') $('myScore').textContent = G.team >= 0 ? `${TEAMS[0].name} ${G.teamScore[0]} · ${G.teamScore[1]} ${TEAMS[1].name}` : G.gm === 'koth' ? `${me.pts} / ${G.limit} poin` : `${me.kills} / ${G.limit || KILL_LIMIT}`;
+  if (G.gm !== 'pve') $('myScore').textContent = G.team >= 0 ? `${TEAMS[0].name} ${G.teamScore[0]} · ${G.teamScore[1]} ${TEAMS[1].name}` : G.gm === 'koth' || G.gm === 'king' ? `${me.pts} / ${G.limit} poin` : `${me.kills} / ${G.limit || KILL_LIMIT}`;
   if (!$('score').classList.contains('hidden')) { fillScore(); if (!G.ended && G.team >= 0) $('scoreTitle').textContent = `${TEAMS[0].name} ${G.teamScore[0]} · ${G.teamScore[1]} ${TEAMS[1].name}`; }
 }
 function fillScore() {
-  const k = G.gm === 'koth';
+  const k = G.gm === 'koth' || G.gm === 'king';
   const rows = sortedRoster().map((r, i) => `<tr class="${r.id === G.myId ? 'me' : ''}"><td>${i + 1}</td><td></td>${k ? `<td>${r.pts}</td>` : ''}<td>${r.kills}</td><td>${r.deaths}</td></tr>`).join('');
   $('scoreTable').innerHTML = `<tr><th>#</th><th>Pengembara</th>${k ? '<th>Poin</th>' : ''}<th>Kill</th><th>Gugur</th></tr>${rows}`;
   sortedRoster().forEach((r, i) => {
@@ -932,6 +962,11 @@ function frame(now) {
       $('net').textContent = `${G.ping} ms · ${fpsShown} fps`;
       $('buffs').innerHTML = [['dmg', G.me.dmgT], ['spd', G.me.spdT]].filter(([, v]) => v > 0)
         .map(([k, v]) => `<span class="buff" style="--c:#${RUNE_INFO[k].color.toString(16).padStart(6, '0')}"><i></i>${RUNE_INFO[k].name.replace('Rune ', '')} ${Math.ceil(v)}</span>`).join('');
+      if (G.gm === 'king') {
+        const kg = [...G.players.values()].find((q) => q.flags & 64), zt = $('zoneTag');
+        zt.textContent = !kg ? 'Mahkota menunggu pemilik baru…' : kg.id === G.myId ? 'Kamu sang RAJA: bertahan hidup untuk poin!' : `Buru sang raja: ${nameOf(kg.id)}`;
+        zt.style.setProperty('--c', kg?.id === G.myId ? '#f2c66d' : '#ff4d5e');
+      }
       if (G.gm === 'koth') {
         const h = G.holder, zt = $('zoneTag');
         const inside = Math.hypot(G.rx, G.rz) < KOTH_R;

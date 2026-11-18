@@ -42,10 +42,12 @@ export class Stats {
     this.save();
   }
   save() {
-    clearTimeout(this.timer);
+    // jangan mengulur timer yang sudah berjalan: perubahan beruntun (mis. poin raja tiap detik) tetap tersimpan
+    if (this.timer) return;
     this.timer = setTimeout(() => this.flush(), 1500);
   }
   flush() {
+    clearTimeout(this.timer); this.timer = null;
     try {
       fs.mkdirSync(this.dir, { recursive: true });
       const tmp = `${this.file}.${process.pid}.tmp`;
@@ -59,6 +61,26 @@ export class Stats {
     const s = this.touch(pid, name); if (!s) return;
     s.bestWave = Math.max(s.bestWave || 0, cleared); s.wk.wave = Math.max(s.wk.wave || 0, cleared);
     this.save();
+  }
+
+  // ---- event ----
+  eventAttend(pid, name, ev) {
+    const s = this.touch(pid, name); if (!s) return;
+    s.ev ||= {};
+    if (!s.ev[ev.id]) { s.ev[ev.id] = { score: 0, done: false }; s.evAttend = (s.evAttend || 0) + 1; this.save(); }
+  }
+  // how: 'max' (nilai terbaik) atau 'add' (dijumlah). Mengembalikan true bila target baru saja tercapai.
+  eventScore(pid, name, ev, how, v) {
+    const s = this.touch(pid, name); if (!s) return false;
+    s.ev ||= {}; const e = s.ev[ev.id] ||= { score: 0, done: false };
+    e.score = how === 'max' ? Math.max(e.score, v) : e.score + v;
+    let hit = false;
+    if (!e.done && e.score >= ev.target.n) { e.done = true; s['ev_' + ev.type] = 1; hit = true; }
+    this.save();
+    return hit;
+  }
+  eventTop(id, n = 10) {
+    return Object.values(this.db).filter((s) => s.ev?.[id]?.score > 0).sort((a, b) => b.ev[id].score - a.ev[id].score).slice(0, n).map((s) => ({ name: s.name, score: s.ev[id].score, done: s.ev[id].done }));
   }
 
   // tantangan harian: 3 tantangan yang sama untuk semua pemain, dipilih dari tanggal (zona WIB)

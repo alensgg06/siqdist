@@ -1,0 +1,61 @@
+// Event terjadwal: dibaca dari DATA_DIR/events.json (ditulis tangan atau lewat tools/event.js).
+// Waktu tanpa zona dianggap WIB (+07:00).
+import fs from 'node:fs';
+import path from 'node:path';
+import { EVENT_TYPES, EVENT_RULES } from '../shared/config.js';
+
+export function parseTime(v) {
+  if (typeof v !== 'string') return NaN;
+  return Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(v) ? v : v + '+07:00');
+}
+
+// Memeriksa satu daftar event mentah. Mengembalikan { list, errors }; entri yang salah dilewati.
+export function validate(raw) {
+  const errors = [], list = [], seen = new Set();
+  if (!Array.isArray(raw)) return { list, errors: ['Isi events.json harus berupa daftar [ ... ].'] };
+  raw.forEach((e, i) => {
+    const at = `event ke-${i + 1}${e && e.id ? ` ("${e.id}")` : ''}`;
+    if (!e || typeof e !== 'object') return errors.push(`${at}: bukan objek.`);
+    if (!/^[a-z0-9-]{1,40}$/.test(e.id || '')) return errors.push(`${at}: "id" wajib, huruf kecil/angka/tanda hubung.`);
+    if (seen.has(e.id)) return errors.push(`${at}: id ganda.`);
+    const tpl = EVENT_TYPES[e.tipe];
+    if (!tpl) return errors.push(`${at}: "tipe" harus salah satu dari ${Object.keys(EVENT_TYPES).join(', ')}.`);
+    const start = parseTime(e.mulai), end = parseTime(e.selesai);
+    if (!Number.isFinite(start) || !Number.isFinite(end)) return errors.push(`${at}: "mulai"/"selesai" harus berbentuk 2026-11-21T20:00.`);
+    if (end <= start) return errors.push(`${at}: "selesai" harus setelah "mulai".`);
+    const rules = e.aturan === undefined ? tpl.rules : e.aturan;
+    if (!Array.isArray(rules) || rules.some((r) => !EVENT_RULES[r])) return errors.push(`${at}: "aturan" hanya boleh berisi ${Object.keys(EVENT_RULES).join(', ')}.`);
+    const n = e.target === undefined ? tpl.target.n : e.target;
+    if (!Number.isInteger(n) || n < 1 || n > 999) return errors.push(`${at}: "target" harus bilangan bulat 1-999.`);
+    seen.add(e.id);
+    list.push({
+      id: e.id, type: e.tipe, name: String(e.nama || tpl.name).slice(0, 40), desc: tpl.desc, mode: tpl.mode, rules, start, end,
+      target: { type: tpl.target.type, n, text: tpl.target.text.replace(String(tpl.target.n), String(n)) }, skin: tpl.skin,
+    });
+  });
+  return { list, errors };
+}
+
+export function eventsFile(dir) { return path.join(dir, 'events.json'); }
+export function readRaw(dir) {
+  try { return JSON.parse(fs.readFileSync(eventsFile(dir), 'utf8')); } catch (err) { return err.code === 'ENOENT' ? [] : { error: err.message }; }
+}
+
+export class Events {
+  constructor(dir) { this.dir = dir; this.list = []; this.mtime = -1; this.reload(); this.timer = setInterval(() => this.reload(), 5000); this.timer.unref?.(); }
+  reload() {
+    let mt = 0;
+    try { mt = fs.statSync(eventsFile(this.dir)).mtimeMs; } catch { /* belum ada file */ }
+    if (mt === this.mtime) return;
+    this.mtime = mt;
+    const raw = readRaw(this.dir);
+    if (raw.error) { console.error('events.json tidak terbaca (bukan JSON yang sah):', raw.error); this.list = []; return; }
+    const { list, errors } = validate(raw);
+    for (const e of errors) console.error('events.json:', e);
+    this.list = list;
+    if (list.length) console.log(`events.json dimuat: ${list.length} event.`);
+  }
+  active(now = Date.now()) { return this.list.find((e) => e.start <= now && now < e.end) || null; }
+  next(now = Date.now()) { return this.list.filter((e) => e.start > now).sort((a, b) => a.start - b.start)[0] || null; }
+  last(now = Date.now()) { return this.list.filter((e) => e.end <= now && now - e.end < 7 * 86400e3).sort((a, b) => b.end - a.end)[0] || null; }
+}
