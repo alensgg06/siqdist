@@ -42,6 +42,29 @@ Bila port 8080 sudah dipakai, ubah angka kiri pada `ports` di `docker-compose.ym
 Memperbarui setelah ada perubahan kode: `git pull && docker compose up -d --build`.
 Melihat log: `docker compose logs -f arkana`.
 
+### Main dari luar rumah lewat Cloudflare Tunnel
+
+Server di jaringan rumah (alamat `192.168.x.x`) tidak terjangkau dari internet. Tunnel
+membuat sambungan keluar dari server ke Cloudflare, jadi tidak perlu membuka port router,
+dan alamatnya langsung HTTPS.
+
+**Tunnel cepat** (tanpa akun, untuk mencoba):
+
+```bash
+docker compose --profile quick up -d --build
+docker compose logs tunnel-quick | grep trycloudflare.com
+```
+
+Alamat `https://....trycloudflare.com` yang muncul bisa langsung dibagikan. Alamat ini
+berganti setiap container tunnel dimulai ulang (termasuk saat server reboot).
+
+**Tunnel tetap** (alamat tidak berubah; butuh akun Cloudflare dan domain di sana):
+
+1. Dasbor Cloudflare Zero Trust > Networks > Tunnels > buat tunnel jenis *Cloudflared*.
+2. Salin token-nya ke file `.env`: `cp .env.example .env`, lalu isi `TUNNEL_TOKEN=`.
+3. Di tab *Public Hostname* tunnel itu: pilih subdomain, service `HTTP`, URL `arkana:8080`.
+4. `docker compose --profile tunnel up -d --build`
+
 ### HTTPS (disarankan bila punya domain)
 
 Dengan reverse proxy yang sudah ada di VPS (Nginx Proxy Manager, Traefik, Caddy),

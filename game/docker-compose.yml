@@ -1,15 +1,38 @@
-# Jalankan:  docker compose up -d --build
-# Game tersedia di http://IP-VPS:8080  (ubah port kiri bila 8080 sudah terpakai)
+# Server saja (jaringan lokal):        docker compose up -d --build
+# + tunnel cepat tanpa akun:           docker compose --profile quick up -d --build
+# + tunnel tetap (akun Cloudflare):    docker compose --profile tunnel up -d --build
 services:
   arkana:
     build: .
     container_name: arkana
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "8080:8080"      # akses dari Wi-Fi yang sama; ubah angka kiri bila 8080 terpakai
     environment:
       - PORT=8080
     mem_limit: 256m
     logging:
       driver: json-file
       options: { max-size: "5m", max-file: "3" }
+
+  # Tunnel cepat: tanpa akun dan tanpa domain, tetapi alamatnya ACAK dan BERGANTI setiap
+  # container ini dimulai ulang. Lihat alamatnya dengan:  docker compose logs tunnel-quick
+  tunnel-quick:
+    image: cloudflare/cloudflared:latest
+    container_name: arkana-tunnel-quick
+    profiles: ["quick"]
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --url http://arkana:8080
+    depends_on: [arkana]
+
+  # Tunnel tetap: alamat tidak berubah. Butuh akun Cloudflare dan domain yang dikelola di sana.
+  # Isi TUNNEL_TOKEN di file .env (lihat .env.example).
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: arkana-tunnel
+    profiles: ["tunnel"]
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN:-}
+    depends_on: [arkana]
