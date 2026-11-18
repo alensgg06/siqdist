@@ -26,6 +26,34 @@ Di layanan seperti Render, Railway, atau Fly.io:
 Server yang sama menyajikan klien dan WebSocket (`/ws`). Jika klien disajikan dari tempat
 lain, arahkan ke server dengan `?server=wss://alamat-server/ws`.
 
+## Menaruh di VPS dengan Docker
+
+```bash
+git clone -b claude/practical-sagan-uin0e8 https://github.com/alensgg06/siqdist.git
+cd siqdist/game
+docker compose up -d --build
+docker compose ps          # status harus "healthy"
+```
+
+Game lalu tersedia di `http://IP-VPS:8080`. Buka port itu di firewall VPS
+(mis. `ufw allow 8080/tcp`) dan di firewall panel penyedia VPS bila ada.
+Bila port 8080 sudah dipakai, ubah angka kiri pada `ports` di `docker-compose.yml`.
+
+Memperbarui setelah ada perubahan kode: `git pull && docker compose up -d --build`.
+Melihat log: `docker compose logs -f arkana`.
+
+### HTTPS (disarankan bila punya domain)
+
+Dengan reverse proxy yang sudah ada di VPS (Nginx Proxy Manager, Traefik, Caddy),
+arahkan domain ke `arkana:8080` / `localhost:8080` dan **aktifkan dukungan WebSocket**.
+Contoh Caddyfile, sertifikat diurus otomatis:
+
+```
+game.domainmu.com {
+    reverse_proxy localhost:8080
+}
+```
+
 ## Kontrol
 
 | | HP | Desktop |

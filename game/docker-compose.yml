@@ -1,0 +1,15 @@
+# Jalankan:  docker compose up -d --build
+# Game tersedia di http://IP-VPS:8080  (ubah port kiri bila 8080 sudah terpakai)
+services:
+  arkana:
+    build: .
+    container_name: arkana
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+    mem_limit: 256m
+    logging:
+      driver: json-file
+      options: { max-size: "5m", max-file: "3" }
