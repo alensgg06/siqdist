@@ -10,6 +10,7 @@ import {
   RESPAWN_TIME, PROTECT_TIME, MAX_HUMANS, BOT_FILL, MAX_LEVEL, XP_LV, NOVA_R, NOVA_DMG,
   SHIELD_TIME, ORB_HEAL, ORB_RESPAWN, levelDmg, levelHp,
   TEAM_MODES, TEAM_LIMIT, TEAMS, MAPS, MAP_KEYS, SKINS, skinUnlocked,
+  DMG_SCALE, REGEN_DELAY, REGEN_RATE, BOT_DIFF, MERCY_DEATHS,
   MODES, KOTH_R, KOTH_LIMIT, RUNES, RUNE_TIME, RUNE_RESPAWN, DMG_BUFF, SPD_BUFF, LAG_MAX,
 } from '../shared/config.js';
 import { stepPlayer, blocked, los, angDiff, setMap } from '../shared/sim.js';
@@ -60,6 +61,8 @@ class Room {
     this.code = opts.code || null;          // room privat: hanya bisa dimasuki dengan kode
     this.practice = !!opts.practice;        // room latihan: satu pemain, bot boneka tidak menyerang
     this.mode = MODES[opts.mode] ? opts.mode : 'dm';
+    this.diff = BOT_DIFF[opts.diff] ? opts.diff : 'normal'; // room publik: Normal
+    this.D = BOT_DIFF[this.diff];
     // peta: pilihan pembuat room; 'rotate' (dan room publik) berganti peta setiap ronde
     this.rotate = !opts.map || opts.map === 'rotate';
     this.map = MAPS[opts.map] ? opts.map : 'ruins';
@@ -97,7 +100,8 @@ class Room {
       pts: 0, ptsAcc: 0, dmgT: 0, spdT: 0, spd: 1, rtt: 0, hist: [],
       dead: false, respawnT: 0, fireCd: 0, shieldT: 0, protT: 0, hurtT: 99,
       queue: [], last: { s: 0, mx: 0, mz: 0, y: 0, f: 0, k: 0 }, ack: 0,
-      ai: { tgt: 0, retT: 0, err: 0, errT: 0, strT: 0, strDir: 1, wp: null, stuckT: 0, lx: 0, lz: 0 },
+      ai: { tgt: 0, retT: 0, err: 0, errT: 0, strT: 0, strDir: 1, wp: null, stuckT: 0, lx: 0, lz: 0, seenT: 0 },
+      streak: 0, // gugur berturut-turut tanpa menumbangkan lawan (untuk bot yang melunak)
     };
     this.players.set(p.id, p);
     this.spawn(p);
@@ -224,9 +228,9 @@ class Room {
     this.events.push(['d', t.id, att ? att.id : 0, amount, r2(t.x), r2(t.z)]);
     if (att && att !== t) this.addXp(att, amount * 0.5);
     if (t.hp <= 0) {
-      t.hp = 0; t.dead = true; t.respawnT = RESPAWN_TIME; t.deaths++; t.dashT = 0;
+      t.hp = 0; t.dead = true; t.respawnT = RESPAWN_TIME; t.deaths++; t.dashT = 0; t.streak++;
       if (att && att !== t) {
-        att.kills++; this.addXp(att, 100);
+        att.kills++; this.addXp(att, 100); att.streak = 0;
         if (this.teams) { this.teamScore[att.team]++; if (this.teamScore[att.team] >= TEAM_WIN) this.endMatch(); }
       }
       this.events.push(['k', att ? att.id : 0, t.id]);
@@ -285,13 +289,13 @@ class Room {
 
   shoot(p) {
     const c = p.cls;
-    p.fireCd = c.fireCd;
+    p.fireCd = c.fireCd * (p.bot ? this.D.cd : 1);
     const ox = p.x + Math.sin(p.yaw) * 0.9, oz = p.z + Math.cos(p.yaw) * 0.9;
     for (let i = 0; i < c.pellets; i++) {
       const a = p.yaw + (Math.random() - 0.5) * 2 * c.spread;
       const pr = {
         id: this.nextPid++, o: p.id, tm: p.team, x: ox, z: oz, dx: Math.sin(a), dz: Math.cos(a),
-        sp: c.projSpeed, life: c.projLife, dmg: c.dmg * levelDmg(p.lvl) * (p.dmgT > 0 ? DMG_BUFF : 1), splash: c.splash,
+        sp: c.projSpeed, life: c.projLife, dmg: c.dmg * DMG_SCALE * levelDmg(p.lvl) * (p.dmgT > 0 ? DMG_BUFF : 1), splash: c.splash,
       };
       this.events.push(['s', pr.id, p.id, r2(ox), r2(oz), Math.round(a * 1000) / 1000]);
       if (!this.rewindFly(pr, p)) this.projs.push(pr);
@@ -377,19 +381,30 @@ class Room {
     const ai = p.ai;
     ai.retT -= DT;
     if (ai.retT <= 0) {
-      ai.retT = 0.3; ai.tgt = 0; let best = 45;
+      const prev = ai.tgt;
+      ai.retT = 0.3; ai.tgt = 0; let best = 60;
+      // berapa bot lain yang sudah mengincar tiap pemain: dipakai agar bot tidak mengeroyok satu orang
+      const hunted = new Map();
+      for (const b of this.players.values()) if (b.bot && b !== p && b.ai.tgt) hunted.set(b.ai.tgt, (hunted.get(b.ai.tgt) || 0) + 1);
       for (const q of this.players.values()) {
         if (q.dead || !this.foes(p, q)) continue;
         const d = Math.hypot(q.x - p.x, q.z - p.z);
-        if (d < best && los(p.x, p.z, q.x, q.z)) { best = d; ai.tgt = q.id; }
+        // target lama diberi keuntungan 8 agar bot tidak berganti-ganti target (dan jeda reaksinya tidak terus mulai ulang)
+        const score = d + (hunted.get(q.id) || 0) * this.D.spread + (q.bot ? 0 : this.D.humanPenalty) - (q.id === prev ? 8 : 0);
+        if (score < best && d < 45 && los(p.x, p.z, q.x, q.z)) { best = score; ai.tgt = q.id; }
       }
+      if (ai.tgt !== prev) ai.seenT = 0; // target baru: bot perlu waktu bereaksi
     }
+    ai.seenT += DT;
     let mx = 0, mz = 0, f = 0, k = 0, want = p.yaw;
     const t = this.players.get(ai.tgt);
     if (t && !t.dead) {
       const dx = t.x - p.x, dz = t.z - p.z, d = Math.hypot(dx, dz) || 1;
       ai.errT -= DT;
-      if (ai.errT <= 0) { ai.errT = 0.45; ai.err = (Math.random() - 0.5) * 0.2; }
+      // pemain yang sedang sial (gugur beruntun tanpa kill) dibidik lebih longgar dan lebih lambat
+      const mercy = !t.bot && t.streak >= MERCY_DEATHS;
+      const errMax = this.D.err * (mercy ? 1.6 : 1), react = this.D.react + (mercy ? 0.35 : 0);
+      if (ai.errT <= 0) { ai.errT = 0.45; ai.err = (Math.random() - 0.5) * 2 * errMax; }
       want = Math.atan2(dx, dz) + ai.err;
       const range = p.clsKey === 'guardian' ? 9 : p.clsKey === 'mage' ? 20 : 24;
       ai.strT -= DT;
@@ -397,7 +412,7 @@ class Room {
       const nx = dx / d, nz = dz / d;
       const adv = d > range ? 1 : d < range * 0.5 ? -0.7 : 0;
       mx = -nz * ai.strDir * 0.8 + nx * adv; mz = nx * ai.strDir * 0.8 + nz * adv;
-      if (Math.abs(angDiff(want, p.yaw)) < 0.25 && d < range * 1.5) f = 1;
+      if (Math.abs(angDiff(want, p.yaw)) < 0.25 && d < range * 1.5 && ai.seenT >= react) f = 1;
       if (p.clsKey === 'ranger' && p.hurtT < 0.2 && Math.random() < 0.15) k = 1;
       if (p.clsKey === 'mage' && d < NOVA_R - 1.5) k = 1;
       if (p.clsKey === 'guardian' && p.hp < p.maxHp * 0.5 && p.hurtT < 0.5) k = 1;
@@ -423,7 +438,7 @@ class Room {
       const dx = ai.wp[0] - p.x, dz = ai.wp[1] - p.z, d = Math.hypot(dx, dz) || 1;
       mx = dx / d; mz = dz / d; want = Math.atan2(dx, dz);
     }
-    const turn = 5 * DT, diff = angDiff(want, p.yaw);
+    const turn = (this.practice ? 5 : this.D.turn) * DT, diff = angDiff(want, p.yaw);
     const yaw = p.yaw + Math.max(-turn, Math.min(turn, diff));
     return { s: 0, mx, mz, y: yaw, f, k };
   }
@@ -438,7 +453,7 @@ class Room {
         for (const t of this.players.values()) {
           if (t === p || t.dead) continue;
           const d = Math.hypot(t.x - p.x, t.z - p.z);
-          if (d < NOVA_R) this.damage(t, NOVA_DMG * levelDmg(p.lvl) * (p.dmgT > 0 ? DMG_BUFF : 1) * (1 - 0.5 * d / NOVA_R), p);
+          if (d < NOVA_R) this.damage(t, NOVA_DMG * DMG_SCALE * levelDmg(p.lvl) * (p.dmgT > 0 ? DMG_BUFF : 1) * (1 - 0.5 * d / NOVA_R), p);
         }
       } else if (p.cls.skill === 'shield') {
         p.shieldT = SHIELD_TIME;
@@ -480,7 +495,7 @@ class Room {
         if (p.spdT > 0) p.spdT -= DT;
         if (p.protT > 0) { p.protT -= DT; if (inp.f) p.protT = 0; }
         p.hurtT += DT;
-        if (p.hurtT > 5 && p.hp < p.maxHp) p.hp = Math.min(p.maxHp, p.hp + 6 * DT);
+        if (p.hurtT > REGEN_DELAY && p.hp < p.maxHp) p.hp = Math.min(p.maxHp, p.hp + REGEN_RATE * DT);
         if (inp.f && p.fireCd <= 0 && !p.dead) this.shoot(p);
       }
       this.tickN++;
@@ -622,7 +637,7 @@ wss.on('connection', (ws) => {
         if (!room) return fail(`Room ${code || '(kosong)'} tidak ditemukan. Periksa kodenya.`);
         if (room.humans() >= MAX_HUMANS) { room = null; return fail('Room itu sudah penuh (8 pemain).'); }
       } else if (mode === 'create') {
-        room = new Room({ code: newCode(), mode: m.gm, map: MAPS[m.map] ? m.map : 'rotate' }); rooms.push(room);
+        room = new Room({ code: newCode(), mode: m.gm, map: MAPS[m.map] ? m.map : 'rotate', diff: m.diff }); rooms.push(room);
       } else if (mode === 'practice') {
         room = new Room({ practice: true, map: 'ruins' }); rooms.push(room);
       } else {
@@ -636,7 +651,7 @@ wss.on('connection', (ws) => {
       me.skin = skin && skinUnlocked(skin, stats.get(me.pid)) ? skin.id : 'default'; // jubah terkunci ditolak di server
       room.rosterDirty = true;
       room.balanceBots();
-      ws.send(JSON.stringify({ t: 'w', id: me.id, team: me.team, limit: room.mode === 'koth' ? KOTH_WIN : room.teams ? TEAM_WIN : LIMIT, code: room.code, practice: room.practice, gm: room.mode, map: room.map }));
+      ws.send(JSON.stringify({ t: 'w', id: me.id, team: me.team, limit: room.mode === 'koth' ? KOTH_WIN : room.teams ? TEAM_WIN : LIMIT, code: room.code, practice: room.practice, gm: room.mode, map: room.map, diff: room.diff }));
     } else if (m.t === 'in' && me) {
       if (me.queue.length < 12) {
         me.queue.push({

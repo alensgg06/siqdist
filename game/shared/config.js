@@ -9,7 +9,7 @@ export const MATCH_TIME = 300;    // detik
 export const KILL_LIMIT = 20;
 export const END_TIME = 12;
 export const RESPAWN_TIME = 3;
-export const PROTECT_TIME = 1.5;
+export const PROTECT_TIME = 3;
 export const MAX_HUMANS = 8;
 export const BOT_FILL = 6;
 export const MAX_LEVEL = 5;
@@ -144,3 +144,16 @@ export const SKINS = [
   { id: 'raja', name: 'Emas Raja', accent: 0xb8892a, glow: 0xffd56b, req: { stat: 'wins', n: 10, text: 'Menang 10 ronde' } },
 ];
 export function skinUnlocked(skin, st) { return !skin.req || ((st && st[skin.req.stat]) || 0) >= skin.req.n; }
+
+// ---- C1: lebih ramah untuk pemain HP ----
+export const DMG_SCALE = 0.7;       // semua damage x0,7: waktu untuk tumbang ~1,8 -> ~2,6 dtk
+export const REGEN_DELAY = 3;       // HP mulai pulih setelah 3 dtk tanpa terkena
+export const REGEN_RATE = 12;       // HP per detik
+// Tingkat kesulitan bot. react: jeda sebelum mulai menembak target baru (dtk); err: simpangan bidik maks (rad);
+// cd: pengali jeda tembak; turn: kecepatan putar (rad/dtk); spread: hindari mengeroyok satu target.
+export const BOT_DIFF = {
+  easy: { name: 'Mudah', react: 0.7, err: 0.5, cd: 1.6, turn: 3, spread: 10, humanPenalty: 6 },
+  normal: { name: 'Normal', react: 0.45, err: 0.3, cd: 1.25, turn: 4, spread: 6, humanPenalty: 0 },
+  hard: { name: 'Sulit', react: 0.2, err: 0.15, cd: 1, turn: 5, spread: 0, humanPenalty: 0 },
+};
+export const MERCY_DEATHS = 3;      // gugur berturut-turut tanpa kill sebelum bot melunak pada pemain itu

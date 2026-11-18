@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import WebSocket from 'ws';
 import { los, blocked } from '../shared/sim.js';
-import { RUNES, INTERP, ARENA, PLAYER_R } from '../shared/config.js';
+import { RUNES, INTERP, ARENA, PLAYER_R, DMG_SCALE } from '../shared/config.js';
 
 const HOST = process.env.HOST || 'ws://localhost';
 const DATA = process.env.DATA_DIR;
@@ -141,8 +141,9 @@ async function until(fn, ms, step = 1000 / 30) { const t = Date.now(); while (Da
   clearInterval(iv); clearInterval(ivB2);
   const ds = dmgs().filter((v, i) => i < 3);
   if (!ds.length) { const x = A.me(), y = A.of(B.id); fail(`tidak ada tembakan yang mengenai selama efek rune; jarak ${Math.round(Math.hypot(x[1] - y[1], x[2] - y[2]))}, garis tembak ${los(x[1], x[2], y[1], y[2])}`); }
-  if (ds.some((v) => v < 13)) fail(`damage tidak berlipat: ${ds}`);
-  console.log(`OK damage dengan rune amarah: ${ds.join(', ')} (normal 9).`);
+  const base = 9 * DMG_SCALE, want = Math.round(base * 1.5);
+  if (ds.some((v) => v < want - 1)) fail(`damage tidak berlipat: ${ds} (seharusnya ~${want})`);
+  console.log(`OK damage dengan rune amarah: ${ds.join(', ')} (normal ${Math.round(base)}).`);
   A.ws.close(); B.ws.close();
 }
 

@@ -186,3 +186,4 @@ body:not(.touch) #skillBtn{display:grid;right:24px;bottom:24px}
 #menu,#ranks{touch-action:pan-y;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 .skinmsg{min-height:18px;margin-top:8px;font-size:13px;color:var(--gold)}
 .skin.locked small::before{content:"Terkunci · "}
+.modes.diffs{grid-template-columns:repeat(3,minmax(0,1fr))}

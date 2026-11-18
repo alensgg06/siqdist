@@ -102,7 +102,7 @@ const G = {
   autoFire: store.get('autoFire', isTouch ? '1' : '') === '1', aimAssist: store.get('aimAssist', isTouch ? '1' : '') === '1',
   lastShotTick: new Map(), shake: 0, time: 0,
   vibrate: store.get('vibrate', '1') === '1', code: null, practice: false, joinErr: '', buzzT: 0,
-  pid: playerId(), skin: store.get('skin', 'default'), mapId: 'ruins', createMap: store.get('map', 'rotate'), tut: null, music: store.get('music', '1') === '1', stepT: 0, team: -1, teamScore: [0, 0], gm: 'dm', runeMask: 15, holder: 0, ticks: [], createGm: store.get('gm', 'dm'),
+  createDiff: store.get('diff', 'normal'), pid: playerId(), skin: store.get('skin', 'default'), mapId: 'ruins', createMap: store.get('map', 'rotate'), tut: null, music: store.get('music', '1') === '1', stepT: 0, team: -1, teamScore: [0, 0], gm: 'dm', runeMask: 15, holder: 0, ticks: [], createGm: store.get('gm', 'dm'),
 };
 window.__arkana = G; // dipakai uji otomatis
 
@@ -165,6 +165,14 @@ for (const b of document.querySelectorAll('.mode')) {
   b.addEventListener('click', set);
   if (b.dataset.gm === G.createGm) set();
 }
+for (const b of document.querySelectorAll('.diffb')) {
+  const set = () => {
+    G.createDiff = b.dataset.diff; store.set('diff', G.createDiff);
+    for (const o of document.querySelectorAll('.diffb')) { o.classList.toggle('on', o === b); o.setAttribute('aria-checked', o === b); }
+  };
+  b.addEventListener('click', set);
+  if (b.dataset.diff === G.createDiff) set();
+}
 for (const b of document.querySelectorAll('.mapb')) {
   const set = () => {
     G.createMap = b.dataset.map; store.set('map', G.createMap);
@@ -224,7 +232,7 @@ function connect(name, mode, code) {
   let ws;
   try { ws = new WebSocket(serverUrl()); } catch { return menuError('Alamat server tidak valid.'); }
   G.ws = ws; G.joinErr = '';
-  ws.onopen = () => ws.send(JSON.stringify({ t: 'join', name, cls: G.clsKey, mode, code, gm: G.createGm, map: G.createMap, pid: G.pid, skin: G.skin }));
+  ws.onopen = () => ws.send(JSON.stringify({ t: 'join', name, cls: G.clsKey, mode, code, gm: G.createGm, map: G.createMap, diff: G.createDiff, pid: G.pid, skin: G.skin }));
   ws.onmessage = (e) => onMessage(JSON.parse(e.data));
   ws.onclose = () => {
     if (G.ws !== ws) return;
