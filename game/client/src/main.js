@@ -3,9 +3,9 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { DT, CLASSES, CLASS_KEYS, ARENA, OBST, ORBS, XP_LV, MAX_LEVEL, NOVA_R, KILL_LIMIT } from '../../shared/config.js';
+import { DT, CLASSES, CLASS_KEYS, ARENA, OBST, ORBS, XP_LV, MAX_LEVEL, NOVA_R, KILL_LIMIT, KOTH_R, RUNES, RUNE_INFO, SPD_BUFF, INTERP } from '../../shared/config.js';
 import { stepPlayer, blocked, los, angDiff } from '../../shared/sim.js';
-import { buildWorld } from './world.js';
+import { buildWorld, buildExtras } from './world.js';
 import { Avatar } from './chars.js';
 import { Fx } from './fx.js';
 import { input, setupInput, isTouch } from './input.js';
@@ -27,6 +27,7 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(62, 1, 0.3, 900);
 const world = buildWorld(scene);
 const fx = new Fx(scene, world.glowTex);
+const extras = buildExtras(scene, world.glowTex, RUNES, RUNE_INFO, KOTH_R);
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
 const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.42, 0.5, 0.9);
@@ -69,7 +70,7 @@ const G = {
   autoFire: store.get('autoFire', isTouch ? '1' : '') === '1', aimAssist: store.get('aimAssist', isTouch ? '1' : '') === '1',
   lastShotTick: new Map(), shake: 0, time: 0,
   vibrate: store.get('vibrate', '1') === '1', code: null, practice: false, joinErr: '', buzzT: 0,
-  tut: null,
+  tut: null, gm: 'dm', runeMask: 15, holder: 0, ticks: [], createGm: store.get('gm', 'dm'),
 };
 window.__arkana = G; // dipakai uji otomatis
 
@@ -125,6 +126,14 @@ function start(mode, code) {
 $('play').addEventListener('click', () => {
   if (!store.get('tutorDone', '')) { G.tut = newTutorial(); start('practice'); } else start('public');
 });
+for (const b of document.querySelectorAll('.mode')) {
+  const set = () => {
+    G.createGm = b.dataset.gm; store.set('gm', G.createGm);
+    for (const o of document.querySelectorAll('.mode')) { o.classList.toggle('on', o === b); o.setAttribute('aria-checked', o === b); }
+  };
+  b.addEventListener('click', set);
+  if (b.dataset.gm === G.createGm) set();
+}
 $('create').addEventListener('click', () => start('create'));
 $('joinBtn').addEventListener('click', () => {
   const c = cleanCode($('code').value);
@@ -137,7 +146,7 @@ function connect(name, mode, code) {
   let ws;
   try { ws = new WebSocket(serverUrl()); } catch { return menuError('Alamat server tidak valid.'); }
   G.ws = ws; G.joinErr = '';
-  ws.onopen = () => ws.send(JSON.stringify({ t: 'join', name, cls: G.clsKey, mode, code }));
+  ws.onopen = () => ws.send(JSON.stringify({ t: 'join', name, cls: G.clsKey, mode, code, gm: G.createGm }));
   ws.onmessage = (e) => onMessage(JSON.parse(e.data));
   ws.onclose = () => {
     if (G.ws !== ws) return;
@@ -173,20 +182,22 @@ function onMessage(m) {
     $('skillName').textContent = G.cls.skillName;
     $('death').classList.add('hidden'); $('score').classList.add('hidden'); $('pause').classList.add('hidden');
     input.enabled = true;
-    G.code = m.code || null; G.practice = !!m.practice;
+    G.code = m.code || null; G.practice = !!m.practice; G.gm = m.gm || 'dm'; G.ticks.length = 0;
+    $('zoneTag').classList.toggle('hidden', G.gm !== 'koth');
     const pill = $('roomPill');
     pill.classList.toggle('hidden', !G.code && !G.practice);
-    pill.textContent = G.code ? `Room ${G.code} ⤴` : 'Latihan';
+    pill.textContent = G.code ? `${G.gm === 'koth' ? 'Altar' : 'Room'} ${G.code} ⤴` : 'Latihan';
     if (G.practice && G.tut) { G.tut.show(); } else { G.tut = null; $('tutor').classList.add('hidden'); }
     if (!G.practice || !G.tut) toast(G.code ? `Room ${G.code}: ketuk kode untuk membagikan` : G.practice ? 'Arena latihan' : 'Pertarungan dimulai');
   } else if (m.t === 'e') {
     G.joinErr = m.m;
   } else if (m.t === 'r') {
     G.roster.clear();
-    for (const [id, name, cls, kills, deaths, bot] of m.l) G.roster.set(id, { id, name, cls, kills, deaths, bot });
+    for (const [id, name, cls, kills, deaths, bot, pts] of m.l) G.roster.set(id, { id, name, cls, kills, deaths, bot, pts: pts || 0 });
     updateScoreHud();
   } else if (m.t === 's') onSnapshot(m);
   else if (m.t === 'pg') G.ping = Math.round(performance.now() - m.c);
+  else if (m.t === 'sp') G.ws?.send(JSON.stringify({ t: 'spr', c: m.c })); // ping dari server
 }
 setInterval(() => { if (G.ws?.readyState === 1) G.ws.send(JSON.stringify({ t: 'pg', c: performance.now() })); }, 2000);
 // laporan untuk catatan pertandingan di server (ping dan fps), hanya saat bermain dan tab terlihat
@@ -272,7 +283,8 @@ function onSnapshot(m) {
   const now = performance.now();
   if (!G.myId) return;
   const wasEnded = G.ended;
-  G.ended = !!m.st; G.tm = m.tm; G.orbMask = m.o;
+  G.ended = !!m.st; G.tm = m.tm; G.orbMask = m.o; G.runeMask = m.u ?? 15; G.holder = m.z || 0;
+  G.ticks.push([now, m.k || 0]); if (G.ticks.length > 30) G.ticks.shift();
   G.snapN = (G.snapN || 0) + 1;
   for (const e of m.p) {
     const p = getPlayer(e[0]);
@@ -290,7 +302,8 @@ function onSnapshot(m) {
 
   // rekonsiliasi prediksi
   const me = m.me, pr = G.pred;
-  G.me.xp = me[6]; G.me.respawnT = me[7];
+  G.me.xp = me[6]; G.me.respawnT = me[7]; G.me.dmgT = me[8] || 0; G.me.spdT = me[9] || 0;
+  pr.spd = G.me.spdT > 0 ? SPD_BUFF : 1;
   while (G.pending.length && G.pending[0].s <= m.a) G.pending.shift();
   pr.x = me[0]; pr.z = me[1]; pr.dashT = me[2]; pr.dx = me[3]; pr.dz = me[4]; pr.skillCd = me[5];
   if (!(G.me.flags & 1) && !G.ended) for (const inp of G.pending) stepPlayer(pr, inp, G.cls, DT);
@@ -367,6 +380,12 @@ function onEvent(e) {
       break;
     }
     case 'n': fx.nova(e[2], e[3], CLASSES.mage.color, NOVA_R); sfx('nova', vol(e[2], e[3])); G.shake = Math.max(G.shake, 0.6 * vol(e[2], e[3])); break;
+    case 'u': {
+      const r = RUNES[e[1]], info = RUNE_INFO[r.type];
+      fx.burst(r.x, 1.2, r.z, info.color, 34, 6, 1.3, 0.8, -2); fx.pillar(r.x, r.z, info.color);
+      if (e[2] === G.myId) { sfx('level'); buzz([30, 30, 30]); toast(`${info.name}: ${info.desc}`); }
+      break;
+    }
     case 'o': fx.burst(ORBS[e[1]][0], 1.2, ORBS[e[1]][1], 0x59ff9c, 26, 5, 1.1, 0.7, -2); if (e[2] === G.myId) sfx('orb'); break;
   }
 }
@@ -397,17 +416,18 @@ function updateDmg(dt) {
   }
 }
 
-function sortedRoster() { return [...G.roster.values()].sort((a, b) => b.kills - a.kills || a.deaths - b.deaths); }
+function sortedRoster() { return [...G.roster.values()].sort((a, b) => (G.gm === 'koth' ? b.pts - a.pts : 0) || b.kills - a.kills || a.deaths - b.deaths); }
 function updateScoreHud() {
   const list = sortedRoster(), me = G.roster.get(G.myId);
   if (!me) return;
   $('rank').textContent = '#' + (list.indexOf(me) + 1);
-  $('myScore').textContent = `${me.kills} / ${G.limit || KILL_LIMIT}`;
+  $('myScore').textContent = G.gm === 'koth' ? `${me.pts} / ${G.limit} poin` : `${me.kills} / ${G.limit || KILL_LIMIT}`;
   if (!$('score').classList.contains('hidden')) fillScore();
 }
 function fillScore() {
-  const rows = sortedRoster().map((r, i) => `<tr class="${r.id === G.myId ? 'me' : ''}"><td>${i + 1}</td><td></td><td>${r.kills}</td><td>${r.deaths}</td></tr>`).join('');
-  $('scoreTable').innerHTML = `<tr><th>#</th><th>Pengembara</th><th>Kill</th><th>Gugur</th></tr>${rows}`;
+  const k = G.gm === 'koth';
+  const rows = sortedRoster().map((r, i) => `<tr class="${r.id === G.myId ? 'me' : ''}"><td>${i + 1}</td><td></td>${k ? `<td>${r.pts}</td>` : ''}<td>${r.kills}</td><td>${r.deaths}</td></tr>`).join('');
+  $('scoreTable').innerHTML = `<tr><th>#</th><th>Pengembara</th>${k ? '<th>Poin</th>' : ''}<th>Kill</th><th>Gugur</th></tr>${rows}`;
   sortedRoster().forEach((r, i) => { $('scoreTable').rows[i + 1].cells[1].textContent = r.name + (r.bot ? ' (bot)' : '') + ' · ' + CLASSES[r.cls].name; });
 }
 function showScore(end) {
@@ -449,6 +469,8 @@ function drawMinimap() {
   const s = 132 / (ARENA * 2 + 6), c = 66;
   mg.clearRect(0, 0, 132, 132); mg.drawImage(mmBg, 0, 0);
   ORBS.forEach(([x, z], i) => { if (G.orbMask & (1 << i)) { mg.fillStyle = '#59ff9c'; mg.fillRect(c - x * s - 1.5, c - z * s - 1.5, 3, 3); } });
+  RUNES.forEach((r, i) => { if (G.runeMask & (1 << i)) { mg.fillStyle = r.type === 'dmg' ? '#ff3b4e' : '#4dc3ff'; mg.beginPath(); mg.arc(c - r.x * s, c - r.z * s, 3, 0, 7); mg.fill(); } });
+  if (G.gm === 'koth') { mg.strokeStyle = G.holder === G.myId ? '#f2c66d' : G.holder === -1 ? '#b76bff' : G.holder ? '#ff4d5e' : 'rgba(255,242,208,.7)'; mg.lineWidth = 2; mg.beginPath(); mg.arc(c, c, KOTH_R * s, 0, 7); mg.stroke(); }
   for (const p of G.players.values()) {
     if (p.id === G.myId || (p.flags & 1)) continue;
     if (Math.hypot(p.x - G.rx, p.z - G.rz) > 32) continue;
@@ -479,6 +501,16 @@ function findTarget() {
   return best;
 }
 
+// Tick dunia yang sedang ditampilkan (lawan digambar INTERP detik di belakang); server memutar mundur ke sini saat menembak.
+function viewTick() {
+  const b = G.ticks, rt = performance.now() - INTERP * 1000;
+  if (!b.length) return 0;
+  for (let i = b.length - 1; i > 0; i--) {
+    if (b[i - 1][0] <= rt) { const [t0, k0] = b[i - 1], [t1, k1] = b[i]; return Math.round((k0 + (k1 - k0) * Math.min(1, (rt - t0) / (t1 - t0 || 1))) * 10) / 10; }
+  }
+  return b[0][1];
+}
+
 function fixedTick() {
   const dead = G.me.flags & 1, paused = !pauseEl.classList.contains('hidden');
   const fwdX = Math.sin(input.yaw), fwdZ = Math.cos(input.yaw);
@@ -495,7 +527,7 @@ function fixedTick() {
   const q = (v) => Math.round(v * 1000) / 1000;
   const inp = {
     t: 'in', s: ++G.seq, mx: q(fwdX * jy - fwdZ * jx), mz: q(fwdZ * jy + fwdX * jx),
-    y: q(input.yaw), f: fire && !dead ? 1 : 0, k,
+    y: q(input.yaw), f: fire && !dead ? 1 : 0, k, vt: viewTick(),
   };
   if (G.ws?.readyState === 1) G.ws.send(JSON.stringify(inp));
   if (dead || G.ended) return;
@@ -562,6 +594,10 @@ function frame(now) {
       }
       p.av.update(dt, p.x, p.z, p.yaw, p.flags, t);
       if (p.flags & 8 && Math.random() < 0.7) fx.particle(p.x, 1 + Math.random(), p.z, 0, 0.5, 0, CLASSES[p.cls].color, 1.3, 0.3, 0);
+      if (!(p.flags & 1)) {
+        if (p.flags & 16 && Math.random() < 0.5) fx.particle(p.x + (Math.random() - 0.5), 0.4 + Math.random() * 2, p.z + (Math.random() - 0.5), 0, 1.6, 0, RUNE_INFO.dmg.color, 0.9, 0.5, 0);
+        if (p.flags & 32 && Math.random() < 0.5) fx.particle(p.x + (Math.random() - 0.5), 0.2 + Math.random() * 0.6, p.z + (Math.random() - 0.5), 0, 0.3, 0, RUNE_INFO.spd.color, 1.1, 0.4, 0);
+      }
     }
 
     // kamera orang ketiga dengan penghindar tembok
@@ -606,16 +642,26 @@ function frame(now) {
       else $('scoreNext').textContent = '';
       if (!G.ended) { if (input.showScore && $('score').classList.contains('hidden')) showScore(false); else if (!input.showScore && !isTouch && G.tabOpen) $('score').classList.add('hidden'); G.tabOpen = input.showScore; }
       $('net').textContent = `${G.ping} ms · ${fpsShown} fps`;
+      $('buffs').innerHTML = [['dmg', G.me.dmgT], ['spd', G.me.spdT]].filter(([, v]) => v > 0)
+        .map(([k, v]) => `<span class="buff" style="--c:#${RUNE_INFO[k].color.toString(16).padStart(6, '0')}"><i></i>${RUNE_INFO[k].name.replace('Rune ', '')} ${Math.ceil(v)}</span>`).join('');
+      if (G.gm === 'koth') {
+        const h = G.holder, zt = $('zoneTag');
+        const inside = Math.hypot(G.rx, G.rz) < KOTH_R;
+        zt.textContent = h === G.myId ? 'Kamu menguasai altar' : h === -1 ? 'Altar diperebutkan' : h ? `Altar dikuasai ${nameOf(h)}` : inside ? 'Bertahan di lingkaran untuk mengumpulkan poin' : 'Altar kosong: rebut lingkaran di tengah';
+        zt.style.setProperty('--c', h === G.myId ? '#f2c66d' : h === -1 ? '#b76bff' : h ? '#ff4d5e' : '#fff2d0');
+      }
       drawMinimap();
     }
     updateDmg(dt);
     world.update(t, { x: G.rx, z: G.rz }, G.orbMask);
+    extras.update(t, G.runeMask, G.gm, G.holder, G.myId);
   } else {
     // menu: kamera mengitari altar
     const a = t * 0.08;
     camera.position.set(Math.sin(a) * 30, 9 + Math.sin(t * 0.2) * 1.5, Math.cos(a) * 30);
     camera.lookAt(0, 3.5, 0);
     world.update(t, { x: 0, z: 0 }, 255);
+    extras.update(t, 15, 'dm', 0, 0);
   }
 
   fx.update(dt);

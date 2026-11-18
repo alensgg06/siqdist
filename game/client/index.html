@@ -31,6 +31,8 @@
   <button id="pauseBtn" aria-label="Menu">☰</button>
   <div id="toast"></div>
 
+  <div id="zoneTag" class="hidden"></div>
+  <div id="buffs"></div>
   <div id="status">
     <div id="lvl">1</div>
     <div class="bars">
@@ -73,6 +75,10 @@
     <div id="classes"></div>
     <button id="play">Masuk Arena</button>
     <div id="rooms">
+      <div class="modes" role="radiogroup" aria-label="Mode room privat">
+        <button class="mode on" data-gm="dm" role="radio" aria-checked="true">Deathmatch</button>
+        <button class="mode" data-gm="koth" role="radio" aria-checked="false">Rebut Altar</button>
+      </div>
       <button id="create" class="sec">Buat room privat</button>
       <div class="join"><input id="code" maxlength="4" placeholder="KODE" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Kode room"><button id="joinBtn" class="sec">Gabung</button></div>
     </div>

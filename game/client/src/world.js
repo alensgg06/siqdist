@@ -368,3 +368,45 @@ export function buildWorld(scene) {
   };
   return world;
 }
+
+// ---- Paket B: rune di peta dan lingkaran Rebut Altar ----
+export function buildExtras(scene, glowTex, RUNES, RUNE_INFO, KOTH_R) {
+  const runes = RUNES.map((r) => {
+    const info = RUNE_INFO[r.type], g = new THREE.Group();
+    const mat = new THREE.MeshStandardMaterial({ color: info.color, emissive: info.color, emissiveIntensity: 2.4, roughness: 0.3 });
+    const gem = new THREE.Mesh(r.type === 'dmg' ? new THREE.TetrahedronGeometry(0.5, 0) : new THREE.OctahedronGeometry(0.45, 0), mat);
+    gem.castShadow = true; g.add(gem);
+    const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: info.color, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.85 }));
+    halo.scale.setScalar(3); g.add(halo);
+    const base = new THREE.Mesh(new THREE.RingGeometry(0.8, 1.15, 6), new THREE.MeshBasicMaterial({ color: info.color, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+    base.rotation.x = -Math.PI / 2; base.position.y = -1.15; g.add(base);
+    g.position.set(r.x, 1.2, r.z); scene.add(g);
+    return { g, gem, base };
+  });
+  // cincin tipis di tanah; warnanya menunjukkan siapa yang menguasai altar
+  const zoneMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+  const zone = new THREE.Mesh(new THREE.RingGeometry(KOTH_R - 0.35, KOTH_R, 72), zoneMat);
+  zone.rotation.x = -Math.PI / 2; zone.position.y = 0.06; zone.visible = false; scene.add(zone);
+  const pillarMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.12, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+  const pillar = new THREE.Mesh(new THREE.CylinderGeometry(KOTH_R, KOTH_R, 6, 48, 1, true), pillarMat);
+  pillar.position.y = 3; pillar.visible = false; scene.add(pillar);
+  const zoneCol = { 0: 0xfff2d0, mine: 0xf2c66d, other: 0xff4d5e, contest: 0xb76bff };
+  return {
+    update(t, runeMask, mode, holder, myId) {
+      runes.forEach((r, i) => {
+        r.g.visible = !!(runeMask & (1 << i));
+        r.gem.rotation.y = t * 2 + i; r.gem.rotation.x = t * 1.3;
+        r.g.position.y = 1.2 + Math.sin(t * 2.4 + i) * 0.2;
+        r.base.rotation.z = t * 0.8;
+      });
+      const on = mode === 'koth';
+      zone.visible = pillar.visible = on;
+      if (on) {
+        const c = holder === 0 ? zoneCol[0] : holder === -1 ? zoneCol.contest : holder === myId ? zoneCol.mine : zoneCol.other;
+        zoneMat.color.setHex(c); pillarMat.color.setHex(c);
+        zoneMat.opacity = 0.45 + 0.25 * Math.sin(t * (holder ? 6 : 2));
+        pillarMat.opacity = holder ? 0.16 : 0.07;
+      }
+    },
+  };
+}

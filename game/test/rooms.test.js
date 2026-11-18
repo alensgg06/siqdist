@@ -15,6 +15,7 @@ function client(join) {
   c.ws.on('close', () => { c.closed = true; });
   c.ws.on('message', (raw) => {
     const m = JSON.parse(raw);
+    if (m.t === 'sp') { c.ws.send(JSON.stringify({ t: 'spr', c: m.c })); return; } // ping dari server
     if (m.t === 'w') { c.w = m; c.id = m.id; } else if (m.t === 'e') c.err = m.m;
     else if (m.t === 'r') c.roster = m.l;
     else if (m.t === 's') { c.snap = m; for (const e of m.e) { if (e[0] === 's') c.shots.push(e[2]); if (e[0] === 'k') c.kills.push([e[1], e[2]]); } }
@@ -96,9 +97,9 @@ if (DATA) {
   if (!has()) fail('ronde privat tidak tercatat di matches.jsonl');
   const rec = fs.readFileSync(file, 'utf8').trim().split('\n').map((l) => JSON.parse(l)).find((r) => r.room === 'privat');
   const tamu = rec.players.find((p) => p.name === 'Tamu');
-  if (!tamu || tamu.ping !== 42 || tamu.fps !== 58) fail(`ping/fps tamu tidak tercatat benar: ${JSON.stringify(tamu)}`);
+  if (!tamu || typeof tamu.ping !== 'number' || tamu.ping > 200 || tamu.fps !== 58) fail(`ping/fps tamu tidak tercatat benar: ${JSON.stringify(tamu)}`);
   if (!(rec.players.reduce((s, p) => s + p.dmg, 0) > 0)) fail('damage tidak tercatat');
-  console.log(`OK catatan pertandingan: pemenang ${rec.winner}, ${rec.players.length} pemain, ping/fps tamu 42/58.`);
+  console.log(`OK catatan pertandingan: pemenang ${rec.winner}, ${rec.players.length} pemain, ping diukur server ${tamu.ping} ms, fps ${tamu.fps}.`);
 }
 for (const c of [host, guest, stranger, pr]) c.ws.close();
 await sleep(200);

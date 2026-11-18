@@ -74,3 +74,22 @@ export const ORBS = [
   [12, 0], [-12, 0], [0, 12], [0, -12],
   [39, 39], [-39, 39], [39, -39], [-39, -39],
 ];
+
+// ---- Paket B ----
+export const MODES = { dm: 'Deathmatch', koth: 'Rebut Altar' };
+export const KOTH_R = 7.5;          // jari-jari lingkaran altar
+export const KOTH_LIMIT = 60;       // poin (detik menguasai sendirian) untuk menang
+export const RUNE_TIME = 10;        // lama efek rune
+export const RUNE_RESPAWN = 25;
+export const DMG_BUFF = 1.5;
+export const SPD_BUFF = 1.35;
+export const RUNE_INFO = {
+  dmg: { name: 'Rune Amarah', desc: 'damage +50%', color: 0xff3b4e },
+  spd: { name: 'Rune Angin', desc: 'kecepatan +35%', color: 0x4dc3ff },
+};
+export const RUNES = [
+  { x: 0, z: 26, type: 'dmg' }, { x: 0, z: -26, type: 'dmg' },
+  { x: 18, z: 18, type: 'spd' }, { x: -18, z: -18, type: 'spd' },
+];
+export const INTERP = 0.11;         // klien menampilkan lawan 110 ms di belakang
+export const LAG_MAX = 0.45;        // batas putar-mundur kompensasi lag (detik), setara RTT ~340 ms + interpolasi

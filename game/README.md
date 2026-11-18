@@ -101,6 +101,22 @@ versi lama bila ditandatangani kunci yang sama.
 - **Latihan**: pemain baru otomatis masuk latihan bertutorial (5 langkah, bot boneka tidak
   menyerang). Bisa dilewati, dan bisa diulang dari *Latihan dan tutorial* di menu.
 
+## Mode dan rune
+
+- **Deathmatch** (semua room publik): pertama mencapai 20 kill, atau skor tertinggi setelah 5 menit.
+- **Rebut Altar** (pilih saat membuat room privat): berdiri sendirian di lingkaran altar memberi
+  1 poin per detik; dua pemain atau lebih di dalam berarti diperebutkan dan tidak ada yang dapat
+  poin. Pertama mencapai 60 poin menang. Warna lingkaran: emas = kamu, merah = lawan, ungu = diperebutkan.
+- **Rune** muncul di empat titik peta dan kembali 25 detik setelah diambil:
+  Rune Amarah (merah) damage +50% selama 10 detik, Rune Angin (biru) kecepatan +35% selama 10 detik.
+
+## Kompensasi lag
+
+Klien mengirim nomor tick dunia yang sedang ia tampilkan. Saat pemain menembak, server memutar
+mundur posisi lawan ke tick itu (paling jauh 0,45 detik) dan menerbangkan peluru di sana, sehingga
+peluru yang di layar mengenai lawan memang dihitung kena. Uji `test/modes.test.js` mengukurnya
+dengan latensi buatan 150 ms satu arah pada lawan yang bergerak menyamping.
+
 ## Catatan pertandingan
 
 Setiap ronde publik atau privat yang selesai dicatat satu baris di `data/matches.jsonl`
@@ -108,7 +124,7 @@ Setiap ronde publik atau privat yang selesai dicatat satu baris di `data/matches
 di tengah). Ronde latihan tidak dicatat. Ringkasan keseimbangan kelas:
 
 ```bash
-docker compose exec arkana node tools/stats.js     # di dockerlab
+docker compose exec arkana node tools/stats.js     # di server Docker
 npm run stats                                       # tanpa Docker
 ```
 

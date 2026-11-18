@@ -10,9 +10,10 @@ BT="$SDK/build-tools/35.0.0"; JAR="$SDK/platforms/android-34/android.jar"
 KS="${ARKANA_KEYSTORE:-$HOME/.arkana/arkana.jks}"; KS_PASS="${ARKANA_KEYSTORE_PASS:-arkana-game}"
 OUT=build; rm -rf "$OUT"; mkdir -p "$OUT/gen" "$OUT/cls" "$OUT/res-gen/values"
 
-# alamat server sebagai resource string (di-escape untuk XML)
-esc=$(printf '%s' "$SERVER_URL" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e "s/'/\\\\'/g")
-printf '<?xml version="1.0" encoding="utf-8"?>\n<resources><string name="server_url">%s</string></resources>\n' "$esc" > "$OUT/res-gen/values/server.xml"
+# Alamat server disamarkan (XOR + base64) agar tidak terbaca sebagai teks biasa di dalam APK.
+# Ini hanya penghalang ringan: siapa pun yang memantau lalu lintas jaringan HP tetap bisa melihat domainnya.
+enc=$(python3 -c 'import sys,base64;k=b"arkana-senja";d=sys.argv[1].encode();print(base64.b64encode(bytes(c^k[i%len(k)] for i,c in enumerate(d))).decode())' "$SERVER_URL")
+printf '<?xml version="1.0" encoding="utf-8"?>\n<resources><string name="server_enc">%s</string></resources>\n' "$enc" > "$OUT/res-gen/values/server.xml"
 
 "$BT/aapt2" compile --dir res -o "$OUT/res.zip"
 "$BT/aapt2" compile --dir "$OUT/res-gen" -o "$OUT/res-gen.zip"

@@ -58,7 +58,8 @@ export function stepPlayer(p, inp, cls, dt) {
     p.x += p.dx * DASH_SPEED * dt; p.z += p.dz * DASH_SPEED * dt;
     p.dashT = Math.max(0, p.dashT - dt);
   } else {
-    p.x += mx * cls.speed * dt; p.z += mz * cls.speed * dt;
+    const sp = cls.speed * (p.spd || 1); // p.spd: pengali kecepatan dari Rune Angin
+    p.x += mx * sp * dt; p.z += mz * sp * dt;
   }
   collide(p, PLAYER_R);
   return fired;

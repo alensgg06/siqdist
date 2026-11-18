@@ -143,3 +143,13 @@ body:not(.touch) #skillBtn{display:grid;right:24px;bottom:24px}
 .tbtns button.ghost{background:transparent;border:1px solid var(--line);color:#f4e9d8}
 @media (max-height:430px){#tutor{top:calc(44px + var(--st));padding:7px 12px 9px}#tutorText{font-size:13.5px}#rooms{margin-top:6px}.link{margin-top:2px}}
 @media (prefers-reduced-motion:reduce){.arc{animation-duration:1.2s}}
+
+/* ---------- Paket B ---------- */
+.modes{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.mode{padding:9px 6px;min-height:40px;font-size:13px;font-weight:600;background:transparent;color:#cdb9e6}
+.mode.on{background:rgba(242,198,109,.18);color:var(--gold)}
+#zoneTag{position:absolute;top:calc(42px + var(--st));left:50%;transform:translateX(-50%);padding:3px 12px;border-radius:999px;font-size:12.5px;font-weight:700;
+  background:rgba(15,8,24,.75);border:1px solid var(--c,#fff2d0);color:var(--c,#fff2d0);white-space:nowrap}
+#buffs{position:absolute;left:calc(12px + var(--sl));bottom:calc(58px + var(--sb));display:flex;gap:6px}
+.buff{display:flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:700;background:rgba(15,8,24,.75);border:1px solid var(--c);color:var(--c)}
+.buff i{width:9px;height:9px;border-radius:50%;background:var(--c);box-shadow:0 0 8px var(--c)}
