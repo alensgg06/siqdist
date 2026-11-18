@@ -214,3 +214,5 @@ body:not(.touch) #ultBtn{right:100px;bottom:24px}
 .rhead{position:sticky;top:0;z-index:2;background:#1c1029;padding-block:8px;margin-top:-8px}
 .rgrid section:last-child{grid-column:1/-1}
 @media (min-width:641px){#skins{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.modes:not(.maps):not(.diffs){grid-template-columns:repeat(5,minmax(0,1fr))}
+@media (max-width:700px){.modes:not(.maps):not(.diffs){grid-template-columns:repeat(3,minmax(0,1fr))}}

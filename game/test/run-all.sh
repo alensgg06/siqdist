@@ -24,5 +24,6 @@ run tim node test/teams.test.js
 run statistik node test/stats.test.js
 run peta node test/maps.test.js
 run c2 node test/c2.test.js
+run bertahan node test/pve.test.js
 for f in "$T"/*.log; do grep -H -i "error\|gagal" "$f" | head -3; done
 exit $fail

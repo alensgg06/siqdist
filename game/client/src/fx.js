@@ -1,6 +1,6 @@
 // Efek: partikel aditif, proyektil, cincin ledakan, kilatan cahaya.
 import * as THREE from 'three';
-import { CLASSES } from '../../shared/config.js';
+import { ALL_CLASSES as CLASSES } from '../../shared/config.js';
 import { blocked } from '../../shared/sim.js';
 
 const MAXP = 1800;

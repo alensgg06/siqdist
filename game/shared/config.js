@@ -191,3 +191,32 @@ SKINS.push(
   { id: 'fajar', name: 'Bintang Fajar', accent: 0xd9693a, glow: 0xffb070, req: { stat: 'chal', n: 3, text: 'Selesaikan 3 tantangan harian' } },
   { id: 'malam', name: 'Bayangan Malam', accent: 0x161a2e, glow: 0x7af0ff, req: { stat: 'chal', n: 10, text: 'Selesaikan 10 tantangan harian' } },
 );
+
+// ---- C3: Bertahan Bersama (gelombang monster) ----
+MODES.pve = 'Bertahan Bersama';
+export const MONSTERS = {
+  ghoul: { name: 'Hantu Rawa', hp: 30, speed: 6.2, color: 0x7dff8a, melee: { dmg: 6, cd: 1.1, r: 1.9 } }, // lebih lambat dari semua kelas: bisa dihindari
+  caster: { name: 'Dukun Bayang', hp: 38, speed: 5.4, color: 0xc86bff, range: 18,
+    fireCd: 1.5, dmg: 15, projSpeed: 30, projLife: 1.6, pellets: 1, spread: 0.04, splash: 0, skill: 'none', skillCd: 99 },
+  brute: { name: 'Golem Batu', hp: 260, speed: 4.0, color: 0xffa040, boss: true, // HP dikali (0,6 + 0,4 x jumlah pemain)
+    melee: { dmg: 16, cd: 1.6, r: 2.8 }, slam: { dmg: 18, r: 5.5, cd: 7 } },
+};
+export const ALL_CLASSES = { ...CLASSES, ...MONSTERS };
+export const PVE = {
+  breakTime: 6,            // jeda antar gelombang
+  cap: 22,                 // monster hidup maksimal sekaligus
+  bossEvery: 5,
+  winWave: 10,             // bertahan sampai gelombang 10 dihitung menang
+  diffMul: { easy: 0.7, normal: 1, hard: 1.45 },
+};
+// isi gelombang n untuk h pemain manusia
+export function wavePlan(n, h) {
+  const total = Math.round((2 + 1.5 * n) * (0.65 + 0.35 * Math.max(1, h)));
+  const boss = n % PVE.bossEvery === 0;
+  const casters = n >= 2 ? Math.round(total * 0.3) : 0;
+  const list = [];
+  if (boss) for (let i = 0; i < Math.max(1, Math.floor(n / PVE.bossEvery)); i++) list.push('brute');
+  for (let i = 0; i < (boss ? Math.round(total * 0.4) : total) - (boss ? 0 : casters); i++) list.push('ghoul');
+  for (let i = 0; i < (boss ? Math.round(casters * 0.5) : casters); i++) list.splice(Math.floor(Math.random() * (list.length + 1)), 0, 'caster');
+  return { list, hpMul: 1 + 0.12 * (n - 1) };
+}

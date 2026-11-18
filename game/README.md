@@ -113,6 +113,30 @@ versi lama bila ditandatangani kunci yang sama.
 - **Rune** muncul di empat titik peta dan kembali 25 detik setelah diambil:
   Rune Amarah (merah) damage +50% selama 10 detik, Rune Angin (biru) kecepatan +35% selama 10 detik.
 
+## Bertahan Bersama
+
+Mode kerja sama (room privat): semua teman melawan gelombang monster yang makin kuat.
+
+| Monster | Sifat |
+|---|---|
+| Hantu Rawa | cepat mendekat, menyerang dari dekat; lebih lambat dari semua kelas sehingga bisa dihindari |
+| Dukun Bayang | menjaga jarak dan menembakkan bola gelap (sejak gelombang 2) |
+| Golem Batu | bos tiap 5 gelombang: pukulan berat dan hentakan tanah; HP menyesuaikan jumlah pemain |
+
+Pemain yang tumbang bangkit saat gelombang selesai; semua pemain pulih penuh di antara gelombang.
+Permainan berakhir bila semua tumbang bersamaan. Bertahan melewati gelombang 10 dihitung menang.
+Tingkat bot (Mudah/Normal/Sulit) mengatur kekuatan monster.
+
+## Selama ronde
+
+- **Buronan**: pemimpin kill (minimal 3, unggul 2) bermahkota dan tampil di peta mini;
+  menumbangkannya memberi +200 XP.
+- **Kejadian** tiap 90 detik: Gerhana (gelap, bot hanya melihat dekat), Hujan Rune, Cawan Emas.
+- **Jurus pamungkas** terisi dari damage dan kill: Hujan Panah, Meteor, Benteng Rune
+  (tombol emas di HP, tombol Q di desktop).
+- **Tantangan harian**: 3 tantangan yang sama untuk semua pemain, berganti tiap hari (WIB);
+  menyelesaikannya membuka jubah Bintang Fajar dan Bayangan Malam.
+
 ## Peta
 
 - **Reruntuhan Senja**: reruntuhan batu di bawah langit senja, altar kristal di tengah.
@@ -189,8 +213,14 @@ test/     uji integrasi jaringan tanpa grafis
 ## Uji
 
 ```bash
+npm test          # menyalakan server uji sendiri dan menjalankan semua uji
+```
+
+Atau satu per satu:
+
+```bash
 PORT=8099 node server/server.js &
-WS_URL=ws://localhost:8099/ws npm test
+WS_URL=ws://localhost:8099/ws node test/net.test.js
 # uji akhir ronde:
 PORT=8098 KILL_LIMIT=1 END_TIME=2 node server/server.js &
 WS_URL=ws://localhost:8098/ws EXPECT_END=1 npm test

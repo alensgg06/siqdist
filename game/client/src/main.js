@@ -3,11 +3,11 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { DT, CLASSES, CLASS_KEYS, ARENA, MAPS, XP_LV, MAX_LEVEL, NOVA_R, KILL_LIMIT, KOTH_R, RUNE_INFO, SPD_BUFF, INTERP, TEAMS, TEAM_MODES, SKINS, skinUnlocked, ULT, ULT_MAX, EVENTS } from '../../shared/config.js';
+import { DT, CLASSES, CLASS_KEYS, ARENA, MAPS, XP_LV, MAX_LEVEL, NOVA_R, KILL_LIMIT, KOTH_R, RUNE_INFO, SPD_BUFF, INTERP, TEAMS, TEAM_MODES, SKINS, skinUnlocked, ULT, ULT_MAX, EVENTS, MONSTERS, ALL_CLASSES } from '../../shared/config.js';
 import { stepPlayer, blocked, los, angDiff, setMap } from '../../shared/sim.js';
 import { buildWorld, buildExtras } from './world.js';
 import { buildHarbor } from './harbor.js';
-import { Avatar } from './chars.js';
+import { Avatar, Monster } from './chars.js';
 import { Fx } from './fx.js';
 import { input, setupInput, isTouch } from './input.js';
 import { initAudio, sfx, setMuted, setMusic, step } from './audio.js';
@@ -170,10 +170,10 @@ function start(mode, code) {
 $('play').addEventListener('click', () => {
   if (!store.get('tutorDone', '')) { G.tut = newTutorial(); start('practice'); } else start('public');
 });
-for (const b of document.querySelectorAll('.mode')) {
+for (const b of document.querySelectorAll('.mode[data-gm]')) {
   const set = () => {
     G.createGm = b.dataset.gm; store.set('gm', G.createGm);
-    for (const o of document.querySelectorAll('.mode')) { o.classList.toggle('on', o === b); o.setAttribute('aria-checked', o === b); }
+    for (const o of document.querySelectorAll('.mode[data-gm]')) { o.classList.toggle('on', o === b); o.setAttribute('aria-checked', o === b); }
   };
   b.addEventListener('click', set);
   if (b.dataset.gm === G.createGm) set();
@@ -289,8 +289,9 @@ function onMessage(m) {
     $('zoneTag').classList.toggle('hidden', G.gm !== 'koth');
     const pill = $('roomPill');
     pill.classList.toggle('hidden', !G.code && !G.practice);
-    pill.textContent = G.code ? `${{ koth: 'Altar', tdm: 'Tim', coop: 'Lawan Bot' }[G.gm] || 'Room'} ${G.code} ⤴` : 'Latihan';
-    if (G.team >= 0) setTimeout(() => toast(`Kamu di regu ${TEAMS[G.team].name}`), 1900);
+    pill.textContent = G.code ? `${{ koth: 'Altar', tdm: 'Tim', coop: 'Lawan Bot', pve: 'Bertahan' }[G.gm] || 'Room'} ${G.code} ⤴` : 'Latihan';
+    if (G.gm === 'pve') G.team = 0;
+    if (G.team >= 0 && G.gm !== 'pve') setTimeout(() => toast(`Kamu di regu ${TEAMS[G.team].name}`), 1900);
     if (G.practice && G.tut) { G.tut.show(); } else { G.tut = null; $('tutor').classList.add('hidden'); }
     if (!G.practice || !G.tut) toast(G.code ? `Room ${G.code}: ketuk kode untuk membagikan` : G.practice ? 'Arena latihan' : 'Pertarungan dimulai');
   } else if (m.t === 'e') {
@@ -377,7 +378,7 @@ function getPlayer(id) {
   if (p) return p;
   const r = G.roster.get(id);
   if (!r) return null;
-  const av = new Avatar(r.cls, r.name, id === G.myId, world.glowTex, r.team >= 0 ? TEAMS[r.team].color : null, r.skin);
+  const av = MONSTERS[r.cls] ? new Monster(r.cls, world.glowTex) : new Avatar(r.cls, r.name, id === G.myId, world.glowTex, r.team >= 0 && G.gm !== 'pve' ? TEAMS[r.team].color : null, r.skin);
   scene.add(av.group);
   p = { id, av, buf: [], x: 0, z: 0, yaw: 0, flags: 0, hp: 1, maxHp: 1, lvl: 1, cls: r.cls, seen: 0 };
   G.players.set(id, p);
@@ -409,7 +410,7 @@ function onSnapshot(m) {
   // rekonsiliasi prediksi
   const me = m.me, pr = G.pred;
   G.me.xp = me[6]; G.me.respawnT = me[7]; G.me.dmgT = me[8] || 0; G.me.spdT = me[9] || 0; G.me.ult = me[10] || 0;
-  G.ev = m.ev || null;
+  G.ev = m.ev || null; G.wv = m.wv || null;
   pr.spd = G.me.spdT > 0 ? SPD_BUFF : 1;
   while (G.pending.length && G.pending[0].s <= m.a) G.pending.shift();
   pr.x = me[0]; pr.z = me[1]; pr.dashT = me[2]; pr.dx = me[3]; pr.dz = me[4]; pr.skillCd = me[5];
@@ -464,7 +465,7 @@ function onEvent(e) {
       while (feed.children.length > 4) feed.firstChild.remove();
       setTimeout(() => div.remove(), 5000);
       const v = G.players.get(e[2]);
-      if (v) fx.burst(v.x, 1.4, v.z, CLASSES[v.cls].color, 40, 8, 1.4, 0.9);
+      if (v) fx.burst(v.x, 1.4, v.z, ALL_CLASSES[v.cls].color, 40, 8, 1.4, 0.9);
       if (e[1] === G.myId && e[2] !== G.myId) { sfx('kill'); toast('Lawan tumbang'); buzz([40, 40, 70]); if (G.tut) { G.tut.kills++; G.tut.check(); } }
       if (e[2] === G.myId) {
         sfx('death'); buzz(250); input.fire = false;
@@ -486,7 +487,7 @@ function onEvent(e) {
       if (e[1] === G.myId) { sfx('level'); toast(`Naik ke Level ${e[2]}`); }
       break;
     }
-    case 'n': fx.nova(e[2], e[3], CLASSES.mage.color, NOVA_R); sfx('nova', vol(e[2], e[3])); G.shake = Math.max(G.shake, 0.6 * vol(e[2], e[3])); break;
+    case 'n': fx.nova(e[2], e[3], G.roster.get(e[1])?.cls === 'brute' ? MONSTERS.brute.color : CLASSES.mage.color, G.roster.get(e[1])?.cls === 'brute' ? MONSTERS.brute.slam.r : NOVA_R); sfx('nova', vol(e[2], e[3])); G.shake = Math.max(G.shake, 0.6 * vol(e[2], e[3])); break;
     case 'E': {
       const ev = EVENTS[e[1]]; if (!ev) break;
       toast(`${ev.name}: ${ev.desc}`); sfx('level'); buzz([60, 40, 60]);
@@ -517,6 +518,9 @@ function onEvent(e) {
       G.shake = Math.max(G.shake, 0.9 * vol(e[1], e[2]));
       break;
     }
+    case 'W': toast(e[2] ? `Gelombang ${e[1]}: Golem Batu datang!` : `Gelombang ${e[1]}`); sfx('level'); buzz([50, 50, 50]); break;
+    case 'w': toast(`Gelombang ${e[1]} selesai! Rekan bangkit, HP pulih`); sfx('level'); $('death').classList.add('hidden'); break;
+    case 'a': { const p = G.players.get(e[1]); if (p) { p.av.fireKick(); sfx('hit', vol(p.x, p.z) * 0.6); } break; }
     case 'u': {
       const r = M.runes[e[1]]; if (!r) break;
       const info = RUNE_INFO[r.type];
@@ -554,7 +558,7 @@ function updateDmg(dt) {
   }
 }
 
-function sortedRoster() { return [...G.roster.values()].sort((a, b) => (G.team >= 0 ? a.team - b.team : 0) || (G.gm === 'koth' ? b.pts - a.pts : 0) || b.kills - a.kills || a.deaths - b.deaths); }
+function sortedRoster() { return [...G.roster.values()].filter((r) => !MONSTERS[r.cls]).sort((a, b) => (G.team >= 0 ? a.team - b.team : 0) || (G.gm === 'koth' ? b.pts - a.pts : 0) || b.kills - a.kills || a.deaths - b.deaths); }
 const ally = (id) => G.team >= 0 && G.roster.get(id)?.team === G.team;
 function updateScoreHud() {
   const list = sortedRoster(), me = G.roster.get(G.myId);
@@ -577,6 +581,7 @@ function showScore(end) {
   fillScore();
   const top = sortedRoster()[0];
   const ts = G.teamScore, win = ts[0] === ts[1] ? -1 : ts[0] > ts[1] ? 0 : 1;
+  if (end && G.gm === 'pve') { $('scoreTitle').textContent = `Bertahan sampai gelombang ${G.wv?.[0] || 0}`; $('score').classList.remove('hidden'); return; }
   $('scoreTitle').textContent = !end ? (G.team >= 0 ? `${TEAMS[0].name} ${ts[0]} · ${ts[1]} ${TEAMS[1].name}` : 'Papan Skor')
     : G.team >= 0 ? (win < 0 ? 'Seri' : win === G.team ? `Regu ${TEAMS[win].name} Menang!` : `Regu ${TEAMS[win].name} Menang`)
     : top?.id === G.myId ? 'Kamu Menang!' : `${top?.name || ''} Menang`;
@@ -748,7 +753,7 @@ function frame(now) {
         }
       }
       p.av.update(dt, p.x, p.z, p.yaw, p.flags, t);
-      if (p.flags & 8 && Math.random() < 0.7) fx.particle(p.x, 1 + Math.random(), p.z, 0, 0.5, 0, CLASSES[p.cls].color, 1.3, 0.3, 0);
+      if (p.flags & 8 && Math.random() < 0.7) fx.particle(p.x, 1 + Math.random(), p.z, 0, 0.5, 0, ALL_CLASSES[p.cls].color, 1.3, 0.3, 0);
       if (!(p.flags & 1)) {
         if (p.flags & 16 && Math.random() < 0.5) fx.particle(p.x + (Math.random() - 0.5), 0.4 + Math.random() * 2, p.z + (Math.random() - 0.5), 0, 1.6, 0, RUNE_INFO.dmg.color, 0.9, 0.5, 0);
         if (p.flags & 32 && Math.random() < 0.5) fx.particle(p.x + (Math.random() - 0.5), 0.2 + Math.random() * 0.6, p.z + (Math.random() - 0.5), 0, 0.3, 0, RUNE_INFO.spd.color, 1.1, 0.4, 0);
@@ -798,8 +803,9 @@ function frame(now) {
       if (evNow) $('eventTag').textContent = `${EVENTS[evNow[0]].name} · ${evNow[1]} dtk`;
       $('skillName').style.opacity = cd > 0 ? 0.25 : 1;
       const tm = Math.max(0, G.tm);
-      $('timer').textContent = `${Math.floor(tm / 60)}:${String(tm % 60).padStart(2, '0')}`;
-      if (me.flags & 1) $('deathT').textContent = `Bangkit dalam ${Math.ceil(me.respawnT)}…`;
+      $('timer').textContent = G.gm === 'pve' && !G.ended ? (G.wv?.[1] === 0 ? `Mulai ${tm}` : `G${G.wv?.[0] || 1}`) : `${Math.floor(tm / 60)}:${String(tm % 60).padStart(2, '0')}`;
+      if (G.gm === 'pve' && G.wv) $('myScore').textContent = G.wv[1] === 0 ? `Gelombang ${G.wv[0] + 1} segera` : `Gelombang ${G.wv[0]} · ${G.wv[2]} monster`;
+      if (me.flags & 1) $('deathT').textContent = G.gm === 'pve' ? 'Bangkit saat gelombang ini selesai. Rekanmu masih bertahan…' : `Bangkit dalam ${Math.ceil(me.respawnT)}…`;
       if (G.ended) $('scoreNext').textContent = `Ronde berikutnya dalam ${tm} detik`;
       else $('scoreNext').textContent = '';
       if (!G.ended) { if (input.showScore && $('score').classList.contains('hidden')) showScore(false); else if (!input.showScore && !isTouch && G.tabOpen) $('score').classList.add('hidden'); G.tabOpen = input.showScore; }

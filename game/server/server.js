@@ -12,9 +12,10 @@ import {
   TEAM_MODES, TEAM_LIMIT, TEAMS, MAPS, MAP_KEYS, SKINS, skinUnlocked,
   DMG_SCALE, REGEN_DELAY, REGEN_RATE, BOT_DIFF, MERCY_DEATHS,
   BOUNTY_MIN, BOUNTY_LEAD, BOUNTY_XP, EVENT_FIRST, EVENT_EVERY, EVENTS, ULT_MAX,
+  MONSTERS, PVE, wavePlan, ARENA,
   MODES, KOTH_R, KOTH_LIMIT, RUNES, RUNE_TIME, RUNE_RESPAWN, DMG_BUFF, SPD_BUFF, LAG_MAX,
 } from '../shared/config.js';
-import { stepPlayer, blocked, los, angDiff, setMap } from '../shared/sim.js';
+import { stepPlayer, blocked, los, angDiff, setMap, collide } from '../shared/sim.js';
 import { Stats } from './stats.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'client');
@@ -29,6 +30,7 @@ const KOTH_WIN = Number(process.env.KOTH_LIMIT) || KOTH_LIMIT;
 const LAGCOMP = process.env.LAGCOMP !== '0';
 const MATCH_T = Number(process.env.MATCH_TIME) || MATCH_TIME;
 const EV_FIRST = Number(process.env.EVENT_FIRST) || EVENT_FIRST;
+const PVE_BREAK = Number(process.env.PVE_BREAK) || PVE.breakTime;
 const TEAM_WIN = Number(process.env.TEAM_LIMIT) || TEAM_LIMIT;
 const HIST = 16; // riwayat posisi per pemain, dalam tick (~0,53 dtk)
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // tanpa I dan O agar tidak tertukar dengan 1 dan 0
@@ -49,6 +51,15 @@ function newCode() {
 }
 const BOT_NAMES = ['Raka', 'Sura', 'Wira', 'Laksmi', 'Bayu', 'Kirana', 'Jaya', 'Dewangga', 'Sekar', 'Gendis'];
 const r2 = (v) => Math.round(v * 100) / 100;
+
+// Grid untuk pencarian jalan monster: sel 1x1 langkah, true = bisa dilewati (dengan jari-jari tubuh)
+const GN = Math.floor(ARENA), GW = 2 * GN + 1;
+const PASS = {};
+for (const id of MAP_KEYS) {
+  setMap(id); PASS[id] = new Uint8Array(GW * GW);
+  for (let i = -GN; i <= GN; i++) for (let j = -GN; j <= GN; j++) PASS[id][(i + GN) * GW + (j + GN)] = blocked(i, j, PLAYER_R + 0.15) ? 0 : 1;
+}
+const NB = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
 
 // titik jelajah bot per peta
 const WAYPOINTS = {};
@@ -73,7 +84,9 @@ class Room {
     this.tickN = 0;
     this.runeT = this.M.runes.map(() => 0);
     this.holder = 0;                         // Rebut Altar: id penguasa, 0 kosong, -1 diperebutkan
-    this.teams = TEAM_MODES.includes(this.mode); // Tim: dua regu seimbang; Lawan Bot: semua manusia satu regu
+    this.teams = TEAM_MODES.includes(this.mode) || this.mode === 'pve'; // Tim: dua regu seimbang; Lawan Bot/Bertahan: manusia satu regu
+    this.pve = this.mode === 'pve';
+    this.wave = 0; this.wavePhase = 0; this.waveT = PVE_BREAK; this.spawnQ = []; this.spawnT = 0; this.hpMul = 1; this.flow = null; this.flowT = 0;
     this.teamScore = [0, 0];
     this.bounty = 0;                         // id buronan saat ini
     this.evT = EV_FIRST; this.ev = null;     // kejadian di tengah ronde
@@ -95,7 +108,7 @@ class Room {
   humans() { let n = 0; for (const p of this.players.values()) if (!p.bot) n++; return n; }
 
   addPlayer(name, clsKey, ws) {
-    const cls = CLASSES[clsKey];
+    const cls = CLASSES[clsKey] || MONSTERS[clsKey];
     const team = this.teams ? this.pickTeam(!ws) : -1;
     const p = {
       id: this.nextId++, name, clsKey, cls, bot: !ws, ws, team,
@@ -124,7 +137,7 @@ class Room {
   }
 
   pickTeam(bot) {
-    if (this.mode === 'coop') return bot ? 1 : 0;
+    if (this.mode === 'coop' || this.pve) return bot ? 1 : 0;
     const n = [0, 0], h = [0, 0];
     for (const p of this.players.values()) { n[p.team]++; if (!p.bot) h[p.team]++; }
     if (!bot && h[0] !== h[1]) return h[0] < h[1] ? 0 : 1; // manusia dibagi rata dulu
@@ -134,6 +147,7 @@ class Room {
   foes(a, b) { return a !== b && (!this.teams || a.team !== b.team); }
 
   balanceBots() {
+    if (this.pve) return; // monster diatur oleh gelombang, bukan pengisi bot
     if (this.teams) return this.balanceTeams();
     const humans = this.humans();
     let bots = this.players.size - humans;
@@ -229,16 +243,17 @@ class Room {
     if (t.shieldT > 0) amount *= 0.3;
     amount = Math.max(1, Math.round(amount));
     t.hp -= amount; t.hurtT = 0;
-    if (att && att !== t) { att.dmg += amount; att.ult = Math.min(ULT_MAX, att.ult + amount * 0.5); }
+    if (att && att !== t) { att.dmg += amount; if (!att.monster) att.ult = Math.min(ULT_MAX, att.ult + amount * 0.5); }
     this.events.push(['d', t.id, att ? att.id : 0, amount, r2(t.x), r2(t.z)]);
     if (att && att !== t) this.addXp(att, amount * 0.5);
     if (t.hp <= 0) {
       t.hp = 0; t.dead = true; t.respawnT = RESPAWN_TIME; t.deaths++; t.dashT = 0; t.streak++;
+      if (this.pve) { t.respawnT = t.monster ? 1.2 : 1e9; this.rosterDirty = true; } // Bertahan: manusia bangkit saat gelombang selesai
       if (att && att !== t) {
         att.kills++; this.addXp(att, 100); att.streak = 0; att.ult = Math.min(ULT_MAX, att.ult + 15);
         this.track(att, { type: 'kill', cls: att.clsKey });
         if (t.id === this.bounty) { this.addXp(att, BOUNTY_XP); this.events.push(['b', att.id, t.id]); this.track(att, { type: 'bounty' }); this.bounty = 0; }
-        if (this.teams) { this.teamScore[att.team]++; if (this.teamScore[att.team] >= TEAM_WIN) this.endMatch(); }
+        if (this.teams && !this.pve) { this.teamScore[att.team]++; if (this.teamScore[att.team] >= TEAM_WIN) this.endMatch(); } // Bertahan: tanpa batas kill
       }
       this.events.push(['k', att ? att.id : 0, t.id]);
       this.updateBounty();
@@ -255,7 +270,7 @@ class Room {
 
   // Buronan: pemimpin kill (minimal BOUNTY_MIN) yang unggul BOUNTY_LEAD atas pemain kedua
   updateBounty() {
-    if (this.practice) return;
+    if (this.practice || this.pve) return;
     const top = [...this.players.values()].sort((a, b) => b.kills - a.kills);
     const lead = top[0], second = top[1];
     const id = lead && lead.kills >= BOUNTY_MIN && lead.kills - (second?.kills || 0) >= BOUNTY_LEAD ? lead.id : 0;
@@ -295,7 +310,7 @@ class Room {
 
   // Jurus pamungkas
   ultimate(p) {
-    if (p.ult < ULT_MAX || p.dead) return;
+    if (p.ult < ULT_MAX || p.dead || p.monster) return;
     p.ult = 0;
     this.track(p, { type: 'ult' });
     this.events.push(['U', p.id, p.clsKey]);
@@ -339,6 +354,125 @@ class Room {
     }
   }
 
+  // ---------- Bertahan Bersama ----------
+  pveTick() {
+    const humans = [...this.players.values()].filter((p) => !p.bot);
+    if (!humans.length) return;
+    if (this.wavePhase === 0) {
+      this.waveT -= DT;
+      if (this.waveT > 0) return;
+      this.wave++; this.wavePhase = 1;
+      const plan = wavePlan(this.wave, humans.length);
+      this.spawnQ = plan.list; this.hpMul = plan.hpMul * PVE.diffMul[this.diff]; this.spawnT = 0;
+      this.events.push(['W', this.wave, plan.list.includes('brute') ? 1 : 0]);
+      return;
+    }
+    this.spawnT -= DT;
+    const alive = [...this.players.values()].filter((p) => p.monster && !p.dead).length;
+    if (this.spawnQ.length && this.spawnT <= 0 && alive < PVE.cap) { this.spawnT = 1.1; this.addMonster(this.spawnQ.shift()); }
+    if (!this.spawnQ.length && alive === 0 && ![...this.players.values()].some((p) => p.monster)) {
+      // gelombang selesai: semua bangkit dan pulih penuh
+      this.wavePhase = 0; this.waveT = PVE_BREAK;
+      for (const h of humans) { if (h.dead) this.spawn(h); h.hp = h.maxHp; }
+      this.events.push(['w', this.wave]);
+      for (const h of humans) this.track(h, { type: 'round' });
+    }
+    if (humans.every((h) => h.dead)) this.endMatch(); // semua tumbang: permainan berakhir
+  }
+
+  addMonster(key) {
+    const m = MONSTERS[key];
+    const p = this.addPlayer(m.name, key, null);
+    p.monster = true; p.team = 1;
+    const humans = Math.max(1, this.humans());
+    p.maxHp = Math.round(m.hp * this.hpMul * (m.boss ? 0.6 + 0.4 * humans : 1)); p.hp = p.maxHp;
+    p.meleeCd = 0.5; p.slamCd = 3;
+    // muncul di titik spawn terjauh dari para pemain
+    const hs = [...this.players.values()].filter((q) => !q.bot && !q.dead);
+    const spots = this.M.spawns.map(([x, z]) => ({ x, z, d: Math.min(...hs.map((h) => Math.hypot(h.x - x, h.z - z)), 999) })).sort((a, b) => b.d - a.d);
+    const s = spots[Math.floor(Math.random() * Math.min(4, spots.length))];
+    p.x = s.x + (Math.random() - 0.5) * 2; p.z = s.z + (Math.random() - 0.5) * 2; p.protT = 0;
+    this.events.push(['r', p.id, r2(p.x), r2(p.z)]);
+    this.rosterDirty = true;
+  }
+
+  // Medan jarak ke pemain hidup terdekat (BFS dari semua pemain sekaligus), dipakai monster untuk berjalan memutari penghalang
+  updateFlow() {
+    const pass = PASS[this.map], dist = this.flow ||= new Int16Array(GW * GW);
+    dist.fill(-1);
+    const q = [];
+    for (const h of this.players.values()) {
+      if (h.bot || h.dead) continue;
+      const i = Math.round(h.x) + GN, j = Math.round(h.z) + GN, k = i * GW + j;
+      if (i >= 0 && i < GW && j >= 0 && j < GW && dist[k] < 0) { dist[k] = 0; q.push(k); }
+    }
+    for (let h = 0; h < q.length; h++) {
+      const k = q[h], i = (k / GW) | 0, j = k % GW;
+      for (const [di, dj] of NB) {
+        const ni = i + di, nj = j + dj;
+        if (ni < 0 || nj < 0 || ni >= GW || nj >= GW) continue;
+        const nk = ni * GW + nj;
+        if (dist[nk] >= 0 || !pass[nk]) continue;
+        if (di && dj && (!pass[i * GW + nj] || !pass[ni * GW + j])) continue; // jangan memotong sudut
+        dist[nk] = dist[k] + 1; q.push(nk);
+      }
+    }
+  }
+
+  monsterThink(p) {
+    const m = MONSTERS[p.clsKey], mul = PVE.diffMul[this.diff];
+    this.flowT -= DT / Math.max(1, this.players.size);
+    if (this.flowT <= 0 || !this.flow) { this.flowT = 0.4; this.updateFlow(); }
+    let t = null, td = 1e9;
+    for (const q of this.players.values()) { if (q.bot || q.dead) continue; const d = Math.hypot(q.x - p.x, q.z - p.z); if (d < td) { td = d; t = q; } }
+    if (!t) return { s: 0, mx: 0, mz: 0, y: p.yaw, f: 0, k: 0 };
+    const dx = t.x - p.x, dz = t.z - p.z, see = td < 30 && los(p.x, p.z, t.x, t.z);
+    let mx = 0, mz = 0, f = 0;
+    const face = Math.atan2(dx, dz);
+    const goDirect = () => { mx = dx / (td || 1); mz = dz / (td || 1); };
+    const goFlow = () => {
+      const i = Math.round(p.x) + GN, j = Math.round(p.z) + GN;
+      let best = this.flow[i * GW + j], bi = 0, bj = 0;
+      if (best < 0) best = 1e9;
+      for (const [di, dj] of NB) {
+        const ni = i + di, nj = j + dj; if (ni < 0 || nj < 0 || ni >= GW || nj >= GW) continue;
+        const v = this.flow[ni * GW + nj];
+        if (v >= 0 && v < best) { best = v; bi = di; bj = dj; }
+      }
+      if (bi || bj) { const tx = i + bi - GN - p.x, tz = j + bj - GN - p.z, l = Math.hypot(tx, tz) || 1; mx = tx / l; mz = tz / l; } else goDirect();
+    };
+    if (p.clsKey === 'caster' && see && td < m.range) {
+      // dukun menjaga jarak dan menembak
+      p.ai.strT -= DT;
+      if (p.ai.strT <= 0) { p.ai.strT = 1 + Math.random(); p.ai.strDir = -p.ai.strDir || 1; }
+      const adv = td < 9 ? -0.6 : 0;
+      mx = (-dz / td) * p.ai.strDir * 0.6 + (dx / td) * adv; mz = (dx / td) * p.ai.strDir * 0.6 + (dz / td) * adv;
+      p.ai.seenT += DT;
+      if (p.ai.seenT > 0.6) f = 1;
+    } else {
+      p.ai.seenT = 0;
+      if (see && td < 5) goDirect(); else goFlow();
+    }
+    // serangan jarak dekat
+    if (m.melee) {
+      p.meleeCd -= DT;
+      if (td < m.melee.r + PLAYER_R * 0.5 && p.meleeCd <= 0) {
+        p.meleeCd = m.melee.cd; this.events.push(['a', p.id]);
+        this.damage(t, m.melee.dmg * mul, p);
+      }
+    }
+    if (m.slam) {
+      p.slamCd -= DT;
+      if (p.slamCd <= 0 && td < m.slam.r) {
+        p.slamCd = m.slam.cd; this.events.push(['n', p.id, r2(p.x), r2(p.z)]);
+        for (const q of this.players.values()) { if (q.bot || q.dead) continue; const d = Math.hypot(q.x - p.x, q.z - p.z); if (d < m.slam.r) this.damage(q, m.slam.dmg * mul * (1 - 0.4 * d / m.slam.r), p); }
+      }
+    }
+    const want = face + (p.clsKey === 'caster' ? (Math.random() - 0.5) * 0.12 : 0);
+    const turn = 6 * DT, yaw = p.yaw + Math.max(-turn, Math.min(turn, angDiff(want, p.yaw)));
+    return { s: 0, mx, mz, y: yaw, f, k: 0 };
+  }
+
   playerRecord(p) {
     return {
       name: p.name, cls: p.clsKey, bot: p.bot, team: p.team, kills: p.kills, deaths: p.deaths, dmg: p.dmg, lvl: p.lvl, pts: p.pts,
@@ -354,8 +488,8 @@ class Room {
       const all = [...this.players.values()];
       const best = all.slice().sort((a, b) => (this.mode === 'koth' ? b.pts - a.pts : 0) || b.kills - a.kills)[0];
       const winTeam = this.teams && this.teamScore[0] !== this.teamScore[1] ? (this.teamScore[0] > this.teamScore[1] ? 0 : 1) : -1;
-      const won = (p) => (this.teams ? p.team === winTeam : p === best && (p.kills > 0 || p.pts > 0));
-      for (const p of all) if (!p.bot && p.pid) {
+      const won = (p) => (this.pve ? this.wave > PVE.winWave : this.teams ? p.team === winTeam : p === best && (p.kills > 0 || p.pts > 0));
+      for (const p of all) if (!p.bot && p.pid) { // (monster adalah bot)
         stats.add(p.pid, p.name, { kills: p.kills, deaths: p.deaths, dmg: p.dmg, cls: p.clsKey, finished: true, win: won(p) });
         this.track(p, { type: 'round' });
         if (won(p)) this.track(p, { type: 'win' });
@@ -383,6 +517,7 @@ class Room {
     }
     this.orbT = this.M.orbs.map(() => 0); this.runeT = this.M.runes.map(() => 0);
     this.holder = 0; this.teamScore = [0, 0]; this.bounty = 0; this.evT = EV_FIRST; this.ev = null; this.meteors = [];
+    if (this.pve) { for (const p of [...this.players.values()]) if (p.monster) this.players.delete(p.id); this.wave = 0; this.wavePhase = 0; this.waveT = PVE_BREAK; this.spawnQ = []; }
     for (const p of this.players.values()) {
       p.kills = 0; p.deaths = 0; p.xp = 0; p.lvl = 1; p.dmg = 0; p.pts = 0; p.ptsAcc = 0; p.ult = 0;
       p.pingSum = p.pingN = p.fpsSum = p.fpsN = 0; p.joinedAt = Date.now();
@@ -399,11 +534,28 @@ class Room {
       const a = p.yaw + (Math.random() - 0.5) * 2 * c.spread;
       const pr = {
         id: this.nextPid++, o: p.id, tm: p.team, x: ox, z: oz, dx: Math.sin(a), dz: Math.cos(a),
-        sp: c.projSpeed, life: c.projLife, dmg: c.dmg * DMG_SCALE * levelDmg(p.lvl) * (p.dmgT > 0 ? DMG_BUFF : 1), splash: c.splash,
+        sp: c.projSpeed, life: c.projLife, dmg: c.dmg * DMG_SCALE * levelDmg(p.lvl) * (p.dmgT > 0 ? DMG_BUFF : 1) * (p.monster ? PVE.diffMul[this.diff] : 1), splash: c.splash,
       };
       this.events.push(['s', pr.id, p.id, r2(ox), r2(oz), Math.round(a * 1000) / 1000]);
+      if (this.pointBlank(pr, p)) continue;
       if (!this.rewindFly(pr, p)) this.projs.push(pr);
     }
+  }
+
+  // Lawan yang menempel di badan penembak: peluru muncul 0,9 langkah di depan dan bisa lahir di belakangnya.
+  // Periksa ruas dari tubuh penembak ke titik muncul peluru lebih dulu.
+  pointBlank(pr, p) {
+    const hitR = PLAYER_R + 0.35, ax = p.x, az = p.z, bx = pr.x, bz = pr.z, lx = bx - ax, lz = bz - az, l2 = lx * lx + lz * lz || 1;
+    let best = null, bt = 2;
+    for (const t of this.players.values()) {
+      if (t.dead || t.id === p.id || (pr.tm >= 0 && t.team === pr.tm)) continue;
+      const u = Math.max(0, Math.min(1, ((t.x - ax) * lx + (t.z - az) * lz) / l2));
+      const dx = ax + lx * u - t.x, dz = az + lz * u - t.z;
+      if (dx * dx + dz * dz < hitR * hitR && u < bt) { bt = u; best = t; }
+    }
+    if (!best) return false;
+    pr.x = best.x; pr.z = best.z; this.explode(pr, best.id);
+    return true;
   }
 
   // Posisi pemain t pada tick pecahan tf, diinterpolasi dari riwayat. Di luar riwayat: posisi terdekat yang tersimpan.
@@ -580,12 +732,12 @@ class Room {
         if (p.dead) {
           if (p.queue.length) { p.ack = p.queue[p.queue.length - 1].s; p.queue.length = 0; }
           p.respawnT -= DT;
-          if (p.respawnT <= 0) this.spawn(p);
+          if (p.respawnT <= 0) { if (p.monster) this.removePlayer(p); else this.spawn(p); }
           continue;
         }
         p.spd = p.spdT > 0 ? SPD_BUFF : 1;
         let inp;
-        if (p.bot) { inp = this.botThink(p); this.applyInput(p, inp); } else {
+        if (p.monster) { inp = this.monsterThink(p); this.applyInput(p, inp); } else if (p.bot) { inp = this.botThink(p); this.applyInput(p, inp); } else {
           inp = p.queue.shift();
           if (inp) {
             this.applyInput(p, inp);
@@ -607,6 +759,20 @@ class Room {
         if (inp.f && p.fireCd <= 0 && !p.dead) this.shoot(p);
       }
       this.tickN++;
+      if (this.pve) {
+        // monster saling menjaga jarak (dan tidak menembus pemain) sehingga mengepung, bukan menumpuk
+        const ms = [...this.players.values()].filter((q) => !q.dead), MIN = 1.25;
+        for (let i = 0; i < ms.length; i++) for (let j = i + 1; j < ms.length; j++) {
+          const a = ms[i], b = ms[j];
+          if (!a.monster && !b.monster) continue;
+          const dx = b.x - a.x, dz = b.z - a.z, d = Math.hypot(dx, dz);
+          if (d >= MIN || d < 1e-4) continue;
+          const push = (MIN - d) / 2, nx = dx / d, nz = dz / d;
+          if (a.monster) { a.x -= nx * push * (b.monster ? 1 : 2); a.z -= nz * push * (b.monster ? 1 : 2); }
+          if (b.monster) { b.x += nx * push * (a.monster ? 1 : 2); b.z += nz * push * (a.monster ? 1 : 2); }
+        }
+        for (const q of ms) if (q.monster) collide(q, PLAYER_R);
+      }
       for (const p of this.players.values()) {
         if (p.dead) continue;
         p.hist.push([this.tickN, p.x, p.z]);
@@ -654,8 +820,10 @@ class Room {
           }
         }
       }
-      this.timeLeft -= DT;
-      if (this.timeLeft <= 0) this.endMatch();
+      if (this.pve) this.pveTick(); else {
+        this.timeLeft -= DT;
+        if (this.timeLeft <= 0) this.endMatch();
+      }
     }
     this.broadcast();
   }
@@ -682,7 +850,8 @@ class Room {
     for (let i = 0; i < this.M.runes.length; i++) if (this.runeT[i] <= 0) runeMask |= 1 << i;
     const base = {
       t: 's', st: this.state === 'end' ? 1 : 0,
-      tm: Math.ceil(this.state === 'end' ? this.endT : this.timeLeft),
+      tm: Math.ceil(this.state === 'end' ? this.endT : this.pve ? Math.max(0, this.waveT) : this.timeLeft),
+      wv: this.pve ? [this.wave, this.wavePhase, this.spawnQ.length + [...this.players.values()].filter((q) => q.monster && !q.dead).length] : undefined,
       p: list, e: this.events, o: orbMask, u: runeMask, z: this.holder, k: this.tickN, mp: this.map,
       ev: this.ev ? [this.ev.id, Math.ceil(this.ev.t), this.ev.gx ?? null, this.ev.gz ?? null, this.ev.taken ? 1 : 0] : null,
     };

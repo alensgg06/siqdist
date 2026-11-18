@@ -179,3 +179,83 @@ export class Avatar {
     if (this.tagTex) { this.tagTex.dispose(); this.tag.material.dispose(); }
   }
 }
+
+// ---- Monster Bertahan Bersama: bentuk sendiri, antarmuka sama dengan Avatar ----
+export class Monster {
+  constructor(kind, glowTex) {
+    this.kind = kind; this.phase = 0; this.kick = 0; this.deadT = 0; this.lastX = 0; this.lastZ = 0; this.speed = 0;
+    const g = this.group = new THREE.Group(), body = this.body = new THREE.Group(); g.add(body);
+    const m = (geo, mat, x = 0, y = 0, z = 0) => { const o = new THREE.Mesh(geo, mat); o.position.set(x, y, z); o.castShadow = true; body.add(o); return o; };
+    const eye = (color) => new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 4 });
+    if (kind === 'ghoul') {
+      // makhluk rawa bungkuk, lengan panjang, mata hijau
+      const skin = new THREE.MeshStandardMaterial({ color: 0x3d5240, roughness: 0.9 });
+      const torso = m(new THREE.SphereGeometry(0.5, 12, 10), skin, 0, 1.2, -0.1); torso.scale.set(1, 1.2, 0.9); torso.rotation.x = 0.6;
+      m(new THREE.SphereGeometry(0.3, 12, 10), skin, 0, 1.75, 0.35);
+      for (const s of [-1, 1]) m(new THREE.SphereGeometry(0.06, 8, 6), eye(0x8bff6a), s * 0.12, 1.8, 0.62);
+      this.armL = new THREE.Group(); this.armL.position.set(0.45, 1.45, 0.1); this.armR = new THREE.Group(); this.armR.position.set(-0.45, 1.45, 0.1);
+      for (const a of [this.armL, this.armR]) { const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.09, 0.95, 3, 8), skin); arm.position.y = -0.55; arm.castShadow = true; a.add(arm); a.rotation.x = -0.5; body.add(a); }
+      this.legL = new THREE.Group(); this.legL.position.set(0.22, 0.75, 0); this.legR = new THREE.Group(); this.legR.position.set(-0.22, 0.75, 0);
+      for (const l of [this.legL, this.legR]) { const leg = new THREE.Mesh(new THREE.CapsuleGeometry(0.12, 0.5, 3, 8), skin); leg.position.y = -0.38; leg.castShadow = true; l.add(leg); body.add(l); }
+      this.tipY = 1.4;
+    } else if (kind === 'caster') {
+      // dukun berjubah melayang dengan bola ungu
+      const robe = new THREE.MeshStandardMaterial({ color: 0x241a33, roughness: 0.8, side: THREE.DoubleSide });
+      m(new THREE.ConeGeometry(0.6, 1.8, 12, 1, true), robe, 0, 1.15, 0);
+      const hood = m(new THREE.SphereGeometry(0.34, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.6), robe, 0, 2.05, 0); hood.rotation.x = -0.2;
+      for (const s of [-1, 1]) m(new THREE.SphereGeometry(0.05, 8, 6), eye(0xd87bff), s * 0.1, 1.98, 0.27);
+      this.orb = m(new THREE.SphereGeometry(0.2, 12, 10), eye(0xc86bff), 0.45, 1.5, 0.45);
+      const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0xc86bff, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.8 }));
+      s.scale.setScalar(1.6); this.orb.add(s);
+      this.tipY = 1.5;
+    } else {
+      // golem batu raksasa dengan retakan menyala
+      const rock = new THREE.MeshStandardMaterial({ color: 0x6b5d52, roughness: 1, flatShading: true });
+      const lava = eye(0xff8a2a);
+      const torso = m(new THREE.DodecahedronGeometry(1.1, 0), rock, 0, 2.3, 0); torso.scale.set(1.2, 1, 0.9);
+      m(new THREE.BoxGeometry(0.9, 0.12, 0.1), lava, 0, 2.3, 0.85);
+      m(new THREE.DodecahedronGeometry(0.5, 0), rock, 0, 3.45, 0.15);
+      for (const s of [-1, 1]) m(new THREE.SphereGeometry(0.09, 8, 6), lava, s * 0.2, 3.5, 0.55);
+      this.armL = new THREE.Group(); this.armL.position.set(1.35, 2.8, 0); this.armR = new THREE.Group(); this.armR.position.set(-1.35, 2.8, 0);
+      for (const a of [this.armL, this.armR]) { const fist = new THREE.Mesh(new THREE.DodecahedronGeometry(0.55, 0), rock); fist.position.y = -1.2; fist.castShadow = true; a.add(fist); const up = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.1, 0.5), rock); up.position.y = -0.5; up.castShadow = true; a.add(up); body.add(a); }
+      this.legL = new THREE.Group(); this.legL.position.set(0.6, 1.3, 0); this.legR = new THREE.Group(); this.legR.position.set(-0.6, 1.3, 0);
+      for (const l of [this.legL, this.legR]) { const leg = new THREE.Mesh(new THREE.BoxGeometry(0.65, 1.3, 0.65), rock); leg.position.y = -0.65; leg.castShadow = true; l.add(leg); body.add(l); }
+      this.tipY = 2.4;
+    }
+    this.tip = new THREE.Object3D(); this.tip.position.set(0, this.tipY, 0.6); body.add(this.tip);
+    const blob = new THREE.Mesh(new THREE.CircleGeometry(kind === 'brute' ? 1.6 : 0.75, 16), new THREE.MeshBasicMaterial({ color: 0, transparent: true, opacity: 0.35, depthWrite: false }));
+    blob.rotation.x = -Math.PI / 2; blob.position.y = 0.03; g.add(blob); this.blob = blob;
+    // batang HP di atas kepala
+    const cv = this.tagCanvas = document.createElement('canvas'); cv.width = 128; cv.height = 16;
+    this.tagTex = new THREE.CanvasTexture(cv);
+    this.tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.tagTex, transparent: true, depthWrite: false, fog: false }));
+    this.tag.scale.set(kind === 'brute' ? 3.2 : 1.6, kind === 'brute' ? 0.4 : 0.2, 1); this.tag.position.y = kind === 'brute' ? 4.3 : 2.5; this.tag.renderOrder = 5; g.add(this.tag);
+    this.shown = -1;
+  }
+  setInfo(hp, maxHp) {
+    const f = Math.max(0, hp / maxHp); if (Math.abs(f - this.shown) < 0.01) return; this.shown = f;
+    const g = this.tagCanvas.getContext('2d'); g.clearRect(0, 0, 128, 16);
+    g.fillStyle = 'rgba(0,0,0,.7)'; g.fillRect(0, 0, 128, 16); g.fillStyle = this.kind === 'brute' ? '#ff8a2a' : '#ff5d5d'; g.fillRect(2, 2, 124 * f, 12);
+    this.tagTex.needsUpdate = true;
+  }
+  fireKick() { this.kick = 1; }
+  tipWorld(out) { return this.tip.getWorldPosition(out); }
+  update(dt, x, z, yaw, flags, time) {
+    const dead = flags & 1, g = this.group;
+    const sp = dt > 0 ? Math.min(30, Math.hypot(x - this.lastX, z - this.lastZ) / dt) : 0;
+    this.speed += (sp - this.speed) * Math.min(1, dt * 10); this.lastX = x; this.lastZ = z;
+    g.position.set(x, 0, z); g.rotation.y = yaw;
+    const k = Math.min(1, this.speed / 5); this.phase += this.speed * dt * (this.kind === 'brute' ? 0.7 : 1.4);
+    const sw = Math.sin(this.phase) * 0.7 * k;
+    if (this.legL) { this.legL.rotation.x = sw; this.legR.rotation.x = -sw; }
+    this.kick = Math.max(0, this.kick - dt * 4);
+    if (this.armL) { this.armL.rotation.x = (this.kind === 'ghoul' ? -0.5 : 0) - sw * 0.6 - this.kick * 1.6; this.armR.rotation.x = (this.kind === 'ghoul' ? -0.5 : 0) + sw * 0.6 - this.kick * 1.6; }
+    if (this.kind === 'caster') { this.body.position.y = 0.25 + Math.sin(time * 2.5) * 0.12; this.orb.position.y = 1.5 + Math.sin(time * 4) * 0.08; }
+    else this.body.position.y = Math.abs(Math.sin(this.phase)) * 0.06 * k;
+    this.deadT = dead ? Math.min(1, this.deadT + dt * 2) : 0;
+    this.body.rotation.x = -this.deadT * 1.4; this.body.position.y -= this.deadT * 0.3;
+    g.scale.setScalar(1 - this.deadT * 0.4);
+    this.tag.visible = !dead; this.blob.visible = !dead;
+  }
+  dispose(scene) { scene.remove(this.group); this.tagTex.dispose(); this.tag.material.dispose(); }
+}
