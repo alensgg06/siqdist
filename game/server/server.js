@@ -587,6 +587,14 @@ const server = http.createServer((req, res) => {
   if (!file.startsWith(ROOT)) { res.writeHead(403); res.end(); return; }
   fs.readFile(file, (err, data) => {
     if (err) { res.writeHead(404); res.end('Tidak ditemukan'); return; }
+    if (path.basename(file) === 'index.html') {
+      // nomor versi pada skrip dan gaya: cache browser, WebView, atau Cloudflare tidak bisa memakai berkas lama
+      let v = '0';
+      try { v = Math.floor(fs.statSync(path.join(ROOT, 'dist', 'bundle.js')).mtimeMs).toString(36); } catch { /* belum dibangun */ }
+      data = data.toString().replace('dist/bundle.js', `dist/bundle.js?v=${v}`).replace('style.css', `style.css?v=${v}`);
+      res.writeHead(200, { 'content-type': MIME['.html'], 'cache-control': 'no-store' });
+      return res.end(data);
+    }
     res.writeHead(200, { 'content-type': MIME[path.extname(file)] || 'application/octet-stream', 'cache-control': 'no-cache' });
     res.end(data);
   });

@@ -181,3 +181,8 @@ body:not(.touch) #skillBtn{display:grid;right:24px;bottom:24px}
 .skin.on{border-color:var(--gold);background:rgba(242,198,109,.12)}
 .skin.locked{opacity:.55}
 @media (max-width:640px){.rgrid{grid-template-columns:minmax(0,1fr)}}
+
+/* menu dan panel harus bisa digulir dengan jari walau halaman memblokir gestur (touch-action:none) */
+#menu,#ranks{touch-action:pan-y;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.skinmsg{min-height:18px;margin-top:8px;font-size:13px;color:var(--gold)}
+.skin.locked small::before{content:"Terkunci · "}

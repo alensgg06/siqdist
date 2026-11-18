@@ -13,6 +13,7 @@ import { input, setupInput, isTouch } from './input.js';
 import { initAudio, sfx, setMuted, setMusic, step } from './audio.js';
 
 const $ = (id) => document.getElementById(id);
+addEventListener('error', (e) => { const m = document.getElementById('menuMsg'); if (m) m.textContent = `Galat: ${e.message}`; });
 const store = { get: (k, d) => { try { return localStorage.getItem('arkana.' + k) ?? d; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem('arkana.' + k, v); } catch { /* mode privat */ } } };
 if (isTouch) document.body.classList.add('touch');
 
@@ -180,11 +181,11 @@ $('create').addEventListener('click', () => start('create'));
 const hex = (n) => '#' + n.toString(16).padStart(6, '0');
 async function openRanks() {
   $('ranks').classList.remove('hidden');
-  $('myStats').textContent = 'Memuat…';
+  $('myStats').textContent = 'Memuat…'; $('skinMsg').textContent = '';
   let top = null, mine = null;
   try {
     [top, mine] = await Promise.all([fetch('/api/top').then((r) => r.json()), fetch(`/api/stats?pid=${G.pid}`).then((r) => r.json())]);
-  } catch { $('myStats').textContent = 'Peringkat belum bisa dimuat. Periksa koneksi ke server.'; }
+  } catch { $('myStats').textContent = 'Peringkat belum bisa dimuat dari server, jadi semua jubah tampil terkunci. Coba tutup dan buka lagi.'; }
   const st = mine?.stats;
   if (top) {
     $('myStats').textContent = st ? `Kamu: ${st.kills} kill, ${st.deaths} gugur, ${st.wins} menang dari ${st.matches} ronde.` : 'Belum ada statistik: selesaikan satu ronde di arena untuk mulai tercatat.';
@@ -200,13 +201,19 @@ async function openRanks() {
   }).join('');
   for (const b of $('skins').querySelectorAll('.skin')) {
     b.addEventListener('click', () => {
-      if (b.classList.contains('locked')) return;
+      const k = SKINS.find((x) => x.id === b.dataset.id);
+      if (b.classList.contains('locked')) {
+        // beri tahu kenapa tidak bisa dipilih, jangan diam saja
+        $('skinMsg').textContent = `${k.name} masih terkunci: ${k.req.text.toLowerCase()} (sekarang ${Math.min(st?.[k.req.stat] || 0, k.req.n)} dari ${k.req.n}).`;
+        return;
+      }
+      $('skinMsg').textContent = `${k.name} dipakai mulai ronde berikutnya.`;
       G.skin = b.dataset.id; store.set('skin', G.skin);
       for (const o of $('skins').querySelectorAll('.skin')) { o.classList.toggle('on', o === b); if (!o.classList.contains('locked')) o.querySelector('small').textContent = o === b ? 'Dipakai' : 'Terbuka'; }
     });
   }
 }
-$('ranksBtn').addEventListener('click', openRanks);
+$('ranksBtn').addEventListener('click', () => openRanks().catch((err) => { $('myStats').textContent = 'Galat: ' + err.message; }));
 $('ranksClose').addEventListener('click', () => $('ranks').classList.add('hidden'));
 $('joinBtn').addEventListener('click', () => {
   const c = cleanCode($('code').value);
