@@ -187,3 +187,30 @@ body:not(.touch) #skillBtn{display:grid;right:24px;bottom:24px}
 .skinmsg{min-height:18px;margin-top:8px;font-size:13px;color:var(--gold)}
 .skin.locked small::before{content:"Terkunci · "}
 .modes.diffs{grid-template-columns:repeat(3,minmax(0,1fr))}
+
+/* ---------- C2 ---------- */
+#ultBtn{position:absolute;display:grid;place-items:center;right:calc(30px + var(--sr));bottom:calc(124px + var(--sb));width:64px;height:64px;border-radius:50%;
+  background:radial-gradient(circle at 35% 30%,rgba(255,210,110,.55),rgba(120,60,10,.75));border:0;color:#fff4d6;font-size:10px;font-weight:800;opacity:.55;transition:opacity .2s,transform .1s}
+#ultBtn svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}
+#ultBtn .track{fill:none;stroke:rgba(0,0,0,.45);stroke-width:5}
+#ultBtn .ring{fill:none;stroke:#ffd56b;stroke-width:5;stroke-linecap:round;stroke-dasharray:176;stroke-dashoffset:176}
+#ultBtn span{position:relative}
+#ultBtn.ready{opacity:1;animation:ultpulse 1.2s ease-in-out infinite}
+@keyframes ultpulse{0%,100%{box-shadow:0 0 0 0 rgba(255,213,107,.6)}50%{box-shadow:0 0 22px 6px rgba(255,213,107,.55)}}
+body:not(.touch) #ultBtn{right:100px;bottom:24px}
+#eventTag{position:absolute;top:calc(68px + var(--st));left:50%;transform:translateX(-50%);padding:4px 14px;border-radius:999px;font-size:13px;font-weight:700;
+  background:rgba(15,8,24,.8);border:1px solid #ffd56b;color:#ffd56b;white-space:nowrap}
+#daily{list-style:none;margin:0 0 10px;padding:0;display:grid;gap:6px}
+#daily li{position:relative;padding:7px 10px;border-radius:8px;background:rgba(255,255,255,.05);font-size:13px;overflow:hidden}
+#daily li i{position:absolute;left:0;top:0;bottom:0;background:rgba(242,198,109,.18);z-index:0}
+#daily li span{position:relative;display:flex;justify-content:space-between;gap:8px}
+#daily li.done{color:var(--gold)}
+.rgrid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.rgrid section:nth-child(2){grid-row:span 1}
+@media (prefers-reduced-motion:reduce){#ultBtn.ready{animation:none}}
+/* Penengahan yang aman: bila kartu lebih tinggi dari layar, bagian atasnya tidak terpotong dan semuanya bisa digulir */
+#menu,#ranks{align-items:flex-start}
+#menu>.card,#ranks>.card{margin-block:auto}
+.rhead{position:sticky;top:0;z-index:2;background:#1c1029;padding-block:8px;margin-top:-8px}
+.rgrid section:last-child{grid-column:1/-1}
+@media (min-width:641px){#skins{grid-template-columns:repeat(4,minmax(0,1fr))}}

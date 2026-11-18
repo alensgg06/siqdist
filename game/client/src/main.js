@@ -3,7 +3,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { DT, CLASSES, CLASS_KEYS, ARENA, MAPS, XP_LV, MAX_LEVEL, NOVA_R, KILL_LIMIT, KOTH_R, RUNE_INFO, SPD_BUFF, INTERP, TEAMS, TEAM_MODES, SKINS, skinUnlocked } from '../../shared/config.js';
+import { DT, CLASSES, CLASS_KEYS, ARENA, MAPS, XP_LV, MAX_LEVEL, NOVA_R, KILL_LIMIT, KOTH_R, RUNE_INFO, SPD_BUFF, INTERP, TEAMS, TEAM_MODES, SKINS, skinUnlocked, ULT, ULT_MAX, EVENTS } from '../../shared/config.js';
 import { stepPlayer, blocked, los, angDiff, setMap } from '../../shared/sim.js';
 import { buildWorld, buildExtras } from './world.js';
 import { buildHarbor } from './harbor.js';
@@ -35,6 +35,19 @@ const fx = new Fx(scene, world.glowTex);
 const extrasBy = { ruins: buildExtras(world.root, world.glowTex, MAPS.ruins.runes, RUNE_INFO, KOTH_R) };
 let extras = extrasBy.ruins;
 let M = MAPS.ruins;
+// Cawan Emas untuk kejadian 'golden'
+const cup = new THREE.Group();
+{
+  const gm = new THREE.MeshStandardMaterial({ color: 0xffcf4a, emissive: 0xffa21a, emissiveIntensity: 2.2, metalness: 0.85, roughness: 0.25 });
+  cup.add(new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.2, 0.55, 16, 1, true), gm));
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.5, 8), gm); stem.position.y = -0.5; cup.add(stem);
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.32, 0.08, 16), gm); base.position.y = -0.75; cup.add(base);
+  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: world.glowTex, color: 0xffd56b, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+  halo.scale.setScalar(4.5); cup.add(halo);
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 30, 16, 1, true), new THREE.MeshBasicMaterial({ color: 0xffd56b, transparent: true, opacity: 0.12, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+  beam.position.y = 15; cup.add(beam);
+  cup.visible = false; scene.add(cup);
+}
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
 const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.42, 0.5, 0.9);
@@ -193,6 +206,8 @@ async function openRanks() {
     [top, mine] = await Promise.all([fetch('/api/top').then((r) => r.json()), fetch(`/api/stats?pid=${G.pid}`).then((r) => r.json())]);
   } catch { $('myStats').textContent = 'Peringkat belum bisa dimuat dari server, jadi semua jubah tampil terkunci. Coba tutup dan buka lagi.'; }
   const st = mine?.stats;
+  $('daily').innerHTML = (mine?.daily || []).map((d) => `<li class="${d.done ? 'done' : ''}"><i style="width:${Math.round((d.p / d.n) * 100)}%"></i><span><b></b><em>${d.done ? 'Selesai' : `${d.p}/${d.n}`}</em></span></li>`).join('') || '<li><span>Tantangan belum bisa dimuat.</span></li>';
+  (mine?.daily || []).forEach((d, i) => { $('daily').children[i].querySelector('b').textContent = d.text; });
   if (top) {
     $('myStats').textContent = st ? `Kamu: ${st.kills} kill, ${st.deaths} gugur, ${st.wins} menang dari ${st.matches} ronde.` : 'Belum ada statistik: selesaikan satu ronde di arena untuk mulai tercatat.';
     $('weekTitle').textContent = `Minggu ini (${top.week.replace('-W', ', minggu ')})`;
@@ -386,14 +401,15 @@ function onSnapshot(m) {
     } else {
       p.buf.push({ t: now, x: e[1], z: e[2], yaw: e[3] });
       if (p.buf.length > 30) p.buf.shift();
-      p.av.setInfo(e[4], e[5], e[6]);
+      p.av.setInfo(e[4], e[5], e[6], !!(e[7] & 64));
     }
   }
   for (const [id, p] of G.players) if (p.seen !== G.snapN) { p.av.dispose(scene); G.players.delete(id); }
 
   // rekonsiliasi prediksi
   const me = m.me, pr = G.pred;
-  G.me.xp = me[6]; G.me.respawnT = me[7]; G.me.dmgT = me[8] || 0; G.me.spdT = me[9] || 0;
+  G.me.xp = me[6]; G.me.respawnT = me[7]; G.me.dmgT = me[8] || 0; G.me.spdT = me[9] || 0; G.me.ult = me[10] || 0;
+  G.ev = m.ev || null;
   pr.spd = G.me.spdT > 0 ? SPD_BUFF : 1;
   while (G.pending.length && G.pending[0].s <= m.a) G.pending.shift();
   pr.x = me[0]; pr.z = me[1]; pr.dashT = me[2]; pr.dx = me[3]; pr.dz = me[4]; pr.skillCd = me[5];
@@ -471,6 +487,36 @@ function onEvent(e) {
       break;
     }
     case 'n': fx.nova(e[2], e[3], CLASSES.mage.color, NOVA_R); sfx('nova', vol(e[2], e[3])); G.shake = Math.max(G.shake, 0.6 * vol(e[2], e[3])); break;
+    case 'E': {
+      const ev = EVENTS[e[1]]; if (!ev) break;
+      toast(`${ev.name}: ${ev.desc}`); sfx('level'); buzz([60, 40, 60]);
+      break;
+    }
+    case 'g': {
+      const gx = G.ev?.[2] ?? 0, gz = G.ev?.[3] ?? 0;
+      fx.pillar(gx, gz, 0xffd56b); fx.burst(gx, 1.4, gz, 0xffd56b, 50, 7, 1.4, 0.9, -2);
+      toast(e[1] === G.myId ? 'Cawan Emas: HP penuh dan kedua rune!' : `${nameOf(e[1])} mengambil Cawan Emas`);
+      if (e[1] === G.myId) { sfx('level'); buzz([30, 30, 80]); }
+      break;
+    }
+    case 'B': toast(e[1] === G.myId ? 'Kamu jadi BURONAN: semua mengincarmu!' : `${nameOf(e[1])} jadi buronan: tumbangkan untuk hadiah XP`); if (e[1] === G.myId) buzz([80, 60, 80]); break;
+    case 'b': toast(e[1] === G.myId ? 'Buronan tumbang: hadiah XP besar!' : `${nameOf(e[1])} menumbangkan buronan ${nameOf(e[2])}`); if (e[1] === G.myId) sfx('level'); break;
+    case 'C': if (e[1] === G.myId) { setTimeout(() => toast(`Tantangan selesai: ${e[2]}`), 900); sfx('level'); buzz([40, 40, 40, 40, 90]); } break;
+    case 'U': {
+      const p = G.players.get(e[1]); if (!p) break;
+      const col = CLASSES[e[2]]?.color ?? 0xffd56b;
+      fx.pillar(p.x, p.z, 0xffd56b); fx.burst(p.x, 1.6, p.z, col, 40, 9, 1.5, 0.7, 0);
+      if (e[2] === 'guardian') { fx.nova(p.x, p.z, col, 6); }
+      if (e[1] === G.myId) { toast(ULT[e[2]].name + '!'); buzz(120); G.shake = Math.max(G.shake, 0.5); }
+      sfx(e[2] === 'mage' ? 'nova' : e[2] === 'guardian' ? 'shield' : 'ranger', vol(p.x, p.z));
+      break;
+    }
+    case 'M': fx.ring(e[1], e[2], 0xff3b2e, 6, 0.8); fx.ring(e[1], e[2], 0xffb070, 4, 0.8); fx.flash(e[1], 6, e[2], 0xff5a2e, 30); break;
+    case 'm': {
+      fx.nova(e[1], e[2], 0xff6a2e, 6); fx.burst(e[1], 1, e[2], 0xffd27a, 60, 12, 2, 0.8, 8); sfx('boom', vol(e[1], e[2]));
+      G.shake = Math.max(G.shake, 0.9 * vol(e[1], e[2]));
+      break;
+    }
     case 'u': {
       const r = M.runes[e[1]]; if (!r) break;
       const info = RUNE_INFO[r.type];
@@ -577,7 +623,8 @@ function drawMinimap() {
   if (G.gm === 'koth') { mg.strokeStyle = G.holder === G.myId ? '#f2c66d' : G.holder === -1 ? '#b76bff' : G.holder ? '#ff4d5e' : 'rgba(255,242,208,.7)'; mg.lineWidth = 2; mg.beginPath(); mg.arc(c, c, KOTH_R * s, 0, 7); mg.stroke(); }
   for (const p of G.players.values()) {
     if (p.id === G.myId || (p.flags & 1)) continue;
-    const isAlly = ally(p.id);
+    const isAlly = ally(p.id), isBounty = !!(p.flags & 64);
+    if (isBounty) { mg.fillStyle = '#ffd56b'; mg.font = 'bold 12px sans-serif'; mg.textAlign = 'center'; mg.textBaseline = 'middle'; mg.fillText('★', c - p.x * s, c - p.z * s); continue; }
     if (!isAlly && Math.hypot(p.x - G.rx, p.z - G.rz) > 32) continue;
     mg.fillStyle = isAlly ? '#' + TEAMS[G.team].color.toString(16).padStart(6, '0') : '#ff5a4a'; mg.beginPath(); mg.arc(c - p.x * s, c - p.z * s, 3, 0, 7); mg.fill();
   }
@@ -587,7 +634,7 @@ function drawMinimap() {
 }
 
 // ---------- loop ----------
-setupInput({ canvas, touchLayer: $('touchLayer'), stick: $('stick'), knob: $('knob'), fireBtn: $('fireBtn'), skillBtn: $('skillBtn') });
+setupInput({ canvas, touchLayer: $('touchLayer'), stick: $('stick'), knob: $('knob'), fireBtn: $('fireBtn'), skillBtn: $('skillBtn'), ultBtn: $('ultBtn') });
 applyQuality(quality);
 
 function findTarget() {
@@ -619,9 +666,9 @@ function viewTick() {
 function fixedTick() {
   const dead = G.me.flags & 1, paused = !pauseEl.classList.contains('hidden');
   const fwdX = Math.sin(input.yaw), fwdZ = Math.cos(input.yaw);
-  let jx = input.jx, jy = input.jy, fire = input.fire, k = input.skillQueued ? 1 : 0;
-  input.skillQueued = false;
-  if (paused || G.ended) { jx = jy = 0; fire = false; k = 0; }
+  let jx = input.jx, jy = input.jy, fire = input.fire, k = input.skillQueued ? 1 : 0, u = input.ultQueued && G.me.ult >= ULT_MAX ? 1 : 0;
+  input.skillQueued = false; input.ultQueued = false;
+  if (paused || G.ended) { jx = jy = 0; fire = false; k = 0; u = 0; }
   const tgt = (G.autoFire || G.aimAssist) && !dead && !G.ended ? findTarget() : null;
   G.lockId = tgt ? tgt.p.id : 0;
   if (tgt) {
@@ -632,7 +679,7 @@ function fixedTick() {
   const q = (v) => Math.round(v * 1000) / 1000;
   const inp = {
     t: 'in', s: ++G.seq, mx: q(fwdX * jy - fwdZ * jx), mz: q(fwdZ * jy + fwdX * jx),
-    y: q(input.yaw), f: fire && !dead ? 1 : 0, k, vt: viewTick(),
+    y: q(input.yaw), f: fire && !dead ? 1 : 0, k, u: dead ? 0 : u, vt: viewTick(),
   };
   if (G.ws?.readyState === 1) G.ws.send(JSON.stringify(inp));
   if (dead || G.ended) return;
@@ -742,6 +789,13 @@ function frame(now) {
       const cd = G.pred.skillCd;
       $('skillCd').style.height = (cd / G.cls.skillCd) * 100 + '%';
       $('skillNum').textContent = cd > 0 ? Math.ceil(cd) : '';
+      const uf = Math.min(1, (G.me.ult || 0) / ULT_MAX);
+      $('ultRing').style.strokeDashoffset = String(176 * (1 - uf));
+      $('ultBtn').classList.toggle('ready', uf >= 1);
+      $('ultName').textContent = uf >= 1 ? ULT[G.clsKey].name : `${Math.floor(uf * 100)}%`;
+      const evNow = G.ev;
+      $('eventTag').classList.toggle('hidden', !evNow);
+      if (evNow) $('eventTag').textContent = `${EVENTS[evNow[0]].name} · ${evNow[1]} dtk`;
       $('skillName').style.opacity = cd > 0 ? 0.25 : 1;
       const tm = Math.max(0, G.tm);
       $('timer').textContent = `${Math.floor(tm / 60)}:${String(tm % 60).padStart(2, '0')}`;
@@ -763,6 +817,14 @@ function frame(now) {
     updateDmg(dt);
     world.update(t, { x: G.rx, z: G.rz }, G.orbMask);
     extras.update(t, G.runeMask, G.gm, G.holder, G.myId);
+    // Gerhana: arena meredup dan kabut menebal; dikembalikan perlahan setelah selesai
+    const ecl = G.ev?.[0] === 'eclipse' ? 1 : 0;
+    G.eclipse = (G.eclipse || 0) + (ecl - (G.eclipse || 0)) * Math.min(1, dt * 1.5);
+    renderer.toneMappingExposure = 1.15 - 0.7 * G.eclipse;
+    if (world.fog) { world.fogBase ??= world.fog.density; world.fog.density = world.fogBase * (1 + 3.5 * G.eclipse); }
+    const gold = G.ev?.[0] === 'golden' && !G.ev[4];
+    cup.visible = gold;
+    if (gold) { cup.position.set(G.ev[2], 1.1 + Math.sin(t * 2.5) * 0.15, G.ev[3]); cup.rotation.y = t * 1.2; }
   } else {
     // menu: kamera mengitari altar
     const a = t * 0.08;

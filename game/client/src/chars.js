@@ -93,15 +93,15 @@ export class Avatar {
     }
   }
 
-  setInfo(hp, maxHp, lvl) {
+  setInfo(hp, maxHp, lvl, bounty = false) {
     const s = this.shown;
-    if (!this.tag || (s.hp === hp && s.maxHp === maxHp && s.lvl === lvl)) return;
-    s.hp = hp; s.maxHp = maxHp; s.lvl = lvl;
+    if (!this.tag || (s.hp === hp && s.maxHp === maxHp && s.lvl === lvl && s.b === bounty)) return;
+    s.hp = hp; s.maxHp = maxHp; s.lvl = lvl; s.b = bounty;
     const g = this.tagCanvas.getContext('2d');
     g.clearRect(0, 0, 256, 64);
     g.font = '600 24px Georgia, serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.lineWidth = 4; g.strokeStyle = 'rgba(0,0,0,0.85)';
-    const label = `${this.name}  Lv${lvl}`;
+    const label = `${bounty ? '★ ' : ''}${this.name}  Lv${lvl}`;
     g.strokeText(label, 128, 20); g.fillStyle = this.tagColor; g.fillText(label, 128, 20);
     g.fillStyle = 'rgba(0,0,0,0.7)'; g.fillRect(38, 40, 180, 14);
     const f = Math.max(0, hp / maxHp);
@@ -156,6 +156,17 @@ export class Avatar {
     if (this.ring) this.ring.visible = !dead;
     const shield = flags & 2, prot = flags & 4;
     this.bubble.visible = !!(shield || prot) && !dead;
+    // mahkota buronan
+    if (flags & 64 && !dead) {
+      if (!this.crown) {
+        this.crown = new THREE.Group();
+        const gold = new THREE.MeshStandardMaterial({ color: 0xffcf4a, emissive: 0xffa21a, emissiveIntensity: 1.6, metalness: 0.8, roughness: 0.3 });
+        this.crown.add(new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.36, 0.18, 10, 1, true), gold));
+        for (let i = 0; i < 5; i++) { const sp = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.24, 5), gold); const a = (i / 5) * Math.PI * 2; sp.position.set(Math.cos(a) * 0.32, 0.18, Math.sin(a) * 0.32); this.crown.add(sp); }
+        this.crown.position.y = 2.95; this.group.add(this.crown);
+      }
+      this.crown.visible = true; this.crown.rotation.y = time * 1.5; this.crown.position.y = 2.95 + Math.sin(time * 3) * 0.06;
+    } else if (this.crown) this.crown.visible = false;
     if (this.bubble.visible) {
       this.bubble.material.opacity = shield ? 0.2 + 0.08 * Math.sin(time * 9) : 0.1 + 0.08 * Math.sin(time * 18);
       this.bubble.rotation.y = time * 1.5;

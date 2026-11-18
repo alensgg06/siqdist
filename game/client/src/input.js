@@ -1,7 +1,7 @@
 // Masukan terpadu: sentuh (joystick kiri, geser kanan untuk membidik, tombol) + keyboard/mouse.
 export const input = {
   jx: 0, jy: 0,          // kanan, maju (-1..1)
-  yaw: 0, fire: false, skillQueued: false,
+  yaw: 0, fire: false, skillQueued: false, ultQueued: false,
   touch: false, sens: 1, enabled: false, showScore: false,
 };
 
@@ -18,6 +18,7 @@ export function setupInput(el) {
     if (!input.enabled || e.target.tagName === 'INPUT') return;
     keys[e.code] = true; kb();
     if (e.code === 'Space' || e.code === 'ShiftLeft' || e.code === 'KeyE') { input.skillQueued = true; e.preventDefault(); }
+    if (e.code === 'KeyQ' || e.code === 'KeyR') input.ultQueued = true;
     if (e.code === 'Tab') { input.showScore = true; e.preventDefault(); }
   });
   addEventListener('keyup', (e) => { keys[e.code] = false; kb(); if (e.code === 'Tab') input.showScore = false; });
@@ -99,9 +100,11 @@ export function setupInput(el) {
   }, { passive: false });
   el.skillBtn.addEventListener('touchstart', (e) => { e.preventDefault(); e.stopPropagation(); if (input.enabled) input.skillQueued = true; }, { passive: false });
   el.skillBtn.addEventListener('mousedown', (e) => { e.stopPropagation(); if (input.enabled) input.skillQueued = true; });
+  el.ultBtn.addEventListener('touchstart', (e) => { e.preventDefault(); e.stopPropagation(); if (input.enabled) input.ultQueued = true; }, { passive: false });
+  el.ultBtn.addEventListener('mousedown', (e) => { e.stopPropagation(); if (input.enabled) input.ultQueued = true; });
 
   input.reset = () => {
-    moveId = lookId = fireId = null; input.jx = input.jy = 0; input.fire = false; input.skillQueued = false;
+    moveId = lookId = fireId = null; input.jx = input.jy = 0; input.fire = false; input.skillQueued = false; input.ultQueued = false;
     stick.classList.remove('on'); knob.style.transform = ''; el.fireBtn.classList.remove('on');
   };
 }

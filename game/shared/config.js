@@ -157,3 +157,37 @@ export const BOT_DIFF = {
   hard: { name: 'Sulit', react: 0.2, err: 0.15, cd: 1, turn: 5, spread: 0, humanPenalty: 0 },
 };
 export const MERCY_DEATHS = 3;      // gugur berturut-turut tanpa kill sebelum bot melunak pada pemain itu
+
+// ---- C2: buronan, kejadian, jurus pamungkas, tantangan ----
+export const BOUNTY_MIN = 3;        // kill minimal untuk menjadi buronan
+export const BOUNTY_LEAD = 2;       // keunggulan minimal atas pemain kedua
+export const BOUNTY_XP = 200;
+export const EVENT_FIRST = 60, EVENT_EVERY = 90; // detik
+export const EVENTS = {
+  eclipse: { name: 'Gerhana', desc: 'Arena gelap, jarak pandang pendek', dur: 25 },
+  runerain: { name: 'Hujan Rune', desc: 'Semua rune muncul dan cepat kembali', dur: 20 },
+  golden: { name: 'Cawan Emas', desc: 'Ambil cawan: HP penuh dan kedua rune', dur: 30 },
+};
+export const ULT_MAX = 100;
+export const ULT = {
+  ranger: { name: 'Hujan Panah', desc: '11 panah menyebar sekaligus' },
+  mage: { name: 'Meteor', desc: 'Meteor jatuh di depan, ledakan besar' },
+  guardian: { name: 'Benteng Rune', desc: 'Perisai 5 dtk, pulih 50% HP, gelombang kejut' },
+};
+export const CHALLENGES = [
+  { id: 'kill10', text: '10 kill di arena', type: 'kill', n: 10 },
+  { id: 'kranger', text: '5 kill dengan Pemanah Arkana', type: 'kill', cls: 'ranger', n: 5 },
+  { id: 'kmage', text: '5 kill dengan Penyihir Bara', type: 'kill', cls: 'mage', n: 5 },
+  { id: 'kguard', text: '5 kill dengan Penjaga Rune', type: 'kill', cls: 'guardian', n: 5 },
+  { id: 'win1', text: 'Menangkan 1 ronde', type: 'win', n: 1 },
+  { id: 'koth1', text: 'Selesaikan 1 ronde Rebut Altar', type: 'round', mode: 'koth', n: 1 },
+  { id: 'team1', text: 'Selesaikan 1 ronde Tim atau Lawan Bot', type: 'round', mode: 'team', n: 1 },
+  { id: 'rune5', text: 'Ambil 5 rune', type: 'rune', n: 5 },
+  { id: 'ult3', text: 'Pakai jurus pamungkas 3 kali', type: 'ult', n: 3 },
+  { id: 'bounty1', text: 'Tumbangkan 1 buronan', type: 'bounty', n: 1 },
+  { id: 'orb4', text: 'Pakai 4 bola penyembuh', type: 'orb', n: 4 },
+];
+SKINS.push(
+  { id: 'fajar', name: 'Bintang Fajar', accent: 0xd9693a, glow: 0xffb070, req: { stat: 'chal', n: 3, text: 'Selesaikan 3 tantangan harian' } },
+  { id: 'malam', name: 'Bayangan Malam', accent: 0x161a2e, glow: 0x7af0ff, req: { stat: 'chal', n: 10, text: 'Selesaikan 10 tantangan harian' } },
+);

@@ -2,6 +2,7 @@
 // Identitas: id acak yang dibuat dan disimpan klien (tanpa akun). id tidak pernah dikirim ke pemain lain.
 import fs from 'node:fs';
 import path from 'node:path';
+import { CHALLENGES } from '../shared/config.js';
 
 export function isoWeek(d = new Date()) {
   const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
@@ -52,6 +53,40 @@ export class Stats {
       fs.renameSync(tmp, this.file); // tulis atomik: file lama tidak pernah setengah tertulis
     } catch (err) { console.error('gagal menyimpan statistik:', err.message); }
   }
+  // tantangan harian: 3 tantangan yang sama untuk semua pemain, dipilih dari tanggal (zona WIB)
+  static today() { return new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10); }
+  static daily(date = Stats.today()) {
+    let h = 0; for (const c of date) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+    const pool = CHALLENGES.slice(), out = [];
+    while (out.length < 3) { h = (h * 1103515245 + 12345) >>> 0; out.push(pool.splice(h % pool.length, 1)[0]); }
+    return out;
+  }
+  dayOf(s) {
+    const d = Stats.today();
+    if (!s.day || s.day.date !== d) s.day = { date: d, p: [0, 0, 0], done: [false, false, false] };
+    return s.day;
+  }
+  // catat kemajuan; mengembalikan teks tantangan yang baru saja selesai (bila ada)
+  progress(pid, name, ev) {
+    const s = this.touch(pid, name);
+    if (!s) return [];
+    const day = this.dayOf(s), done = [];
+    Stats.daily(day.date).forEach((c, i) => {
+      if (day.done[i] || c.type !== ev.type) return;
+      if (c.cls && c.cls !== ev.cls) return;
+      if (c.mode && !(c.mode === ev.mode || (c.mode === 'team' && (ev.mode === 'tdm' || ev.mode === 'coop')))) return;
+      day.p[i] = Math.min(c.n, day.p[i] + (ev.n || 1));
+      if (day.p[i] >= c.n) { day.done[i] = true; s.chal = (s.chal || 0) + 1; done.push(c.text); }
+    });
+    this.save();
+    return done;
+  }
+  dailyFor(pid) {
+    const s = this.get(pid), date = Stats.today(), list = Stats.daily(date);
+    const day = s?.day?.date === date ? s.day : { p: [0, 0, 0], done: [false, false, false] };
+    return list.map((c, i) => ({ text: c.text, n: c.n, p: day.p[i], done: day.done[i] }));
+  }
+
   // papan peringkat: hanya nama dan angka, tanpa id
   top() {
     const wk = isoWeek(), all = Object.values(this.db);
