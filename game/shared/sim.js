@@ -1,5 +1,9 @@
 // Fisika deterministik yang dipakai server (otoritatif) dan klien (prediksi).
-import { ARENA, PLAYER_R, OBST, DASH_SPEED, DASH_TIME } from './config.js';
+import { ARENA, PLAYER_R, MAPS, DASH_SPEED, DASH_TIME } from './config.js';
+
+// Peta aktif untuk tabrakan. Server memanggil setMap() sebelum memproses tiap room; klien saat peta berganti.
+let OBST = MAPS.ruins.obst;
+export function setMap(id) { OBST = (MAPS[id] || MAPS.ruins).obst; }
 
 export function collide(p, r) {
   for (let it = 0; it < 2; it++) {

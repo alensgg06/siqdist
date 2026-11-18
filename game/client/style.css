@@ -156,3 +156,28 @@ body:not(.touch) #skillBtn{display:grid;right:24px;bottom:24px}
 @media (max-width:520px){.modes{grid-template-columns:repeat(2,minmax(0,1fr))}}
 #scoreTable td.tm{font-weight:700}
 .tdot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle}
+.modes.maps{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:520px){.modes.maps{grid-template-columns:repeat(3,minmax(0,1fr))}}
+
+/* ---------- peringkat dan jubah ---------- */
+.links{display:flex;justify-content:center;gap:4px 14px;flex-wrap:wrap}
+#ranks{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:12px;background:rgba(8,4,14,.7);overflow:auto;z-index:5}
+.card.wide{width:min(760px,100%);text-align:left}
+.rhead{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.rhead h2{font-family:var(--serif);color:var(--gold);font-size:20px;letter-spacing:.08em}
+.rhead .sec{padding:8px 14px;min-height:40px}
+.rgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;margin-top:8px}
+.rgrid h4{font-family:var(--serif);color:#cdb9e6;font-weight:600;margin-bottom:6px}
+#weekTable{width:100%;border-collapse:collapse;font-size:13.5px}
+#weekTable td,#weekTable th{padding:5px 6px;border-bottom:1px solid rgba(255,255,255,.08);text-align:left}
+#weekTable th{font-size:12px;color:#b9a9cf;font-weight:500}
+#weekTable td:nth-child(n+3),#weekTable th:nth-child(n+3){text-align:right;font-variant-numeric:tabular-nums}
+#weekTable tr.me td{color:var(--gold);font-weight:700}
+#skins{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+.skin{display:flex;align-items:center;gap:10px;padding:8px 10px;min-height:52px;border-radius:9px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);text-align:left;font-size:13px}
+.skin i{flex:none;width:24px;height:24px;border-radius:50%;background:var(--c);box-shadow:0 0 10px var(--g,transparent);border:2px solid rgba(255,255,255,.25)}
+.skin b{display:block;font-size:13.5px}
+.skin small{display:block;color:#b9a9cf;font-size:11.5px}
+.skin.on{border-color:var(--gold);background:rgba(242,198,109,.12)}
+.skin.locked{opacity:.55}
+@media (max-width:640px){.rgrid{grid-template-columns:minmax(0,1fr)}}

@@ -114,6 +114,33 @@ versi lama bila ditandatangani kunci yang sama.
 - **Rune** muncul di empat titik peta dan kembali 25 detik setelah diambil:
   Rune Amarah (merah) damage +50% selama 10 detik, Rune Angin (biru) kecepatan +35% selama 10 detik.
 
+## Peta
+
+- **Reruntuhan Senja**: reruntuhan batu di bawah langit senja, altar kristal di tengah.
+- **Pelabuhan Bulan**: dermaga kayu di malam purnama, menara lonceng di tengah, gudang, peti,
+  tiang kapal berlentera, air dan mercusuar di kejauhan.
+
+Room publik berganti peta setiap ronde. Pembuat room privat memilih *Peta bergantian*,
+*Reruntuhan*, atau *Pelabuhan*.
+
+## Statistik, peringkat, dan jubah
+
+Setiap HP atau browser mendapat id acak (tanpa akun) yang hanya dikirim ke server. Kill, gugur,
+kemenangan, dan jumlah ronde disimpan di `data/players.json` (volume Docker yang sama dengan
+catatan pertandingan). Menu *Peringkat dan jubah* menampilkan 10 besar minggu ini, statistikmu,
+dan jubah yang terbuka:
+
+| Jubah | Syarat |
+|---|---|
+| Zamrud | 5 ronde selesai |
+| Ungu Senja | 25 kill |
+| Perak Bulan | 3 kemenangan |
+| Darah Naga | 100 kill |
+| Emas Raja | 10 kemenangan |
+
+Server memeriksa syaratnya sendiri, jadi jubah terkunci tidak bisa dipakai dengan mengubah klien.
+Catatan: id tersimpan di browser/aplikasi; menghapus data aplikasi berarti mulai dari nol.
+
 ## Kompensasi lag
 
 Klien mengirim nomor tick dunia yang sedang ia tampilkan. Saat pemain menembak, server memutar

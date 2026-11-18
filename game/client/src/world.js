@@ -5,9 +5,9 @@ import { blocked } from '../../shared/sim.js';
 
 export const SUN_DIR = new THREE.Vector3(-0.62, 0.4, -0.68).normalize();
 
-function rng(seed) { let s = seed; return () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646; }
+export function rng(seed) { let s = seed; return () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646; }
 
-function canvasTex(size, draw, repeat) {
+export function canvasTex(size, draw, repeat) {
   const c = document.createElement('canvas'); c.width = c.height = size;
   draw(c.getContext('2d'), size);
   const t = new THREE.CanvasTexture(c);
@@ -145,15 +145,16 @@ function pineGeo() { // tiga kerucut bertumpuk dalam satu geometri
 }
 
 export function buildWorld(scene) {
+  const root = new THREE.Group(); scene.add(root);
   const R = rng(1234);
   const glowTex = glowTexture();
   const stoneTex = stoneTexture();
   const stone = new THREE.MeshStandardMaterial({ map: stoneTex, roughness: 0.92, metalness: 0.02 });
   const darkStone = new THREE.MeshStandardMaterial({ map: stoneTex, color: 0xb0a6bc, roughness: 0.95 });
-  const world = { glowTex, orbs: [], spin: [], grass: null, sun: null, pointLights: [] };
+  const world = { root, glowTex, orbs: [], spin: [], grass: null, sun: null, pointLights: [] };
 
   // --- langit ---
-  scene.fog = new THREE.FogExp2(0x6b4470, 0.006);
+  world.fog = new THREE.FogExp2(0x6b4470, 0.006);
   const sky = new THREE.Mesh(
     new THREE.SphereGeometry(600, 32, 16),
     new THREE.ShaderMaterial({
@@ -173,19 +174,19 @@ export function buildWorld(scene) {
     }),
   );
   sky.renderOrder = -10; sky.frustumCulled = false;
-  scene.add(sky);
+  root.add(sky);
   world.sky = sky;
 
   // --- cahaya ---
-  scene.add(new THREE.HemisphereLight(0x93a4f5, 0x5a4250, 1.55));
-  scene.add(new THREE.AmbientLight(0x8f7fb5, 0.75));
+  root.add(new THREE.HemisphereLight(0x93a4f5, 0x5a4250, 1.55));
+  root.add(new THREE.AmbientLight(0x8f7fb5, 0.75));
   const sun = new THREE.DirectionalLight(0xffb880, 3.6);
   sun.castShadow = true;
   sun.shadow.mapSize.set(1024, 1024);
   const sc = sun.shadow.camera;
   sc.left = -34; sc.right = 34; sc.top = 34; sc.bottom = -34; sc.near = 1; sc.far = 160;
   sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.04;
-  scene.add(sun, sun.target);
+  root.add(sun, sun.target);
   world.sun = sun;
 
   // --- tanah ---
@@ -195,14 +196,14 @@ export function buildWorld(scene) {
   );
   ground.material.map.repeat.set(60, 60);
   ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true;
-  scene.add(ground);
+  root.add(ground);
 
   const rune = new THREE.Mesh(
     new THREE.PlaneGeometry(22, 22),
     new THREE.MeshBasicMaterial({ map: runeTexture(), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.75 }),
   );
   rune.rotation.x = -Math.PI / 2; rune.position.y = 0.04;
-  scene.add(rune); world.rune = rune;
+  root.add(rune); world.rune = rune;
 
   const addShadow = (m) => { m.castShadow = true; m.receiveShadow = true; return m; };
   const crystalMat = (color) => new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.8, roughness: 0.25, metalness: 0.1 });
@@ -212,11 +213,11 @@ export function buildWorld(scene) {
     m.scale.y = 1.9; g.add(m);
     const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.7 }));
     s.scale.setScalar(size * 7); g.add(s);
-    g.position.set(x, y, z); scene.add(g);
+    g.position.set(x, y, z); root.add(g);
     world.spin.push({ g, y, sp: 0.5 + R() * 0.6, ph: R() * 6 });
     if (light) {
       const pl = new THREE.PointLight(color, light, 34, 1.6);
-      pl.position.set(x, y, z); scene.add(pl); world.pointLights.push(pl);
+      pl.position.set(x, y, z); root.add(pl); world.pointLights.push(pl);
     }
     return g;
   }
@@ -226,35 +227,35 @@ export function buildWorld(scene) {
     if (o.kind === 'altar') {
       for (const [r, h, y] of [[3.2, 0.5, 0.25], [2.6, 0.5, 0.75], [2.0, 0.4, 1.2]]) {
         const m = addShadow(new THREE.Mesh(new THREE.CylinderGeometry(r, r + 0.15, h, 8), stone));
-        m.position.set(o.x, y, o.z); scene.add(m);
+        m.position.set(o.x, y, o.z); root.add(m);
       }
       crystal(o.x, 4.2, o.z, 1.0, 0x58e6ff, 90);
     } else if (o.kind === 'pillar') {
       const broken = R() < 0.4, h = broken ? 4 + R() * 3 : o.h;
       const base = addShadow(new THREE.Mesh(new THREE.BoxGeometry(o.r * 2.5, 0.7, o.r * 2.5), stone));
-      base.position.set(o.x, 0.35, o.z); scene.add(base);
+      base.position.set(o.x, 0.35, o.z); root.add(base);
       const shaft = addShadow(new THREE.Mesh(new THREE.CylinderGeometry(o.r * 0.82, o.r * 0.95, h, 10), stone));
-      shaft.position.set(o.x, 0.7 + h / 2, o.z); shaft.rotation.z = broken ? (R() - 0.5) * 0.05 : 0; scene.add(shaft);
+      shaft.position.set(o.x, 0.7 + h / 2, o.z); shaft.rotation.z = broken ? (R() - 0.5) * 0.05 : 0; root.add(shaft);
       if (!broken) {
         const cap = addShadow(new THREE.Mesh(new THREE.BoxGeometry(o.r * 2.6, 0.6, o.r * 2.6), stone));
-        cap.position.set(o.x, 0.7 + h + 0.3, o.z); scene.add(cap);
+        cap.position.set(o.x, 0.7 + h + 0.3, o.z); root.add(cap);
         crystal(o.x, 0.7 + h + 1.6, o.z, 0.38, 0xff5ad1, 0);
       }
     } else if (o.kind === 'wall') {
       const m = addShadow(new THREE.Mesh(new THREE.BoxGeometry(o.w, o.h, o.d), stone));
-      m.position.set(o.x, o.h / 2, o.z); scene.add(m);
+      m.position.set(o.x, o.h / 2, o.z); root.add(m);
       const long = o.w > o.d, len = long ? o.w : o.d, n = Math.floor(len / 2);
       for (let i = 0; i < n; i++) { // gerigi atas yang sebagian runtuh
         if (R() < 0.3) continue;
         const hh = 0.5 + R() * 0.9, t = -len / 2 + 1 + i * 2;
         const b = addShadow(new THREE.Mesh(new THREE.BoxGeometry(long ? 1.2 : o.w, hh, long ? o.d : 1.2), stone));
-        b.position.set(o.x + (long ? t : 0), o.h + hh / 2, o.z + (long ? 0 : t)); scene.add(b);
+        b.position.set(o.x + (long ? t : 0), o.h + hh / 2, o.z + (long ? 0 : t)); root.add(b);
       }
     } else {
       const m = addShadow(new THREE.Mesh(new THREE.BoxGeometry(o.w, o.h, o.d), darkStone));
-      m.position.set(o.x, o.h / 2, o.z); m.rotation.y = 0; scene.add(m);
+      m.position.set(o.x, o.h / 2, o.z); m.rotation.y = 0; root.add(m);
       const top = addShadow(new THREE.Mesh(new THREE.BoxGeometry(o.w * 0.6, 0.7, o.d * 0.6), stone));
-      top.position.set(o.x + 0.3, o.h + 0.35, o.z - 0.2); top.rotation.y = 0.5; scene.add(top);
+      top.position.set(o.x + 0.3, o.h + 0.35, o.z - 0.2); top.rotation.y = 0.5; root.add(top);
     }
   }
   for (const s of [-1, 1]) { crystal(0, 5.6, s * 21, 0.5, 0xffb23e, 30); crystal(s * 21, 5.6, 0, 0.5, 0xffb23e, 30); }
@@ -263,14 +264,14 @@ export function buildWorld(scene) {
   const W = ARENA + 1.5;
   for (const [x, z, w, d] of [[0, W, 2 * W + 3, 3], [0, -W, 2 * W + 3, 3], [W, 0, 3, 2 * W + 3], [-W, 0, 3, 2 * W + 3]]) {
     const m = addShadow(new THREE.Mesh(new THREE.BoxGeometry(w, 6, d), darkStone));
-    m.position.set(x, 3, z); scene.add(m);
+    m.position.set(x, 3, z); root.add(m);
   }
   const roofMat = new THREE.MeshStandardMaterial({ color: 0x4a2d5e, roughness: 0.8 });
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
     const t = addShadow(new THREE.Mesh(new THREE.CylinderGeometry(4, 4.6, 12, 10), darkStone));
-    t.position.set(sx * W, 6, sz * W); scene.add(t);
+    t.position.set(sx * W, 6, sz * W); root.add(t);
     const roof = addShadow(new THREE.Mesh(new THREE.ConeGeometry(5, 6, 10), roofMat));
-    roof.position.set(sx * W, 15, sz * W); scene.add(roof);
+    roof.position.set(sx * W, 15, sz * W); root.add(roof);
     crystal(sx * W, 19.5, sz * W, 0.6, 0x58e6ff, 0);
   }
   const mtnMat = new THREE.MeshStandardMaterial({ color: 0x4a3566, roughness: 1, flatShading: true });
@@ -284,7 +285,7 @@ export function buildWorld(scene) {
     }
     mgeo.computeVertexNormals();
     const m = new THREE.Mesh(mgeo, mtnMat);
-    m.position.set(Math.cos(a) * d, h / 2 - 6, Math.sin(a) * d); m.rotation.y = R() * 6; scene.add(m);
+    m.position.set(Math.cos(a) * d, h / 2 - 6, Math.sin(a) * d); m.rotation.y = R() * 6; root.add(m);
   }
   const NT = 150, dummy = new THREE.Object3D();
   const trunks = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.35, 0.5, 4, 6), new THREE.MeshStandardMaterial({ color: 0x3b2a2a, roughness: 1 }), NT);
@@ -298,7 +299,7 @@ export function buildWorld(scene) {
     dummy.position.y = 7 * s; dummy.updateMatrix(); leaves.setMatrixAt(i, dummy.matrix);
     leaves.setColorAt(i, new THREE.Color().setHSL(0.38 + R() * 0.1, 0.45, 0.1 + R() * 0.09));
   }
-  scene.add(trunks, leaves);
+  root.add(trunks, leaves);
 
   // --- batu & rumput ---
   const rockGeo = new THREE.DodecahedronGeometry(0.5, 0);
@@ -307,7 +308,7 @@ export function buildWorld(scene) {
     if (blocked(x, z, 1.2) || Math.hypot(x, z) < 12) continue;
     const m = addShadow(new THREE.Mesh(rockGeo, darkStone));
     const s = 0.3 + R() * 0.5; m.scale.set(s, s * 0.6, s); m.position.set(x, s * 0.15, z); m.rotation.set(R() * 3, R() * 3, 0);
-    scene.add(m);
+    root.add(m);
   }
   const NG = 4200;
   const bladeGeo = tuftGeo();
@@ -321,7 +322,7 @@ export function buildWorld(scene) {
     grass.setMatrixAt(i, dummy.matrix);
     grass.setColorAt(i, col.setHSL(0.22 + R() * 0.12, 0.5, 0.42 + R() * 0.25));
   }
-  grass.receiveShadow = true; scene.add(grass); world.grass = grass; world.grassMax = NG;
+  grass.receiveShadow = true; root.add(grass); world.grass = grass; world.grassMax = NG;
 
   // --- kunang-kunang ---
   const NF = 260, fp = new Float32Array(NF * 3), fph = new Float32Array(NF);
@@ -338,7 +339,7 @@ export function buildWorld(scene) {
     fragmentShader: `varying float vA; void main(){ float d=length(gl_PointCoord-0.5);
       gl_FragColor=vec4(vec3(1.0,0.86,0.45)*2.0, smoothstep(0.5,0.0,d)*vA); }`,
   }));
-  flies.frustumCulled = false; scene.add(flies); world.flies = flies;
+  flies.frustumCulled = false; root.add(flies); world.flies = flies;
 
   // --- bola penyembuh ---
   const orbMat = new THREE.MeshStandardMaterial({ color: 0x59ff9c, emissive: 0x2dff7f, emissiveIntensity: 3, roughness: 0.2 });
@@ -349,7 +350,7 @@ export function buildWorld(scene) {
     s.scale.setScalar(3.2); g.add(s);
     const ring = new THREE.Mesh(new THREE.RingGeometry(0.9, 1.1, 24), new THREE.MeshBasicMaterial({ color: 0x59ff9c, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
     ring.rotation.x = -Math.PI / 2; ring.position.y = -1.15; g.add(ring);
-    g.position.set(x, 1.2, z); scene.add(g); world.orbs.push(g);
+    g.position.set(x, 1.2, z); root.add(g); world.orbs.push(g);
   }
 
   world.update = (t, focus, orbMask) => {
@@ -370,7 +371,7 @@ export function buildWorld(scene) {
 }
 
 // ---- Paket B: rune di peta dan lingkaran Rebut Altar ----
-export function buildExtras(scene, glowTex, RUNES, RUNE_INFO, KOTH_R) {
+export function buildExtras(scene, glowTex, RUNES, RUNE_INFO, KOTH_R) { // scene: grup akar peta
   const runes = RUNES.map((r) => {
     const info = RUNE_INFO[r.type], g = new THREE.Group();
     const mat = new THREE.MeshStandardMaterial({ color: info.color, emissive: info.color, emissiveIntensity: 2.4, roughness: 0.3 });

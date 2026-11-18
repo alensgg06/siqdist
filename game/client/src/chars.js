@@ -1,6 +1,6 @@
 // Avatar prosedural: tubuh, jubah, senjata per kelas, animasi langkah/tembak/gugur.
 import * as THREE from 'three';
-import { CLASSES } from '../../shared/config.js';
+import { CLASSES, SKINS } from '../../shared/config.js';
 
 const cloth = new THREE.MeshStandardMaterial({ color: 0x2a2d44, roughness: 0.85 });
 const skin = new THREE.MeshStandardMaterial({ color: 0xd9a47c, roughness: 0.7 });
@@ -15,15 +15,16 @@ const geo = {
 function mesh(g, m, x = 0, y = 0, z = 0) { const o = new THREE.Mesh(g, m); o.position.set(x, y, z); o.castShadow = true; return o; }
 
 export class Avatar {
-  constructor(clsKey, name, isMe, glowTex, teamColor = null) {
-    const c = CLASSES[clsKey], color = new THREE.Color(c.color);
+  constructor(clsKey, name, isMe, glowTex, teamColor = null, skinId = 'default') {
+    const c = CLASSES[clsKey], sk = SKINS.find((k) => k.id === skinId) || SKINS[0];
+    const color = new THREE.Color(sk.glow ?? c.color); // jubah dapat mengganti warna cahaya senjata
     this.clsKey = clsKey; this.isMe = isMe; this.name = name;
     this.tagColor = teamColor !== null ? '#' + teamColor.toString(16).padStart(6, '0') : '#ffe9c4';
     this.phase = 0; this.kick = 0; this.deadT = 0; this.spawnT = 0.4; this.lastX = 0; this.lastZ = 0; this.speed = 0;
     this.shown = { hp: -1, maxHp: -1, lvl: -1 };
     const root = this.group = new THREE.Group();
     const body = this.body = new THREE.Group(); root.add(body);
-    const accent = new THREE.MeshStandardMaterial({ color: color.clone().multiplyScalar(0.38), roughness: 0.8, side: THREE.DoubleSide });
+    const accent = new THREE.MeshStandardMaterial({ color: sk.accent !== undefined ? new THREE.Color(sk.accent) : color.clone().multiplyScalar(0.38), roughness: 0.8, side: THREE.DoubleSide, metalness: sk.id === 'raja' || sk.id === 'bulan' ? 0.5 : 0 });
     const glow = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 3, roughness: 0.3 });
 
     this.legL = new THREE.Group(); this.legL.position.set(0.2, 1.0, 0);

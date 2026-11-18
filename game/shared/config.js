@@ -103,3 +103,44 @@ export const TEAMS = [
   { name: 'Fajar', color: 0xf2c66d },
   { name: 'Senja', color: 0xa06bff },
 ];
+
+// ---- Peta kedua: Pelabuhan Bulan (malam, dermaga kayu), juga simetris empat arah ----
+const H = [];
+const hcyl = (x, z, r, h, kind) => H.push({ t: 'cyl', x, z, r, h, kind });
+const hbox = (x, z, w, d, h, kind) => H.push({ t: 'box', x, z, w, d, h, kind });
+hcyl(0, 0, 2.6, 2.2, 'bell');                       // menara lonceng di tengah (pusat Rebut Altar)
+for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+  hbox(sx * 31, sz * 13, 12, 4, 5, 'shed');           // gudang memanjang
+  hbox(sx * 13, sz * 31, 4, 12, 5, 'shed');
+  hcyl(sx * 24, sz * 24, 0.6, 12, 'mast');            // tiang kapal dengan lentera
+  hbox(sx * 16, sz * 15, 3, 3, 2.4, 'crate');         // tumpukan peti
+  hbox(sx * 15, sz * 18.5, 2.4, 2.4, 1.8, 'crate');
+  hbox(sx * 35, sz * 33, 4, 9, 1.7, 'boat');          // perahu yang ditarik ke darat
+}
+for (const s of [-1, 1]) {
+  hbox(0, s * 21, 9, 2.6, 2.4, 'crate');
+  hbox(s * 21, 0, 2.6, 9, 2.4, 'crate');
+  hcyl(s * 10.5, s * -10.5, 0.6, 7, 'post');          // tiang tambat
+  hcyl(s * -10.5, s * -10.5, 0.6, 7, 'post');
+}
+export const MAPS = {
+  ruins: { name: 'Reruntuhan Senja', obst: OBST, spawns: SPAWNS, orbs: ORBS, runes: RUNES },
+  harbor: {
+    name: 'Pelabuhan Bulan', obst: H,
+    spawns: [[40, 0], [-40, 0], [0, 40], [0, -40], [39, 22], [39, -22], [-39, 22], [-39, -22], [22, 39], [-22, 39], [22, -39], [-22, -39]],
+    orbs: [[10, 0], [-10, 0], [0, 10], [0, -10], [27, 27], [-27, 27], [27, -27], [-27, -27]],
+    runes: [{ x: 0, z: 30, type: 'dmg' }, { x: 0, z: -30, type: 'dmg' }, { x: 30, z: 0, type: 'spd' }, { x: -30, z: 0, type: 'spd' }],
+  },
+};
+export const MAP_KEYS = Object.keys(MAPS);
+
+// ---- Jubah yang bisa dibuka (warna jubah/aksen dan cahaya senjata) ----
+export const SKINS = [
+  { id: 'default', name: 'Bawaan kelas', req: null },
+  { id: 'zamrud', name: 'Zamrud', accent: 0x1f6b4a, req: { stat: 'matches', n: 5, text: 'Selesaikan 5 ronde' } },
+  { id: 'senja', name: 'Ungu Senja', accent: 0x5b2a86, req: { stat: 'kills', n: 25, text: '25 kill total' } },
+  { id: 'bulan', name: 'Perak Bulan', accent: 0xaab6cc, glow: 0xdfe8ff, req: { stat: 'wins', n: 3, text: 'Menang 3 ronde' } },
+  { id: 'naga', name: 'Darah Naga', accent: 0x7a0f1c, glow: 0xff3b2e, req: { stat: 'kills', n: 100, text: '100 kill total' } },
+  { id: 'raja', name: 'Emas Raja', accent: 0xb8892a, glow: 0xffd56b, req: { stat: 'wins', n: 10, text: 'Menang 10 ronde' } },
+];
+export function skinUnlocked(skin, st) { return !skin.req || ((st && st[skin.req.stat]) || 0) >= skin.req.n; }

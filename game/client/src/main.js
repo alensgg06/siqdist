@@ -3,9 +3,10 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { DT, CLASSES, CLASS_KEYS, ARENA, OBST, ORBS, XP_LV, MAX_LEVEL, NOVA_R, KILL_LIMIT, KOTH_R, RUNES, RUNE_INFO, SPD_BUFF, INTERP, TEAMS, TEAM_MODES } from '../../shared/config.js';
-import { stepPlayer, blocked, los, angDiff } from '../../shared/sim.js';
+import { DT, CLASSES, CLASS_KEYS, ARENA, MAPS, XP_LV, MAX_LEVEL, NOVA_R, KILL_LIMIT, KOTH_R, RUNE_INFO, SPD_BUFF, INTERP, TEAMS, TEAM_MODES, SKINS, skinUnlocked } from '../../shared/config.js';
+import { stepPlayer, blocked, los, angDiff, setMap } from '../../shared/sim.js';
 import { buildWorld, buildExtras } from './world.js';
+import { buildHarbor } from './harbor.js';
 import { Avatar } from './chars.js';
 import { Fx } from './fx.js';
 import { input, setupInput, isTouch } from './input.js';
@@ -25,9 +26,14 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(62, 1, 0.3, 900);
-const world = buildWorld(scene);
+// Setiap peta dibangun sebagai grupnya sendiri (peta kedua dibangun saat pertama dibutuhkan), lalu ditukar.
+const worlds = { ruins: buildWorld(scene) };
+let world = worlds.ruins;
+scene.fog = world.fog;
 const fx = new Fx(scene, world.glowTex);
-const extras = buildExtras(scene, world.glowTex, RUNES, RUNE_INFO, KOTH_R);
+const extrasBy = { ruins: buildExtras(world.root, world.glowTex, MAPS.ruins.runes, RUNE_INFO, KOTH_R) };
+let extras = extrasBy.ruins;
+let M = MAPS.ruins;
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
 const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.42, 0.5, 0.9);
@@ -43,12 +49,26 @@ function applyQuality(q) {
   world.sun.castShadow = q !== 'low';
   const ms = q === 'high' ? 2048 : 1024;
   if (world.sun.shadow.mapSize.x !== ms) { world.sun.shadow.mapSize.set(ms, ms); world.sun.shadow.map?.dispose(); world.sun.shadow.map = null; }
-  world.grass.count = q === 'low' ? 700 : q === 'medium' ? 2200 : world.grassMax;
+  if (world.grass) world.grass.count = q === 'low' ? 700 : q === 'medium' ? 2200 : world.grassMax;
   for (const l of world.pointLights) l.visible = q !== 'low';
   fx.lightsOn = q !== 'low';
   $('quality').value = q;
   resize();
 }
+function useMap(id) {
+  if (!MAPS[id]) id = 'ruins';
+  if (!worlds[id]) {
+    worlds[id] = buildHarbor(scene, worlds.ruins.glowTex);
+    extrasBy[id] = buildExtras(worlds[id].root, worlds.ruins.glowTex, MAPS[id].runes, RUNE_INFO, KOTH_R);
+  }
+  for (const [k, w] of Object.entries(worlds)) w.root.visible = k === id;
+  world = worlds[id]; extras = extrasBy[id]; M = MAPS[id]; G.mapId = id;
+  scene.fog = world.fog;
+  setMap(id); // prediksi gerak & tabrakan proyektil di klien memakai peta yang sama dengan server
+  drawMinimapBg();
+  applyQuality(quality);
+}
+
 function resize() {
   const w = innerWidth, h = innerHeight;
   renderer.setSize(w, h, false); composer.setSize(w, h);
@@ -60,6 +80,17 @@ addEventListener('resize', resize);
 addEventListener('orientationchange', () => setTimeout(resize, 200));
 
 // ---------- state ----------
+// id pemain acak untuk statistik tetap (tanpa akun); hanya dikirim ke server, tidak pernah ditampilkan
+function playerId() {
+  let id = store.get('pid', '');
+  if (!/^[a-z0-9]{16,40}$/.test(id)) {
+    const b = new Uint8Array(12); crypto.getRandomValues(b);
+    id = [...b].map((x) => x.toString(36).padStart(2, '0')).join('').slice(0, 24);
+    store.set('pid', id);
+  }
+  return id;
+}
+
 const G = {
   phase: 'menu', ws: null, myId: 0, clsKey: store.get('cls', 'ranger'), cls: null,
   players: new Map(), roster: new Map(),
@@ -70,7 +101,7 @@ const G = {
   autoFire: store.get('autoFire', isTouch ? '1' : '') === '1', aimAssist: store.get('aimAssist', isTouch ? '1' : '') === '1',
   lastShotTick: new Map(), shake: 0, time: 0,
   vibrate: store.get('vibrate', '1') === '1', code: null, practice: false, joinErr: '', buzzT: 0,
-  tut: null, music: store.get('music', '1') === '1', stepT: 0, team: -1, teamScore: [0, 0], gm: 'dm', runeMask: 15, holder: 0, ticks: [], createGm: store.get('gm', 'dm'),
+  pid: playerId(), skin: store.get('skin', 'default'), mapId: 'ruins', createMap: store.get('map', 'rotate'), tut: null, music: store.get('music', '1') === '1', stepT: 0, team: -1, teamScore: [0, 0], gm: 'dm', runeMask: 15, holder: 0, ticks: [], createGm: store.get('gm', 'dm'),
 };
 window.__arkana = G; // dipakai uji otomatis
 
@@ -135,7 +166,48 @@ for (const b of document.querySelectorAll('.mode')) {
   b.addEventListener('click', set);
   if (b.dataset.gm === G.createGm) set();
 }
+for (const b of document.querySelectorAll('.mapb')) {
+  const set = () => {
+    G.createMap = b.dataset.map; store.set('map', G.createMap);
+    for (const o of document.querySelectorAll('.mapb')) { o.classList.toggle('on', o === b); o.setAttribute('aria-checked', o === b); }
+  };
+  b.addEventListener('click', set);
+  if (b.dataset.map === G.createMap) set();
+}
 $('create').addEventListener('click', () => start('create'));
+
+// ---------- peringkat dan jubah ----------
+const hex = (n) => '#' + n.toString(16).padStart(6, '0');
+async function openRanks() {
+  $('ranks').classList.remove('hidden');
+  $('myStats').textContent = 'Memuat…';
+  let top = null, mine = null;
+  try {
+    [top, mine] = await Promise.all([fetch('/api/top').then((r) => r.json()), fetch(`/api/stats?pid=${G.pid}`).then((r) => r.json())]);
+  } catch { $('myStats').textContent = 'Peringkat belum bisa dimuat. Periksa koneksi ke server.'; }
+  const st = mine?.stats;
+  if (top) {
+    $('myStats').textContent = st ? `Kamu: ${st.kills} kill, ${st.deaths} gugur, ${st.wins} menang dari ${st.matches} ronde.` : 'Belum ada statistik: selesaikan satu ronde di arena untuk mulai tercatat.';
+    $('weekTitle').textContent = `Minggu ini (${top.week.replace('-W', ', minggu ')})`;
+    const rows = top.top.map((r, i) => `<tr class="${st && r.name === st.name ? 'me' : ''}"><td>${i + 1}</td><td></td><td>${r.kills}</td><td>${r.wins}</td></tr>`).join('');
+    $('weekTable').innerHTML = `<tr><th>#</th><th>Nama</th><th>Kill</th><th>Menang</th></tr>${rows || '<tr><td colspan="4">Belum ada yang bermain minggu ini.</td></tr>'}`;
+    top.top.forEach((r, i) => { $('weekTable').rows[i + 1].cells[1].textContent = r.name; }); // nama sebagai teks, bukan HTML
+  }
+  $('skins').innerHTML = SKINS.map((k) => {
+    const open = skinUnlocked(k, st), cls = CLASSES[G.clsKey], col = k.accent ?? Math.round(cls.color * 1) , g = k.glow ?? cls.color;
+    const prog = k.req ? `${Math.min(st?.[k.req.stat] || 0, k.req.n)}/${k.req.n}` : '';
+    return `<button class="skin ${open ? '' : 'locked'} ${G.skin === k.id ? 'on' : ''}" data-id="${k.id}" ${open ? '' : 'aria-disabled="true"'} style="--c:${hex(k.accent ?? col)};--g:${hex(g)}"><i></i><span><b>${k.name}</b><small>${open ? (G.skin === k.id ? 'Dipakai' : 'Terbuka') : `${k.req.text} · ${prog}`}</small></span></button>`;
+  }).join('');
+  for (const b of $('skins').querySelectorAll('.skin')) {
+    b.addEventListener('click', () => {
+      if (b.classList.contains('locked')) return;
+      G.skin = b.dataset.id; store.set('skin', G.skin);
+      for (const o of $('skins').querySelectorAll('.skin')) { o.classList.toggle('on', o === b); if (!o.classList.contains('locked')) o.querySelector('small').textContent = o === b ? 'Dipakai' : 'Terbuka'; }
+    });
+  }
+}
+$('ranksBtn').addEventListener('click', openRanks);
+$('ranksClose').addEventListener('click', () => $('ranks').classList.add('hidden'));
 $('joinBtn').addEventListener('click', () => {
   const c = cleanCode($('code').value);
   if (c.length !== 4) { $('menuMsg').textContent = 'Kode room terdiri dari 4 huruf.'; $('code').focus(); return; }
@@ -147,7 +219,7 @@ function connect(name, mode, code) {
   let ws;
   try { ws = new WebSocket(serverUrl()); } catch { return menuError('Alamat server tidak valid.'); }
   G.ws = ws; G.joinErr = '';
-  ws.onopen = () => ws.send(JSON.stringify({ t: 'join', name, cls: G.clsKey, mode, code, gm: G.createGm }));
+  ws.onopen = () => ws.send(JSON.stringify({ t: 'join', name, cls: G.clsKey, mode, code, gm: G.createGm, map: G.createMap, pid: G.pid, skin: G.skin }));
   ws.onmessage = (e) => onMessage(JSON.parse(e.data));
   ws.onclose = () => {
     if (G.ws !== ws) return;
@@ -184,6 +256,7 @@ function onMessage(m) {
     $('death').classList.add('hidden'); $('score').classList.add('hidden'); $('pause').classList.add('hidden');
     input.enabled = true;
     G.code = m.code || null; G.practice = !!m.practice; G.gm = m.gm || 'dm'; G.ticks.length = 0;
+    if (m.map && m.map !== G.mapId) useMap(m.map);
     G.team = TEAM_MODES.includes(G.gm) ? m.team : -1; G.teamScore = [0, 0];
     $('zoneTag').classList.toggle('hidden', G.gm !== 'koth');
     const pill = $('roomPill');
@@ -196,7 +269,7 @@ function onMessage(m) {
     G.joinErr = m.m;
   } else if (m.t === 'r') {
     G.roster.clear();
-    for (const [id, name, cls, kills, deaths, bot, pts, team] of m.l) G.roster.set(id, { id, name, cls, kills, deaths, bot, pts: pts || 0, team: team ?? -1 });
+    for (const [id, name, cls, kills, deaths, bot, pts, team, skin] of m.l) G.roster.set(id, { id, name, cls, kills, deaths, bot, pts: pts || 0, team: team ?? -1, skin: skin || 'default' });
     if (m.ts) G.teamScore = m.ts;
     updateScoreHud();
   } else if (m.t === 's') onSnapshot(m);
@@ -276,7 +349,7 @@ function getPlayer(id) {
   if (p) return p;
   const r = G.roster.get(id);
   if (!r) return null;
-  const av = new Avatar(r.cls, r.name, id === G.myId, world.glowTex, r.team >= 0 ? TEAMS[r.team].color : null);
+  const av = new Avatar(r.cls, r.name, id === G.myId, world.glowTex, r.team >= 0 ? TEAMS[r.team].color : null, r.skin);
   scene.add(av.group);
   p = { id, av, buf: [], x: 0, z: 0, yaw: 0, flags: 0, hp: 1, maxHp: 1, lvl: 1, cls: r.cls, seen: 0 };
   G.players.set(id, p);
@@ -287,6 +360,7 @@ function onSnapshot(m) {
   const now = performance.now();
   if (!G.myId) return;
   const wasEnded = G.ended;
+  if (m.mp && m.mp !== G.mapId) { useMap(m.mp); toast(`Peta: ${M.name}`); for (const id of [...fx.projs.keys()]) fx.removeProj(id); }
   G.ended = !!m.st; G.tm = m.tm; G.orbMask = m.o; G.runeMask = m.u ?? 15; G.holder = m.z || 0;
   G.ticks.push([now, m.k || 0]); if (G.ticks.length > 30) G.ticks.shift();
   G.snapN = (G.snapN || 0) + 1;
@@ -385,12 +459,13 @@ function onEvent(e) {
     }
     case 'n': fx.nova(e[2], e[3], CLASSES.mage.color, NOVA_R); sfx('nova', vol(e[2], e[3])); G.shake = Math.max(G.shake, 0.6 * vol(e[2], e[3])); break;
     case 'u': {
-      const r = RUNES[e[1]], info = RUNE_INFO[r.type];
+      const r = M.runes[e[1]]; if (!r) break;
+      const info = RUNE_INFO[r.type];
       fx.burst(r.x, 1.2, r.z, info.color, 34, 6, 1.3, 0.8, -2); fx.pillar(r.x, r.z, info.color);
       if (e[2] === G.myId) { sfx('level'); buzz([30, 30, 30]); toast(`${info.name}: ${info.desc}`); }
       break;
     }
-    case 'o': fx.burst(ORBS[e[1]][0], 1.2, ORBS[e[1]][1], 0x59ff9c, 26, 5, 1.1, 0.7, -2); if (e[2] === G.myId) sfx('orb'); break;
+    case 'o': if (!M.orbs[e[1]]) break; fx.burst(M.orbs[e[1]][0], 1.2, M.orbs[e[1]][1], 0x59ff9c, 26, 5, 1.1, 0.7, -2); if (e[2] === G.myId) sfx('orb'); break;
   }
 }
 
@@ -471,19 +546,21 @@ for (const el of [pauseEl]) for (const ev of ['touchstart', 'touchmove']) el.add
 // minimap
 const mm = $('minimap'), mg = mm.getContext('2d'), mmBg = document.createElement('canvas');
 mmBg.width = mmBg.height = 132;
-{
+function drawMinimapBg() {
   const g = mmBg.getContext('2d'), s = 132 / (ARENA * 2 + 6), c = 66;
+  g.clearRect(0, 0, 132, 132);
   g.fillStyle = 'rgba(190,170,220,0.55)';
-  for (const o of OBST) {
+  for (const o of M.obst) {
     if (o.t === 'cyl') { g.beginPath(); g.arc(c - o.x * s, c - o.z * s, Math.max(1.5, o.r * s), 0, 7); g.fill(); }
     else g.fillRect(c - (o.x + o.w / 2) * s, c - (o.z + o.d / 2) * s, o.w * s, o.d * s);
   }
 }
+drawMinimapBg();
 function drawMinimap() {
   const s = 132 / (ARENA * 2 + 6), c = 66;
   mg.clearRect(0, 0, 132, 132); mg.drawImage(mmBg, 0, 0);
-  ORBS.forEach(([x, z], i) => { if (G.orbMask & (1 << i)) { mg.fillStyle = '#59ff9c'; mg.fillRect(c - x * s - 1.5, c - z * s - 1.5, 3, 3); } });
-  RUNES.forEach((r, i) => { if (G.runeMask & (1 << i)) { mg.fillStyle = r.type === 'dmg' ? '#ff3b4e' : '#4dc3ff'; mg.beginPath(); mg.arc(c - r.x * s, c - r.z * s, 3, 0, 7); mg.fill(); } });
+  M.orbs.forEach(([x, z], i) => { if (G.orbMask & (1 << i)) { mg.fillStyle = '#59ff9c'; mg.fillRect(c - x * s - 1.5, c - z * s - 1.5, 3, 3); } });
+  M.runes.forEach((r, i) => { if (G.runeMask & (1 << i)) { mg.fillStyle = r.type === 'dmg' ? '#ff3b4e' : '#4dc3ff'; mg.beginPath(); mg.arc(c - r.x * s, c - r.z * s, 3, 0, 7); mg.fill(); } });
   if (G.gm === 'koth') { mg.strokeStyle = G.holder === G.myId ? '#f2c66d' : G.holder === -1 ? '#b76bff' : G.holder ? '#ff4d5e' : 'rgba(255,242,208,.7)'; mg.lineWidth = 2; mg.beginPath(); mg.arc(c, c, KOTH_R * s, 0, 7); mg.stroke(); }
   for (const p of G.players.values()) {
     if (p.id === G.myId || (p.flags & 1)) continue;

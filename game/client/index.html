@@ -82,12 +82,27 @@
         <button class="mode" data-gm="tdm" role="radio" aria-checked="false">Tim</button>
         <button class="mode" data-gm="coop" role="radio" aria-checked="false">Lawan Bot</button>
       </div>
+      <div class="modes maps" role="radiogroup" aria-label="Peta room privat">
+        <button class="mode mapb" data-map="rotate" role="radio">Peta bergantian</button>
+        <button class="mode mapb" data-map="ruins" role="radio">Reruntuhan</button>
+        <button class="mode mapb" data-map="harbor" role="radio">Pelabuhan</button>
+      </div>
       <button id="create" class="sec">Buat room privat</button>
       <div class="join"><input id="code" maxlength="4" placeholder="KODE" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Kode room"><button id="joinBtn" class="sec">Gabung</button></div>
     </div>
-    <button id="practice" class="link">Latihan dan tutorial</button>
+    <div class="links"><button id="practice" class="link">Latihan dan tutorial</button><button id="ranksBtn" class="link">Peringkat dan jubah</button></div>
     <p id="menuMsg"></p>
     <p class="hint" id="hint"></p>
+  </div>
+</div>
+<div id="ranks" class="hidden" role="dialog" aria-label="Peringkat dan jubah">
+  <div class="card wide">
+    <div class="rhead"><h2>Peringkat dan jubah</h2><button id="ranksClose" class="sec" aria-label="Tutup">Tutup</button></div>
+    <p id="myStats" class="hint"></p>
+    <div class="rgrid">
+      <section><h4 id="weekTitle">Minggu ini</h4><table id="weekTable"></table></section>
+      <section><h4>Jubah</h4><div id="skins"></div><p class="hint">Jubah terbuka otomatis dari statistikmu dan dipakai mulai ronde berikutnya.</p></section>
+    </div>
   </div>
 </div>
 <script type="module" src="dist/bundle.js"></script>
