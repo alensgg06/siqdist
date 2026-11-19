@@ -229,6 +229,8 @@ Waktu tanpa zona dibaca sebagai WIB. Jadwal disimpan di `data/events.json` (ikut
 
 ## Selama ronde
 
+Pemain yang tidak bergerak dan tidak memakai jurus selama 30 menit dikeluarkan dari arena dengan pesan di menu; akunnya tetap masuk dan ia bisa langsung bergabung lagi. Menembak dan arah bidik tidak dihitung sebagai aktivitas, karena tembak otomatis dan bantuan bidik bisa menghasilkannya sendiri.
+
 - **Buronan**: pemimpin kill (minimal 3, unggul 2) bermahkota dan tampil di peta mini;
   menumbangkannya memberi +200 XP.
 - **Kejadian** tiap 90 detik: Gerhana (gelap, bot hanya melihat dekat), Hujan Rune, Cawan Emas.

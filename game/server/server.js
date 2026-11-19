@@ -45,6 +45,8 @@ const accounts = new Accounts(DATA_DIR);
 const AUTH = process.env.ARKANA_AUTH !== 'off';   // 'off' hanya untuk uji dan pengembangan
 const INVITE = process.env.ARKANA_INVITE || '';
 // nama pengguna yang boleh membuka halaman admin, dipisah koma; kosong = halaman admin mati
+// pemain yang tidak bergerak dan tidak memakai jurus selama ini dikeluarkan dari arena (IDLE_SEC hanya untuk uji)
+const IDLE_MS = (Number(process.env.IDLE_SEC) || 30 * 60) * 1000;
 const ADMINS = new Set((process.env.ARKANA_ADMINS || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean));
 const isAdmin = (u) => !!u && ADMINS.has(u.name.toLowerCase());
 // batas perangkat per akun: 1 untuk pemain, 2 untuk pengelola. Perangkat yang baru masuk menggeser yang tertua.
@@ -154,7 +156,7 @@ class Room {
       id: this.nextId++, name, clsKey, cls, bot: !ws, ws, team,
       x: 0, z: 0, yaw: 0, dashT: 0, dx: 0, dz: 0, skillCd: 0,
       hp: cls.hp, maxHp: cls.hp, lvl: 1, xp: 0, kills: 0, deaths: 0, dmg: 0,
-      pingSum: 0, pingN: 0, fpsSum: 0, fpsN: 0, joinedAt: Date.now(),
+      pingSum: 0, pingN: 0, fpsSum: 0, fpsN: 0, joinedAt: Date.now(), activeAt: Date.now(),
       pts: 0, ptsAcc: 0, dmgT: 0, spdT: 0, spd: 1, rtt: 0, hist: [], ult: 0,
       perks: {}, offer: null, spare: 0, spareT: 0, reviveP: 0,
       dead: false, respawnT: 0, fireCd: 0, shieldT: 0, protT: 0, hurtT: 99,
@@ -1359,6 +1361,9 @@ wss.on('connection', (ws) => {
       room.balanceBots();
       ws.send(JSON.stringify({ t: 'w', id: me.id, team: me.team, ev: room.event ? { name: room.event.name, left: Math.round((room.event.end - Date.now()) / 1000), target: room.event.target.text } : null, limit: room.mode === 'koth' ? KOTH_WIN : room.mode === 'king' ? KING_WIN : room.teams ? TEAM_WIN : LIMIT, code: room.code, cls: me.clsKey, mut: room.mut, practice: room.practice, gm: room.mode, map: room.map, diff: room.diff }));
     } else if (m.t === 'in' && me) {
+      // tanda aktif: bergerak, memakai jurus, atau jurus pamungkas. Menembak dan arah bidik tidak dihitung
+      // karena tembak otomatis dan bantuan bidik bisa menghasilkannya tanpa pemain menyentuh layar.
+      if (m.mx || m.mz || m.k || m.u) me.activeAt = Date.now();
       if (me.queue.length < 12) {
         me.queue.push({
           s: num(m.s, 0, 1e9) | 0, mx: num(m.mx, -1, 1), mz: num(m.mz, -1, 1),
@@ -1366,10 +1371,12 @@ wss.on('connection', (ws) => {
         });
       }
     } else if (m.t === 'ping' && me && !me.dead) {
+      me.activeAt = Date.now();
       // isyarat cepat ke seluruh room (klien hanya menampilkan milik rekan); dibatasi 1 per 1,5 dtk
       const now = Date.now(), k = num(m.k, 0, PINGS.length - 1) | 0;
       if (now - (me.pingAt || 0) > 1500) { me.pingAt = now; room.events.push(['q', me.id, k, r2(me.x), r2(me.z)]); }
     } else if (m.t === 'perk' && me && room?.pve) {
+      me.activeAt = Date.now();
       room.pickPerk(me, String(m.id || ''));
     } else if (m.t === 'spr' && me) {
       // balasan ping dari server: rtt diukur server sendiri, dipakai kompensasi lag dan catatan
@@ -1408,6 +1415,14 @@ const monitor = new Monitor(DATA_DIR, TICK, () => {
   for (const c of wss.clients) netBytes += (c._socket?.bytesWritten || 0);
   return { players, netBytes };
 });
+// keluarkan pemain yang tidak aktif (diperiksa berkala; tidak mengeluarkan akun dari perangkatnya)
+setInterval(() => {
+  const now = Date.now(), min = Math.round(IDLE_MS / 60000);
+  for (const r of rooms) for (const p of r.players.values()) {
+    if (p.bot || !p.ws || now - p.activeAt < IDLE_MS) continue;
+    try { p.ws.send(JSON.stringify({ t: 'e', m: `Kamu dikeluarkan karena tidak aktif selama ${min >= 1 ? `${min} menit` : `${Math.round(IDLE_MS / 1000)} detik`}.`, idle: 1 })); p.ws.close(); } catch { /* sudah putus */ }
+  }
+}, Math.min(30000, Math.max(500, IDLE_MS / 4))).unref();
 let next = Date.now();
 function loop() {
   const now = Date.now();
