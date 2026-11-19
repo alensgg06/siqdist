@@ -1295,11 +1295,12 @@ const server = http.createServer((req, res) => {
   if (!file.startsWith(ROOT)) { res.writeHead(403); res.end(); return; }
   fs.readFile(file, (err, data) => {
     if (err) { res.writeHead(404); res.end('Tidak ditemukan'); return; }
-    if (path.basename(file) === 'index.html') {
-      // nomor versi pada skrip dan gaya: cache browser, WebView, atau Cloudflare tidak bisa memakai berkas lama
+    if (path.extname(file) === '.html') {
+      // nomor versi pada skrip dan gaya di semua halaman (game, admin, uji suara):
+      // cache browser, WebView, atau Cloudflare tidak bisa memasangkan halaman baru dengan skrip lama
       let v = '0';
       try { v = Math.floor(fs.statSync(path.join(ROOT, 'dist', 'bundle.js')).mtimeMs).toString(36); } catch { /* belum dibangun */ }
-      data = data.toString().replace('dist/bundle.js', `dist/bundle.js?v=${v}`).replace('style.css', `style.css?v=${v}`);
+      data = data.toString().replace(/dist\/(bundle|admin|suara)\.js/g, `dist/$1.js?v=${v}`).replace('style.css', `style.css?v=${v}`);
       res.writeHead(200, { 'content-type': MIME['.html'], 'cache-control': 'no-store' });
       return res.end(data);
     }

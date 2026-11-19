@@ -143,22 +143,27 @@ for (const b of document.querySelectorAll('#nav button')) b.addEventListener('cl
 addEventListener('hashchange', () => go(location.hash.slice(1)));
 go(location.hash.slice(1));
 
+// Mengembalikan '' bila berhasil, atau alasan gagal. Galat saat menggambar tidak boleh menyamar sebagai "bukan pengelola".
 async function refresh(quiet) {
-  try {
-    const d = await call('/api/admin/state');
-    if (d.code === 200) { state = d; render(); if (!quiet) say('Data dimuat.'); return true; }
-  } catch { if (!quiet) say('Server tidak terjangkau.', 'bad'); }
-  return false;
+  let d;
+  try { d = await call('/api/admin/state'); } catch { if (!quiet) say('Server tidak terjangkau.', 'bad'); return 'Server tidak terjangkau.'; }
+  if (d.code === 403) return 'Akun ini bukan pengelola.';
+  if (d.code !== 200) return `Server menjawab ${d.code}${d.error ? `: ${d.error}` : ''}.`;
+  state = d;
+  try { render(); if (!quiet) say(''); }
+  catch (err) { console.error(err); say(`Sebagian halaman gagal ditampilkan (${err.message}). Muat ulang dengan Ctrl+F5; bila tetap muncul, laporkan pesan ini.`, 'bad'); }
+  return '';
 }
 async function boot() {
   let d = null;
   try { d = await call('/api/me'); } catch { /* ditangani di bawah */ }
   me = d?.user || null;
-  const ok = me?.admin && await refresh();
+  // pertanyaan "pengelola atau bukan" dijawab server lewat data admin, bukan ditebak dari tanda di klien
+  const why = me ? await refresh() : '', ok = !!me && why === '';
   $('app').classList.toggle('hidden', !ok); $('login').classList.toggle('hidden', !!ok);
   $('who').replaceChildren();
   if (me) $('who').append(`Masuk sebagai ${me.name} · `, btn('Keluar', async () => { await call('/api/logout', {}).catch(() => {}); token = ''; try { localStorage.removeItem(KEY); } catch { /* abaikan */ } boot(); }));
-  if (!ok) $('lMsg').textContent = !d ? 'Server tidak terjangkau.' : me ? 'Akun ini bukan pengelola.' : '';
+  $('lMsg').textContent = ok ? '' : !d ? 'Server tidak terjangkau.' : why;
 }
 $('login').addEventListener('submit', async (e) => {
   e.preventDefault(); $('lMsg').textContent = 'Memeriksa…';
