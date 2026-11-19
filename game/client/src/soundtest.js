@@ -1,5 +1,5 @@
 // Halaman uji suara: memutar tiap bunyi game tanpa harus bermain.
-import { initAudio, sfx, render, SOUNDS } from './audio.js';
+import { initAudio, sfx, render, setMusic, setVolume, SOUNDS } from './audio.js';
 
 const GROUPS = [
   ['Tembakan', [['ranger', 'Pemanah Arkana'], ['mage', 'Penyihir Bara'], ['guardian', 'Penjaga Rune'], ['priest', 'Haji Toriq'], ['caster', 'Dukun Bayang (monster)'], ['frost', 'Penyihir Es (monster)']]],
@@ -22,4 +22,10 @@ for (const [title, items] of GROUPS) {
     root.append(row);
   }
 }
-window.arkanaSound = { render, names: Object.keys(SOUNDS) };
+{
+  const h = document.createElement('h2'); h.textContent = 'Musik latar'; root.append(h);
+  const row = document.createElement('div'); row.className = 'row';
+  for (const [id, label] of [['menu', 'Halaman pembuka'], ['battle', 'Saat bermain'], [null, 'Berhenti']]) { const x = document.createElement('button'); x.textContent = label; x.className = 'main'; x.addEventListener('click', () => { initAudio(); setMusic(id); }); row.append(x); }
+  root.append(row);
+}
+window.arkanaSound = { render, setVolume, names: Object.keys(SOUNDS) };

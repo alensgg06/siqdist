@@ -75,7 +75,8 @@
     <label class="row"><input id="autoFire" type="checkbox"> Tembak otomatis saat bidikan mengenai lawan</label>
     <label class="row"><input id="aimAssist" type="checkbox"> Bantuan bidik</label>
     <label class="row"><input id="vibrate" type="checkbox"> Getar saat terkena dan menumbangkan lawan</label>
-    <label class="row"><input id="music" type="checkbox"> Musik latar</label>
+    <label>Musik latar <input type="range" data-vol="music" min="0" max="1" step="0.05" aria-label="Volume musik latar"></label>
+    <label>Efek suara <input type="range" data-vol="sfx" min="0" max="1" step="0.05" aria-label="Volume efek suara"></label>
     <label class="row"><input id="mute" type="checkbox"> Matikan suara</label>
     <div class="btns"><button id="resume">Lanjut</button><button id="leave" class="ghost">Keluar ke menu</button></div>
   </div>
@@ -113,6 +114,7 @@
       <div class="join"><input id="code" maxlength="4" placeholder="KODE" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Kode room"><button id="joinBtn" class="sec">Gabung</button></div>
     </div>
     <div class="links"><button id="practice" class="link">Latihan dan tutorial</button><button id="ranksBtn" class="link">Peringkat dan jubah</button></div>
+    <div class="vols"><label>Musik <input type="range" data-vol="music" min="0" max="1" step="0.05" aria-label="Volume musik latar"></label><label>Efek <input type="range" data-vol="sfx" min="0" max="1" step="0.05" aria-label="Volume efek suara"></label></div>
     <p id="menuMsg"></p>
     <p class="hint" id="hint"></p>
   </div>

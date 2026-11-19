@@ -241,6 +241,8 @@ npm run stats                                       # tanpa Docker
 
 Semua bunyi disintesis di perangkat pemain (`client/src/audio.js`), tanpa berkas audio. Tiap bunyi berlapis (hentakan, badan, ekor) dengan nada yang sedikit diacak, dan tembakan pemain lain diredam sesuai jarak. Buka `/suara.html` di server game untuk mendengar tiap bunyi tanpa bermain.
 
+Musik latar juga disintesis: satu lagu tenang untuk halaman pembuka dan satu lagu berdenyut saat bermain, berganti dengan memudar. Volume musik dan efek diatur terpisah lewat penggeser di halaman pembuka dan di menu Pengaturan (0 = mati), dan tersimpan di perangkat. Di peramban, suara baru mulai setelah sentuhan pertama; di APK langsung saat dibuka. Suara berhenti saat aplikasi di latar belakang.
+
 ## Kontrol
 
 | | HP | Desktop |

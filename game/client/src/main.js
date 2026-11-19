@@ -10,7 +10,7 @@ import { buildHarbor } from './harbor.js';
 import { Avatar, Monster } from './chars.js';
 import { Fx } from './fx.js';
 import { input, setupInput, isTouch } from './input.js';
-import { initAudio, sfx, setMuted, setMusic, step } from './audio.js';
+import { initAudio, sfx, setMuted, setMusic, setVolume, setActive, audioRunning, step } from './audio.js';
 
 const $ = (id) => document.getElementById(id);
 addEventListener('error', (e) => { const m = document.getElementById('menuMsg'); if (m) m.textContent = `Galat: ${e.message}`; });
@@ -115,7 +115,7 @@ const G = {
   autoFire: store.get('autoFire', isTouch ? '1' : '') === '1', aimAssist: store.get('aimAssist', isTouch ? '1' : '') === '1',
   lastShotTick: new Map(), shake: 0, time: 0,
   vibrate: store.get('vibrate', '1') === '1', code: null, practice: false, joinErr: '', buzzT: 0,
-  createDiff: store.get('diff', 'normal'), pid: playerId(), skin: store.get('skin', 'default'), mapId: 'ruins', createMap: store.get('map', 'rotate'), tut: null, music: store.get('music', '1') === '1', stepT: 0, team: -1, teamScore: [0, 0], gm: 'dm', runeMask: 15, holder: 0, ticks: [], createGm: store.get('gm', 'dm'),
+  createDiff: store.get('diff', 'normal'), pid: playerId(), skin: store.get('skin', 'default'), mapId: 'ruins', createMap: store.get('map', 'rotate'), tut: null, stepT: 0, team: -1, teamScore: [0, 0], gm: 'dm', runeMask: 15, holder: 0, ticks: [], createGm: store.get('gm', 'dm'),
 };
 window.__arkana = G; // dipakai uji otomatis
 
@@ -156,7 +156,6 @@ $('code').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('joinBtn
 
 function start(mode, code) {
   initAudio();
-  setMusic(G.music);
   const name = $('name').value.trim() || 'Pengembara';
   store.set('name', name);
   for (const b of menuBtns) $(b).disabled = true;
@@ -363,7 +362,7 @@ function leaveGame() {
   for (const p of G.players.values()) p.av.dispose(scene);
   G.players.clear(); G.roster.clear(); G.pending.length = 0;
   for (const id of [...fx.projs.keys()]) fx.removeProj(id);
-  G.phase = 'menu'; input.enabled = false; input.reset?.();
+  G.phase = 'menu'; input.enabled = false; input.reset?.(); setMusic('menu');
   if (G.menuCls) G.clsKey = G.menuCls;
   showRejoin();
   document.exitPointerLock?.();
@@ -375,7 +374,7 @@ function leaveGame() {
 // ---------- jaringan ----------
 function onMessage(m) {
   if (m.t === 'w') {
-    G.myId = m.id; G.limit = m.limit || KILL_LIMIT; G.menuCls = G.clsKey; if (CLASSES[m.cls]) G.clsKey = m.cls; G.cls = CLASSES[G.clsKey]; G.phase = 'play'; G.ended = false;
+    G.myId = m.id; G.limit = m.limit || KILL_LIMIT; G.menuCls = G.clsKey; if (CLASSES[m.cls]) G.clsKey = m.cls; G.cls = CLASSES[G.clsKey]; G.phase = 'play'; setMusic('battle'); G.ended = false;
     G.mut = m.mut || null; if (G.mut) setTimeout(() => toast(`Mode akhir pekan: ${MUTATORS[G.mut].name}`), 2200);
     if (m.code) { store.set('lastRoom', m.code); } G.barrelMask = 0;
     G.seq = 0; G.pending.length = 0; G.me.xp = 0; G.me.lvl = 1;
@@ -733,8 +732,27 @@ $('autoFire').checked = G.autoFire; $('aimAssist').checked = G.aimAssist;
 $('autoFire').addEventListener('change', (e) => { G.autoFire = e.target.checked; store.set('autoFire', G.autoFire ? '1' : ''); });
 $('aimAssist').addEventListener('change', (e) => { G.aimAssist = e.target.checked; store.set('aimAssist', G.aimAssist ? '1' : ''); });
 $('mute').addEventListener('change', (e) => setMuted(e.target.checked));
-$('music').checked = G.music;
-$('music').addEventListener('change', (e) => { G.music = e.target.checked; store.set('music', G.music ? '1' : ''); setMusic(G.music); });
+// ---------- musik latar dan volume ----------
+// pengaturan lama "musik mati" dibawa sebagai volume musik 0
+const vols = { music: Number(store.get('volMusic', store.get('music', '1') === '1' ? '0.6' : '0')), sfx: Number(store.get('volSfx', '0.8')) };
+for (const el of document.querySelectorAll('[data-vol]')) {
+  const k = el.dataset.vol; el.value = vols[k];
+  el.addEventListener('input', () => {
+    vols[k] = Number(el.value); store.set(k === 'music' ? 'volMusic' : 'volSfx', el.value); setVolume(k, vols[k]);
+    for (const o of document.querySelectorAll(`[data-vol="${k}"]`)) if (o !== el) o.value = el.value;
+    wakeAudio();
+  });
+  if (k === 'sfx') el.addEventListener('change', () => sfx('hit')); // contoh bunyi saat penggeser dilepas
+}
+const trackNow = () => (G.phase === 'play' ? 'battle' : 'menu');
+// peramban baru mengizinkan suara setelah sentuhan pertama; di APK suara boleh langsung
+function wakeAudio() {
+  initAudio(); setVolume('music', vols.music); setVolume('sfx', vols.sfx); setMusic(trackNow());
+  if (audioRunning()) { removeEventListener('pointerdown', wakeAudio, true); removeEventListener('keydown', wakeAudio, true); }
+}
+addEventListener('pointerdown', wakeAudio, true); addEventListener('keydown', wakeAudio, true);
+wakeAudio();
+document.addEventListener('visibilitychange', () => setActive(!document.hidden));
 $('vibrate').checked = G.vibrate;
 $('vibrate').addEventListener('change', (e) => { G.vibrate = e.target.checked; store.set('vibrate', G.vibrate ? '1' : ''); if (G.vibrate) buzz(40); });
 for (const el of [pauseEl]) for (const ev of ['touchstart', 'touchmove']) el.addEventListener(ev, (e) => e.stopPropagation());
