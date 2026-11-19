@@ -12,7 +12,7 @@ const srvs = [];
 const fail = (m) => { console.error('GAGAL:', m); for (const p of srvs) p.kill(); process.exit(1); };
 // dua server: ronde normal untuk uji tabrakan, ronde 6 detik untuk uji rotasi peta
 async function server(port, env) {
-  const p = spawn(process.execPath, ['server/server.js'], { cwd: ROOT, env: { ...process.env, PORT: String(port), BOTS: '0', DATA_DIR: '/tmp/arkana-maps-test', ...env }, stdio: ['ignore', 'ignore', 'inherit'] });
+  const p = spawn(process.execPath, ['server/server.js'], { cwd: ROOT, env: { ...process.env, ARKANA_AUTH: 'off', PORT: String(port), BOTS: '0', DATA_DIR: '/tmp/arkana-maps-test', ...env }, stdio: ['ignore', 'ignore', 'inherit'] });
   srvs.push(p);
   for (let i = 0; i < 50; i++) { try { if ((await fetch(`http://localhost:${port}/health`)).ok) return; } catch { /* belum */ } await sleep(100); }
   fail('server tidak menyala');

@@ -35,7 +35,7 @@ const mailEnv = { SMTP_HOST: '127.0.0.1', SMTP_PORT: String(SMTP), SMTP_FROM: 'A
 const env = { ...process.env, MUTATOR: 'none', BOTS: '0' }; for (const k of ['ARKANA_AUTH', 'SMTP_HOST', 'SMTP_FROM', 'SMTP_USER', 'SMTP_PASS']) delete env[k];
 const s1 = spawn(process.execPath, ['server/server.js'], { cwd: ROOT, env: { ...env, ...mailEnv, PORT: String(P1), DATA_DIR: DATA + '/1' }, stdio: ['ignore', 'ignore', 'inherit'] });
 const s2 = spawn(process.execPath, ['server/server.js'], { cwd: ROOT, env: { ...env, PORT: String(P2), DATA_DIR: DATA + '/2' }, stdio: ['ignore', 'ignore', 'inherit'] });
-const done = () => { s1.kill(); s2.kill(); smtp.close(); fs.rmSync(DATA, { recursive: true, force: true }); };
+const done = () => { s1.kill(); s2.kill(); smtp.close(); try { fs.rmSync(DATA, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); } catch { /* server masih menulis saat dimatikan */ } };
 const fail = (m) => { console.error('GAGAL:', m); done(); process.exit(1); };
 for (const port of [P1, P2]) for (let i = 0; i < 50; i++) { try { if ((await fetch(`http://localhost:${port}/health`)).ok) break; } catch { /* belum */ } await sleep(100); }
 let ipN = 0;

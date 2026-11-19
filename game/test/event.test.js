@@ -16,7 +16,7 @@ const PK = 8082, PG = 8081;
 const DATA = fs.mkdtempSync(path.join(os.tmpdir(), 'arkana-ev-'));
 const DK = DATA + '/k', DG = DATA + '/g';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const base = { ...process.env, MUTATOR: 'none', EVENT_FIRST: '999', END_TIME: '2' };
+const base = { ...process.env, ARKANA_AUTH: 'off', MUTATOR: 'none', EVENT_FIRST: '999', END_TIME: '2' };
 const sk = spawn(process.execPath, ['server/server.js'], { cwd: ROOT, env: { ...base, PORT: String(PK), DATA_DIR: DK, BOTS: '0' }, stdio: ['ignore', 'ignore', 'inherit'] });
 const sg = spawn(process.execPath, ['server/server.js'], { cwd: ROOT, env: { ...base, PORT: String(PG), DATA_DIR: DG, PVE_BREAK: '2', PVE_PERK_BREAK: '6' }, stdio: ['ignore', 'ignore', 'inherit'] });
 const done = () => { sk.kill(); sg.kill(); fs.rmSync(DATA, { recursive: true, force: true }); };
@@ -24,7 +24,7 @@ const fail = (m) => { console.error('GAGAL:', m); done(); process.exit(1); };
 for (const port of [PK, PG]) for (let i = 0; i < 50; i++) { try { if ((await fetch(`http://localhost:${port}/health`)).ok) break; } catch { /* belum */ } await sleep(100); }
 const until = async (fn, ms) => { const t = Date.now(); while (Date.now() - t < ms) { if (await fn()) return true; await sleep(100); } return false; };
 const api = (port) => fetch(`http://localhost:${port}/api/event`).then((r) => r.json());
-const tool = (dir, ...a) => execFileSync(process.execPath, ['tools/event.js', ...a], { cwd: ROOT, env: { ...process.env, DATA_DIR: dir }, encoding: 'utf8' });
+const tool = (dir, ...a) => execFileSync(process.execPath, ['tools/event.js', ...a], { cwd: ROOT, env: { ...process.env, ARKANA_AUTH: 'off', DATA_DIR: dir }, encoding: 'utf8' });
 const pid = (c) => c.repeat(16);
 function client(port, join) {
   const c = { ws: new WebSocket(`ws://localhost:${port}/ws`), id: 0, w: null, err: null, snap: null, roster: [], ev: [], seq: 0 };

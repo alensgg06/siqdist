@@ -13,7 +13,7 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = 8087, PORT2 = 8086, MAP = process.env.MAP || 'ruins';
 const DATA = fs.mkdtempSync(path.join(os.tmpdir(), 'arkana-pve-'));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const env = { ...process.env, PVE_BREAK: '2', PVE_PERK_BREAK: '4', PVE_CHECKPOINT: '1', EVENT_FIRST: '999', END_TIME: '2', DATA_DIR: DATA };
+const env = { ...process.env, ARKANA_AUTH: 'off', PVE_BREAK: '2', PVE_PERK_BREAK: '4', PVE_CHECKPOINT: '1', EVENT_FIRST: '999', END_TIME: '2', DATA_DIR: DATA };
 // server 1: aturan biasa (dengan bot sekutu). server 2: tanpa sekutu, agar tahap tumbang/ditolong/titik simpan bisa diuji
 const srv = spawn(process.execPath, ['server/server.js'], { cwd: ROOT, env: { ...env, PORT: String(PORT) }, stdio: ['ignore', 'ignore', 'inherit'] });
 const srv2 = spawn(process.execPath, ['server/server.js'], { cwd: ROOT, env: { ...env, PORT: String(PORT2), PVE_ALLIES: '0', PVE_DMG_MUL: '3', DATA_DIR: DATA + '/2' }, stdio: ['ignore', 'ignore', 'inherit'] });

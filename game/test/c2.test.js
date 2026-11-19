@@ -15,7 +15,7 @@ const PORT = 8088;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let srv;
 const fail = (m) => { console.error('GAGAL:', m); srv?.kill(); process.exit(1); };
-srv = spawn(process.execPath, ['server/server.js'], { cwd: ROOT, env: { ...process.env, PORT: String(PORT), DATA_DIR: DATA, BOTS: '0', EVENT_FIRST: '3', KILL_LIMIT: '50' }, stdio: ['ignore', 'ignore', 'inherit'] });
+srv = spawn(process.execPath, ['server/server.js'], { cwd: ROOT, env: { ...process.env, ARKANA_AUTH: 'off', PORT: String(PORT), DATA_DIR: DATA, BOTS: '0', EVENT_FIRST: '3', KILL_LIMIT: '50' }, stdio: ['ignore', 'ignore', 'inherit'] });
 for (let i = 0; i < 50; i++) { try { if ((await fetch(`http://localhost:${PORT}/health`)).ok) break; } catch { /* belum */ } await sleep(100); }
 const until = async (fn, ms) => { const t = Date.now(); while (Date.now() - t < ms) { if (fn()) return true; await sleep(50); } return false; };
 function client(join) {

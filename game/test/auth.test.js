@@ -14,7 +14,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const env = { ...process.env, MUTATOR: 'none', BOTS: '0' }; delete env.ARKANA_AUTH;
 const s1 = spawn(process.execPath, ['server/server.js'], { cwd: ROOT, env: { ...env, PORT: String(P1), DATA_DIR: DATA + '/1' }, stdio: ['ignore', 'ignore', 'inherit'] });
 const s2 = spawn(process.execPath, ['server/server.js'], { cwd: ROOT, env: { ...env, PORT: String(P2), DATA_DIR: DATA + '/2', ARKANA_INVITE: 'rahasia-teman' }, stdio: ['ignore', 'ignore', 'inherit'] });
-const done = () => { s1.kill(); s2.kill(); fs.rmSync(DATA, { recursive: true, force: true }); };
+const done = () => { s1.kill(); s2.kill(); try { fs.rmSync(DATA, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); } catch { /* server masih menulis saat dimatikan */ } };
 const fail = (m) => { console.error('GAGAL:', m); done(); process.exit(1); };
 for (const port of [P1, P2]) for (let i = 0; i < 50; i++) { try { if ((await fetch(`http://localhost:${port}/health`)).ok) break; } catch { /* belum */ } await sleep(100); }
 const api = async (port, url, body, token, ip) => {
