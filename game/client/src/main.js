@@ -168,28 +168,41 @@ function signedOut(msg = '') {
   $('who').classList.add('hidden'); $('authMsg').textContent = msg;
   if (auth.on) { $('auth').classList.remove('hidden'); $('authName').value ||= store.get('name', ''); }
 }
-function authTab(reg) {
-  auth.reg = reg;
-  $('tabLogin').classList.toggle('on', !reg); $('tabReg').classList.toggle('on', reg);
-  $('tabLogin').setAttribute('aria-selected', String(!reg)); $('tabReg').setAttribute('aria-selected', String(reg));
-  $('authPass2Row').classList.toggle('hidden', !reg); $('authHint').classList.toggle('hidden', !reg);
-  $('authInviteRow').classList.toggle('hidden', !reg || !auth.invite);
-  $('authPass').autocomplete = reg ? 'new-password' : 'current-password';
-  $('authGo').textContent = reg ? 'Daftar' : 'Masuk'; $('authMsg').textContent = '';
+// tampilan: 'login', 'reg', 'forgot' (minta kode), 'reset' (isi kode dan kata sandi baru)
+function authView(v) {
+  auth.view = v; auth.reg = v === 'reg';
+  const reg = v === 'reg', login = v === 'login', forgot = v === 'forgot', reset = v === 'reset', show = (id, on) => $(id).classList.toggle('hidden', !on);
+  $('tabLogin').classList.toggle('on', login); $('tabReg').classList.toggle('on', reg);
+  $('tabLogin').setAttribute('aria-selected', String(login)); $('tabReg').setAttribute('aria-selected', String(reg));
+  show('authTabs', login || reg); show('authPassRow', !forgot); show('authPass2Row', reg || reset); show('authHint', reg);
+  show('authInviteRow', reg && auth.invite); show('authMailRow', reg && auth.mail); show('authNoMail', !auth.mail);
+  show('authCodeRow', reset); show('authForgot', login && auth.mail); show('authBack', forgot || reset);
+  $('authName').readOnly = reset;
+  $('authPassLabel').textContent = reset ? 'Kata sandi baru' : 'Kata sandi';
+  $('authPass').autocomplete = login ? 'current-password' : 'new-password';
+  $('authGo').textContent = reg ? 'Daftar' : forgot ? 'Kirim kode ke email' : reset ? 'Ganti kata sandi' : 'Masuk';
+  $('authMsg').textContent = '';
 }
-$('tabLogin').addEventListener('click', () => authTab(false));
-$('tabReg').addEventListener('click', () => authTab(true));
+$('tabLogin').addEventListener('click', () => authView('login'));
+$('tabReg').addEventListener('click', () => authView('reg'));
+$('authForgot').addEventListener('click', () => authView('forgot'));
+$('authBack').addEventListener('click', () => authView('login'));
 $('authForm').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const name = $('authName').value.trim(), pass = $('authPass').value, say = (t) => { $('authMsg').textContent = t; };
+  const v = auth.view, name = $('authName').value.trim(), pass = $('authPass').value, mail = $('authMail').value.trim(), code = $('authCode').value.trim(), say = (t) => { $('authMsg').textContent = t; };
   if (!/^[A-Za-z0-9_]{3,14}$/.test(name)) return say('Nama pengguna 3-14 karakter: huruf, angka, atau garis bawah.');
-  if (pass.length < 8) return say('Kata sandi minimal 8 karakter.');
-  if (auth.reg && pass !== $('authPass2').value) return say('Kedua kata sandi tidak sama.');
-  $('authGo').disabled = true; say(auth.reg ? 'Mendaftarkan…' : 'Memeriksa…');
+  if (v !== 'forgot' && pass.length < 8) return say('Kata sandi minimal 8 karakter.');
+  if ((v === 'reg' || v === 'reset') && pass !== $('authPass2').value) return say('Kedua kata sandi tidak sama.');
+  if (v === 'reg' && auth.mail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)) return say('Isi alamat email yang benar.');
+  if (v === 'reset' && !/^\d{6}$/.test(code)) return say('Kode terdiri dari 6 angka.');
+  $('authGo').disabled = true; say(v === 'reg' ? 'Mendaftarkan…' : v === 'forgot' ? 'Mengirim…' : 'Memeriksa…');
   try {
-    const r = await fetch(auth.reg ? '/api/register' : '/api/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name, pass, pid: G.pid, invite: $('authInvite').value.trim() || undefined }) });
+    const url = { login: '/api/login', reg: '/api/register', forgot: '/api/forgot', reset: '/api/reset' }[v];
+    const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name, pass: v === 'forgot' ? undefined : pass, pid: G.pid, invite: $('authInvite').value.trim() || undefined, email: v === 'reg' && mail ? mail : undefined, code: v === 'reset' ? code : undefined }) });
     const d = await r.json();
-    if (d.token) signedIn(d.token, d.user); else say(d.error || 'Gagal. Coba lagi.');
+    if (d.token) { authView('login'); signedIn(d.token, d.user); }
+    else if (v === 'forgot' && d.ok) { authView('reset'); say('Bila akun itu punya email, kode sudah dikirim. Periksa kotak masuk dan folder spam.'); }
+    else say(d.error || 'Gagal. Coba lagi.');
   } catch { say('Server tidak terjangkau. Periksa koneksi lalu coba lagi.'); }
   $('authGo').disabled = false;
 });
@@ -201,9 +214,9 @@ $('logout').addEventListener('click', () => {
 (async () => {
   try {
     const d = await fetch('/api/me', { headers: auth.token ? { authorization: 'Bearer ' + auth.token } : {} }).then((r) => r.json());
-    auth.on = !!d.auth; auth.invite = !!d.invite;
+    auth.on = !!d.auth; auth.invite = !!d.invite; auth.mail = !!d.mail;
     if (!auth.on) return;
-    authTab(false);
+    authView('login');
     if (d.user) signedIn(auth.token, d.user); else signedOut();
   } catch { /* server belum terjangkau: menu tetap tampil, bergabung akan gagal dengan pesan */ }
 })();

@@ -156,6 +156,29 @@ docker compose exec arkana node tools/akun.js hapus <nama>
 - Lewat alamat `https://` kata sandi terenkripsi di perjalanan. Lewat `http://IP:port` di jaringan rumah tidak, jadi pakai alamat https untuk mendaftar dan masuk.
 - `ARKANA_AUTH=off` mematikan kewajiban akun; hanya untuk uji dan pengembangan.
 
+## Email (lupa kata sandi)
+
+Server tidak mengirim email sendiri; ia menitipkannya ke SMTP penyedia email (Gmail, atau layanan email transaksional). Mengirim langsung dari internet rumah hampir pasti ditolak atau masuk spam, jadi itu sengaja tidak dibuat.
+
+Isi di `.env` di server, lalu jalankan ulang container:
+
+```
+SMTP_HOST=smtp.penyedia.com
+SMTP_PORT=587
+SMTP_USER=...
+SMTP_PASS=...            # rahasia: hanya di .env
+SMTP_FROM=Arkana <alamat@domainmu>
+```
+
+Periksa dan coba:
+
+```bash
+docker compose exec arkana node tools/email.js cek
+docker compose exec arkana node tools/email.js tes kamu@contoh.com
+```
+
+Saat pengirim email aktif: pendaftaran meminta email (satu email untuk satu akun), dan halaman masuk menampilkan "Lupa kata sandi?". Pemain memasukkan nama pengguna, menerima kode 6 angka (berlaku 15 menit, hangus setelah 5 tebakan salah), lalu membuat kata sandi baru. Akun yang dibuat sebelum email aktif belum punya email; isi dengan `node tools/akun.js email <nama> <alamat>`. Bila `SMTP_HOST` kosong, semua ini mati dan game berjalan seperti biasa.
+
 ## Event
 
 Event adalah acara berjangka waktu yang kamu mulai sendiri. Selama event berjalan, menu menampilkan spanduk dengan hitung mundur dan tombol **Ikut event**; semua yang menekan tombol itu masuk ke room event yang sama (sampai penuh, lalu room berikutnya).

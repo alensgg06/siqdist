@@ -21,6 +21,7 @@ import { stepPlayer, blocked, los, angDiff, setMap, collide } from '../shared/si
 import { Stats } from './stats.js';
 import { Events } from './events.js';
 import { Accounts } from './accounts.js';
+import { sendMail, mailOn } from './mailer.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'client');
 const PORT = Number(process.env.PORT) || 8080;
@@ -1153,11 +1154,11 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
     res.end(JSON.stringify(body)); return;
   }
-  if (url === '/api/me' || url === '/api/register' || url === '/api/login' || url === '/api/logout') {
+  if (url === '/api/me' || url === '/api/register' || url === '/api/login' || url === '/api/logout' || url === '/api/forgot' || url === '/api/reset') {
     const send = (code, body) => { res.writeHead(code, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify(body)); };
     const bearer = () => { const h = req.headers.authorization || ''; return h.startsWith('Bearer ') ? h.slice(7) : ''; };
     const pub = (u) => (u ? { name: u.name, pid: u.pid } : null);
-    if (url === '/api/me') return send(200, { auth: AUTH, invite: !!INVITE, user: pub(accounts.byToken(bearer())) });
+    if (url === '/api/me') return send(200, { auth: AUTH, invite: !!INVITE, mail: mailOn, user: pub(accounts.byToken(bearer())) });
     if (req.method !== 'POST') return send(405, { error: 'Metode tidak didukung.' });
     let raw = '', over = false;
     req.on('data', (c) => { raw += c; if (raw.length > 2048) { over = true; req.destroy(); } });
@@ -1169,12 +1170,23 @@ const server = http.createServer((req, res) => {
       // di belakang Cloudflare Tunnel alamat asli pemain ada di header ini
       const ip = String(req.headers['cf-connecting-ip'] || req.socket.remoteAddress || '?');
       const nameKey = 'n:' + String(b.name || '').toLowerCase().slice(0, 20);
-      if (accounts.limited('i:' + ip) || (url === '/api/login' && accounts.limited(nameKey))) return send(429, { error: 'Terlalu banyak percobaan. Coba lagi 10 menit lagi.' });
+      if (accounts.limited('i:' + ip) || (url !== '/api/register' && accounts.limited(nameKey))) return send(429, { error: 'Terlalu banyak percobaan. Coba lagi 10 menit lagi.' });
+      if (url === '/api/forgot') {
+        // jawaban selalu sama, supaya tidak membocorkan nama mana yang terdaftar atau punya email
+        accounts.strike('i:' + ip); accounts.strike(nameKey);
+        if (!mailOn) return send(400, { error: 'Pemulihan lewat email belum tersedia. Hubungi pengelola server.' });
+        const rs = accounts.startReset(b.name);
+        if (rs) sendMail(rs.email, 'Arkana: kode ganti kata sandi', `Halo ${rs.name},\n\nKode untuk mengganti kata sandi Arkana: ${rs.code}\nKode berlaku 15 menit.\n\nBila kamu tidak memintanya, abaikan email ini; kata sandimu tidak berubah.\n`).catch((err) => console.error('email gagal terkirim:', err.message));
+        return send(200, { ok: true });
+      }
       let r;
-      if (url === '/api/register') {
+      if (url === '/api/reset') {
+        r = accounts.finishReset(b.name, b.code, b.pass);
+        if (r.error) { accounts.strike('i:' + ip); accounts.strike(nameKey); }
+      } else if (url === '/api/register') {
         accounts.strike('i:' + ip); // pendaftaran juga dibatasi per alamat
         if (INVITE && b.invite !== INVITE) return send(403, { error: 'Kode undangan salah.' });
-        r = accounts.register(b.name, b.pass, b.pid, stats.validId(b.pid));
+        r = accounts.register(b.name, b.pass, b.pid, stats.validId(b.pid), b.email, mailOn);
       } else {
         r = accounts.login(b.name, b.pass);
         if (r.error) { accounts.strike('i:' + ip); accounts.strike(nameKey); }

@@ -86,14 +86,17 @@
   <form class="card" id="authForm" autocomplete="on">
     <h1>ARKANA</h1>
     <h3>Reruntuhan Senja</h3>
-    <div class="tabs" role="tablist"><button type="button" id="tabLogin" class="on" role="tab" aria-selected="true">Masuk</button><button type="button" id="tabReg" role="tab" aria-selected="false">Daftar akun baru</button></div>
+    <div class="tabs" id="authTabs" role="tablist"><button type="button" id="tabLogin" class="on" role="tab" aria-selected="true">Masuk</button><button type="button" id="tabReg" role="tab" aria-selected="false">Daftar akun baru</button></div>
     <label>Nama pengguna<input id="authName" name="username" maxlength="14" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
-    <label>Kata sandi<input id="authPass" name="password" type="password" maxlength="72" autocomplete="current-password" required></label>
+    <label id="authMailRow" class="hidden">Email (untuk pemulihan kata sandi)<input id="authMail" name="email" type="email" maxlength="254" autocomplete="email" autocapitalize="none" spellcheck="false"></label>
+    <label id="authCodeRow" class="hidden">Kode dari email (6 angka)<input id="authCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code"></label>
+    <label id="authPassRow"><span id="authPassLabel">Kata sandi</span><input id="authPass" name="password" type="password" maxlength="72" autocomplete="current-password"></label>
     <label id="authPass2Row" class="hidden">Ulangi kata sandi<input id="authPass2" type="password" maxlength="72" autocomplete="new-password"></label>
     <label id="authInviteRow" class="hidden">Kode undangan<input id="authInvite" maxlength="40" autocomplete="off" spellcheck="false"></label>
-    <p id="authHint" class="hint hidden">Nama pengguna 3-14 karakter (huruf, angka, garis bawah) dan menjadi nama tampilanmu. Kata sandi minimal 8 karakter. Tidak ada pemulihan lewat email: bila lupa kata sandi, minta pengelola server meresetnya.</p>
+    <p id="authHint" class="hint hidden">Nama pengguna 3-14 karakter (huruf, angka, garis bawah) dan menjadi nama tampilanmu. Kata sandi minimal 8 karakter. <span id="authNoMail">Tidak ada pemulihan lewat email: bila lupa kata sandi, minta pengelola server meresetnya.</span></p>
     <p id="authMsg" role="alert"></p>
     <button id="authGo" type="submit">Masuk</button>
+    <p class="authLinks"><button type="button" id="authForgot" class="link hidden">Lupa kata sandi?</button><button type="button" id="authBack" class="link hidden">Kembali ke halaman masuk</button></p>
   </form>
 </div>
 

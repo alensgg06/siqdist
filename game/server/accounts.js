@@ -5,6 +5,8 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 
 const NAME_RE = /^[A-Za-z0-9_]{3,14}$/;
+const MAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,180}\.[^\s@]{2,24}$/;
+const CODE_MS = 15 * 60e3, CODE_TRIES = 5;
 const SESSION_MS = 30 * 86400e3;
 const MAX_SESSIONS = 5;          // per akun; yang tertua dibuang
 export const PASS_MIN = 8, PASS_MAX = 72;
@@ -43,6 +45,37 @@ export class Accounts {
   static checkName(name) { return typeof name === 'string' && NAME_RE.test(name) ? null : 'Nama pengguna 3-14 karakter: huruf, angka, atau garis bawah.'; }
   static checkPass(pass) { return typeof pass === 'string' && pass.length >= PASS_MIN && pass.length <= PASS_MAX ? null : `Kata sandi ${PASS_MIN}-${PASS_MAX} karakter.`; }
 
+  static checkMail(mail) { return typeof mail === 'string' && mail.length <= 254 && MAIL_RE.test(mail) ? null : 'Alamat email tidak sah.'; }
+  mailTaken(mail, except) { const m = mail.toLowerCase(); return Object.values(this.users).some((u) => u !== except && u.email === m); }
+  setMail(name, mail) {
+    this.sync();
+    const u = this.users[String(name).toLowerCase()]; if (!u) return 'Akun tidak ditemukan.';
+    const err = Accounts.checkMail(mail); if (err) return err;
+    if (this.mailTaken(mail, u)) return 'Alamat email itu sudah dipakai akun lain.';
+    u.email = mail.toLowerCase(); this.save(); return null;
+  }
+  // Lupa kata sandi: kode 6 angka berlaku 15 menit. Mengembalikan { email, code } hanya bila akun ada dan punya email.
+  startReset(name) {
+    this.sync();
+    const u = typeof name === 'string' ? this.users[name.toLowerCase()] : null;
+    if (!u || !u.email) return null;
+    const code = String(crypto.randomInt(0, 1e6)).padStart(6, '0');
+    u.reset = { h: sha(u.salt + code), exp: Date.now() + CODE_MS, tries: 0 };
+    this.save();
+    return { email: u.email, code, name: u.name };
+  }
+  finishReset(name, code, pass) {
+    this.sync();
+    const u = typeof name === 'string' ? this.users[name.toLowerCase()] : null, bad = { error: 'Kode salah atau sudah kedaluwarsa. Minta kode baru.' };
+    const err = Accounts.checkPass(pass); if (err) return { error: err };
+    if (!u || !u.reset || u.reset.exp < Date.now()) return bad;
+    if (++u.reset.tries > CODE_TRIES) { delete u.reset; this.save(); return bad; }
+    if (typeof code !== 'string' || sha(u.salt + code) !== u.reset.h) { this.save(); return bad; }
+    delete u.reset;
+    u.salt = crypto.randomBytes(16).toString('hex'); u.hash = hashPass(pass, u.salt); u.sessions = [];
+    return { token: this.issue(u), name: u.name, pid: u.pid };
+  }
+
   issue(u) {
     const token = crypto.randomBytes(32).toString('base64url');
     u.sessions = (u.sessions || []).filter((s) => s.exp > Date.now()).slice(-(MAX_SESSIONS - 1));
@@ -51,15 +84,17 @@ export class Accounts {
     return token;
   }
   // pidHint: id statistik perangkat ini; dipakai bila belum dimiliki akun lain, supaya statistik lama ikut
-  register(name, pass, pidHint, pidOk) {
+  register(name, pass, pidHint, pidOk, mail, mailNeeded) {
     this.sync();
-    const err = Accounts.checkName(name) || Accounts.checkPass(pass);
+    const err = Accounts.checkName(name) || Accounts.checkPass(pass) || (mail || mailNeeded ? Accounts.checkMail(mail) : null);
     if (err) return { error: err };
+    if (mail && this.mailTaken(mail)) return { error: 'Alamat email itu sudah dipakai akun lain.' };
     const key = name.toLowerCase();
     if (this.users[key]) return { error: 'Nama pengguna itu sudah dipakai.' };
     const taken = pidHint && Object.values(this.users).some((u) => u.pid === pidHint);
     const salt = crypto.randomBytes(16).toString('hex');
     const u = this.users[key] = { name, salt, hash: hashPass(pass, salt), pid: pidOk && !taken ? pidHint : newPid(), created: Date.now(), sessions: [] };
+    if (mail) u.email = mail.toLowerCase();
     return { token: this.issue(u), name: u.name, pid: u.pid };
   }
   login(name, pass) {
@@ -83,7 +118,7 @@ export class Accounts {
     const h = sha(token); u.sessions = u.sessions.filter((s) => s.h !== h); this.save();
   }
   // ---- untuk tools/akun.js ----
-  list() { this.sync(); return Object.values(this.users).map((u) => ({ name: u.name, created: u.created, sessions: (u.sessions || []).filter((s) => s.exp > Date.now()).length })); }
+  list() { this.sync(); return Object.values(this.users).map((u) => ({ name: u.name, email: u.email || '', created: u.created, sessions: (u.sessions || []).filter((s) => s.exp > Date.now()).length })); }
   setPass(name, pass) {
     this.sync();
     const u = this.users[String(name).toLowerCase()]; if (!u) return 'Akun tidak ditemukan.';

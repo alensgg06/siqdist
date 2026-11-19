@@ -1,6 +1,7 @@
 // Mengelola akun pemain dari baris perintah. Server membaca perubahan tanpa restart.
 //   node tools/akun.js daftar
 //   node tools/akun.js sandi <nama> <kata-sandi-baru>   ganti kata sandi (semua perangkat akun itu keluar)
+//   node tools/akun.js email <nama> <alamat>            isi atau ganti email pemulihan
 //   node tools/akun.js hapus <nama>                     hapus akun (statistiknya tetap tersimpan)
 // Di Docker: docker compose exec arkana node tools/akun.js ...
 import path from 'node:path';
@@ -15,6 +16,10 @@ if (cmd === 'sandi') {
   if (!name || !pass) die('Pakai: sandi <nama> <kata-sandi-baru>');
   const err = acc.setPass(name, pass); if (err) die(err);
   console.log(`Kata sandi "${name}" diganti. Semua perangkatnya harus masuk lagi.`);
+} else if (cmd === 'email') {
+  if (!name || !pass) die('Pakai: email <nama> <alamat>');
+  const err = acc.setMail(name, pass); if (err) die(err);
+  console.log(`Email pemulihan "${name}" diatur.`);
 } else if (cmd === 'hapus') {
   if (!name) die('Pakai: hapus <nama>');
   const err = acc.remove(name); if (err) die(err);
@@ -22,5 +27,5 @@ if (cmd === 'sandi') {
 } else if (cmd === 'daftar' || !cmd) {
   const l = acc.list();
   if (!l.length) console.log('Belum ada akun.');
-  for (const u of l.sort((a, b) => a.created - b.created)) console.log(`${u.name.padEnd(15)} dibuat ${new Date(u.created + 7 * 3600e3).toISOString().slice(0, 16).replace('T', ' ')} WIB, ${u.sessions} perangkat masuk`);
-} else die('Perintah: daftar | sandi <nama> <kata-sandi-baru> | hapus <nama>');
+  for (const u of l.sort((a, b) => a.created - b.created)) console.log(`${u.name.padEnd(15)} dibuat ${new Date(u.created + 7 * 3600e3).toISOString().slice(0, 16).replace('T', ' ')} WIB, ${u.sessions} perangkat masuk, email: ${u.email || '(belum ada)'}`);
+} else die('Perintah: daftar | sandi <nama> <kata-sandi-baru> | email <nama> <alamat> | hapus <nama>');

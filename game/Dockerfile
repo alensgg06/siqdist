@@ -15,6 +15,7 @@ ENV NODE_ENV=production PORT=8080
 WORKDIR /app
 COPY --from=build /app/package.json ./
 COPY --from=build /app/node_modules/ws ./node_modules/ws
+COPY --from=build /app/node_modules/nodemailer ./node_modules/nodemailer
 COPY --from=build /app/shared ./shared
 COPY --from=build /app/server ./server
 COPY --from=build /app/tools ./tools

@@ -12,7 +12,13 @@ services:
       - "${ARKANA_PORT:-18080}:8080"
     environment:
       - PORT=8080
-      - ARKANA_INVITE=${ARKANA_INVITE:-}   # kode undangan untuk mendaftar; kosong = siapa pun boleh mendaftar
+      - ARKANA_INVITE=${ARKANA_INVITE:-}
+      # pengirim email (lupa kata sandi); kosong = fitur email mati. Isi di .env, jangan di sini.
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - SMTP_FROM=${SMTP_FROM:-}   # kode undangan untuk mendaftar; kosong = siapa pun boleh mendaftar
     volumes:
       - arkana-data:/app/data   # akun, statistik, jadwal event, catatan pertandingan; tetap ada saat image dibangun ulang
     mem_limit: 256m
