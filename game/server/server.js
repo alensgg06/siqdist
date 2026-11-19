@@ -21,7 +21,8 @@ import { stepPlayer, blocked, los, angDiff, setMap, collide } from '../shared/si
 import { Stats } from './stats.js';
 import { Events } from './events.js';
 import { Accounts } from './accounts.js';
-import { sendMail, mailOn } from './mailer.js';
+import { sendMail, verifyMail, mailOn } from './mailer.js';
+import { EVENT_TYPES } from '../shared/config.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'client');
 const PORT = Number(process.env.PORT) || 8080;
@@ -41,7 +42,10 @@ const stats = new Stats(DATA_DIR);
 const events = new Events(DATA_DIR);
 const accounts = new Accounts(DATA_DIR);
 const AUTH = process.env.ARKANA_AUTH !== 'off';   // 'off' hanya untuk uji dan pengembangan
-const INVITE = process.env.ARKANA_INVITE || '';   // bila diisi, mendaftar butuh kode ini
+const INVITE = process.env.ARKANA_INVITE || '';
+// nama pengguna yang boleh membuka halaman admin, dipisah koma; kosong = halaman admin mati
+const ADMINS = new Set((process.env.ARKANA_ADMINS || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean));
+const isAdmin = (u) => !!u && ADMINS.has(u.name.toLowerCase());   // bila diisi, mendaftar butuh kode ini
 const KING_WIN = Number(process.env.KING_LIMIT) || KING_LIMIT;
 const FILL = process.env.BOTS !== undefined ? Number(process.env.BOTS) : BOT_FILL; // jumlah pengisi bot (bisa 0 untuk uji)
 const KOTH_WIN = Number(process.env.KOTH_LIMIT) || KOTH_LIMIT;
@@ -1130,6 +1134,43 @@ class Room {
   }
 }
 
+// ---------- halaman admin ----------
+function kickPid(pid) { for (const r of rooms) for (const p of r.players.values()) if (!p.bot && p.pid === pid) { try { p.ws?.close(); } catch { /* sudah putus */ } } }
+function adminState() {
+  const now = Date.now();
+  let recent = [];
+  try {
+    const f = path.join(DATA_DIR, 'matches.jsonl'), size = fs.statSync(f).size, len = Math.min(size, 96 * 1024), buf = Buffer.alloc(len), fd = fs.openSync(f, 'r');
+    fs.readSync(fd, buf, 0, len, size - len); fs.closeSync(fd);
+    recent = buf.toString('utf8').split('\n').filter(Boolean).slice(-12).reverse().map((l) => { try { const m = JSON.parse(l); const hs = (m.players || []).filter((p) => !p.bot); return { at: m.at, mode: m.mode, map: m.map, room: m.room, secs: m.secs, wave: m.cleared, abandoned: !!m.abandoned, humans: hs.map((p) => p.name) }; } catch { return null; } }).filter(Boolean);
+  } catch { /* belum ada catatan */ }
+  return {
+    now, uptime: Math.round(process.uptime()), auth: AUTH, invite: !!INVITE, mail: mailOn,
+    rooms: rooms.map((r) => ({ code: r.code || '', kind: r.event ? 'event' : r.practice ? 'latihan' : r.code ? 'privat' : 'publik', mode: r.mode, map: r.map, wave: r.pve ? r.wave : null, humans: [...r.players.values()].filter((p) => !p.bot).map((p) => p.name), bots: [...r.players.values()].filter((p) => p.bot && !p.monster).length })).filter((r) => r.humans.length),
+    accounts: accounts.list().map((a) => { const s = stats.get(a.pid); return { name: a.name, email: a.email, banned: a.banned, created: a.created, sessions: a.sessions, admin: ADMINS.has(a.name.toLowerCase()), matches: s?.matches || 0, kills: s?.kills || 0, deaths: s?.deaths || 0, wins: s?.wins || 0, wave: s?.bestWave || 0 }; }),
+    events: events.list.map((e) => ({ id: e.id, type: e.type, name: e.name, start: e.start, end: e.end, target: e.target.text, state: e.start <= now && now < e.end ? 'berjalan' : e.start > now ? 'akan datang' : 'selesai', top: stats.eventTop(e.id, 3) })).sort((a, b) => b.start - a.start).slice(0, 12),
+    eventTypes: Object.entries(EVENT_TYPES).map(([k, t]) => ({ id: k, name: t.name, target: t.target.n })),
+    recent,
+  };
+}
+// Mengembalikan pesan galat, atau null bila berhasil.
+async function adminDo(b, admin) {
+  const u = b.name !== undefined ? accounts.find(b.name) : null;
+  switch (b.do) {
+    case 'pass': return accounts.setPass(b.name, b.pass) || (kickPid(u?.pid), null);
+    case 'email': return accounts.setMail(b.name, b.email);
+    case 'ban': if (u && u.name.toLowerCase() === admin.name.toLowerCase()) return 'Kamu tidak bisa memblokir akunmu sendiri.'; return accounts.ban(b.name, true) || (kickPid(u?.pid), null);
+    case 'unban': return accounts.ban(b.name, false);
+    case 'delete': if (u && isAdmin(u)) return 'Akun pengelola tidak bisa dihapus dari sini.'; return accounts.remove(b.name) || (kickPid(u?.pid), null);
+    case 'kick': if (!u) return 'Akun tidak ditemukan.'; kickPid(u.pid); return null;
+    case 'eventStart': { const min = Number(b.minutes); if (!(min >= 1 && min <= 1440)) return 'Lama event 1-1440 menit.'; return events.add(b.tipe, Date.now() - 1000, Date.now() + min * 60e3, b.nama, b.target); }
+    case 'eventPlan': { const st = Number(b.start), en = Number(b.end); if (!(st > Date.now() - 60e3) || !(en > st)) return 'Waktu mulai harus di masa depan dan selesai setelah mulai.'; return events.add(b.tipe, st, en, b.nama, b.target); }
+    case 'eventEnd': return events.end(b.id);
+    case 'mailTest': if (!mailOn) return 'Pengirim email belum diatur.'; if (!admin.email) return 'Akun pengelola belum punya email. Isi dulu di daftar akun.'; await verifyMail(); await sendMail(admin.email, 'Arkana: email percobaan', 'Email percobaan dari halaman admin Arkana.\n'); return null;
+    default: return 'Tindakan tidak dikenal.';
+  }
+}
+
 // ---------- HTTP statis ----------
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
@@ -1154,10 +1195,30 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
     res.end(JSON.stringify(body)); return;
   }
+  if (url === '/api/admin/state' || url === '/api/admin/do') {
+    const send = (code, body) => { res.writeHead(code, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify(body)); };
+    const h = req.headers.authorization || '', admin = accounts.byToken(h.startsWith('Bearer ') ? h.slice(7) : '');
+    if (!isAdmin(admin)) return send(403, { error: 'Khusus pengelola.' });
+    if (url === '/api/admin/state') return send(200, adminState());
+    if (req.method !== 'POST') return send(405, { error: 'Metode tidak didukung.' });
+    let raw = '', over = false;
+    req.on('data', (c) => { raw += c; if (raw.length > 2048) { over = true; req.destroy(); } });
+    req.on('end', async () => {
+      if (over) return;
+      let b; try { b = JSON.parse(raw); } catch { return send(400, { error: 'Permintaan tidak sah.' }); }
+      if (!b || typeof b !== 'object') return send(400, { error: 'Permintaan tidak sah.' });
+      let err = null;
+      try { err = await adminDo(b, admin); } catch (e) { err = e.message || 'Gagal.'; }
+      // jejak tindakan pengelola (tanpa kata sandi)
+      try { fs.appendFileSync(path.join(DATA_DIR, 'admin.log'), JSON.stringify({ at: new Date().toISOString(), by: admin.name, do: b.do, name: b.name, id: b.id, tipe: b.tipe, ok: !err }) + '\n'); } catch { /* catatan gagal ditulis: tindakan tetap berlaku */ }
+      send(err ? 400 : 200, err ? { error: err } : { ok: true, state: adminState() });
+    });
+    return;
+  }
   if (url === '/api/me' || url === '/api/register' || url === '/api/login' || url === '/api/logout' || url === '/api/forgot' || url === '/api/reset') {
     const send = (code, body) => { res.writeHead(code, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify(body)); };
     const bearer = () => { const h = req.headers.authorization || ''; return h.startsWith('Bearer ') ? h.slice(7) : ''; };
-    const pub = (u) => (u ? { name: u.name, pid: u.pid } : null);
+    const pub = (u) => (u ? { name: u.name, pid: u.pid, ...(isAdmin(u) ? { admin: true } : {}) } : null);
     if (url === '/api/me') return send(200, { auth: AUTH, invite: !!INVITE, mail: mailOn, user: pub(accounts.byToken(bearer())) });
     if (req.method !== 'POST') return send(405, { error: 'Metode tidak didukung.' });
     let raw = '', over = false;
@@ -1186,6 +1247,8 @@ const server = http.createServer((req, res) => {
       } else if (url === '/api/register') {
         accounts.strike('i:' + ip); // pendaftaran juga dibatasi per alamat
         if (INVITE && b.invite !== INVITE) return send(403, { error: 'Kode undangan salah.' });
+        // nama pengelola tidak bisa didaftarkan dari halaman umum: akunnya dibuat lewat tools/akun.js di server
+        if (ADMINS.has(String(b.name || '').toLowerCase())) return send(400, { error: 'Nama pengguna itu sudah dipakai.' });
         r = accounts.register(b.name, b.pass, b.pid, stats.validId(b.pid), b.email, mailOn);
       } else {
         r = accounts.login(b.name, b.pass);
@@ -1193,7 +1256,7 @@ const server = http.createServer((req, res) => {
       }
       if (r.error) return send(400, { error: r.error });
       stats.touch(r.pid, r.name);
-      send(200, { token: r.token, user: { name: r.name, pid: r.pid } });
+      send(200, { token: r.token, user: pub(r) });
     });
     return;
   }

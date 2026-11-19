@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Arkana: pengelola</title>
+<style>
+:root{--bg:#120c1c;--panel:#1d1429;--line:#4a3b60;--gold:#f2c66d;--text:#eadff5;--dim:#b3a4c8;--bad:#ff8f7a;--ok:#7be0a0}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:1080px;margin:auto;padding:16px}
+header{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+h1{font:600 22px Georgia,serif;color:var(--gold);margin:0}
+h2{font:600 12px system-ui;letter-spacing:.09em;text-transform:uppercase;color:var(--gold);margin:0 0 10px}
+#who{color:var(--dim);font-size:13px;margin-left:auto}
+section{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin-top:14px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.tile{border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.tile b{display:block;font:600 22px Georgia,serif;color:#fff}
+.tile span{font-size:12px;color:var(--dim)}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:560px}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid rgba(255,255,255,.07);vertical-align:top}
+th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);font-weight:600}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+.tag{display:inline-block;padding:1px 7px;border-radius:99px;font-size:11px;border:1px solid var(--line);color:var(--dim)}
+.tag.on{color:var(--ok);border-color:var(--ok)} .tag.bad{color:var(--bad);border-color:var(--bad)} .tag.gold{color:var(--gold);border-color:var(--gold)}
+button,select,input{font:inherit;color:var(--text);background:#281b39;border:1px solid var(--line);border-radius:8px;padding:7px 10px;min-height:36px}
+button{cursor:pointer} button:hover{border-color:var(--gold)} button.danger{color:var(--bad)} button.primary{background:var(--gold);color:#2a1606;border-color:var(--gold);font-weight:700}
+button:disabled{opacity:.5;cursor:default}
+td .acts{display:flex;gap:6px;flex-wrap:wrap}
+td .acts button{padding:4px 8px;min-height:30px;font-size:12px}
+form.row{display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-bottom:12px}
+form.row label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--dim)}
+#msg{position:sticky;top:0;z-index:5;margin-top:10px;padding:9px 12px;border-radius:9px;background:#2a1d3c;border:1px solid var(--line);min-height:38px}
+#msg.bad{color:var(--bad);border-color:var(--bad)} #msg.ok{color:var(--ok);border-color:var(--ok)}
+.empty{color:var(--dim);padding:6px 0}
+#login{max-width:360px;margin:60px auto}
+#login label{display:block;margin-top:10px;font-size:13px;color:var(--dim)}
+#login input{display:block;width:100%;margin-top:4px;font-size:16px}
+#login button{width:100%;margin-top:14px}
+.hidden{display:none!important}
+</style>
+</head>
+<body><main>
+<header><h1>Arkana · Pengelola</h1><span id="who"></span></header>
+<form id="login" class="hidden"><section>
+  <h2>Masuk sebagai pengelola</h2>
+  <label>Nama pengguna<input id="lName" autocomplete="username" autocapitalize="none" required></label>
+  <label>Kata sandi<input id="lPass" type="password" autocomplete="current-password" required></label>
+  <button class="primary" type="submit">Masuk</button>
+  <p id="lMsg" class="empty" role="alert"></p>
+</section></form>
+<div id="app" class="hidden">
+  <div id="msg" role="status" aria-live="polite"></div>
+  <section><h2>Ringkasan</h2><div class="tiles" id="tiles"></div></section>
+  <section><h2>Sedang bermain</h2><div class="scroll" id="rooms"></div></section>
+  <section><h2>Event</h2>
+    <form class="row" id="evForm">
+      <label>Tipe<select id="evType"></select></label>
+      <label>Nama (opsional)<input id="evName" maxlength="40" size="16"></label>
+      <label>Target (opsional)<input id="evTarget" type="number" min="1" max="999" style="width:90px"></label>
+      <label>Mulai<select id="evWhen"><option value="now">Sekarang</option><option value="plan">Dijadwalkan</option></select></label>
+      <label id="evMinRow">Lama (menit)<input id="evMin" type="number" min="1" max="1440" value="60" style="width:90px"></label>
+      <label id="evStartRow" class="hidden">Mulai (waktu perangkat ini)<input id="evStart" type="datetime-local"></label>
+      <label id="evEndRow" class="hidden">Selesai<input id="evEnd" type="datetime-local"></label>
+      <button class="primary" type="submit">Buat event</button>
+    </form>
+    <div class="scroll" id="events"></div>
+  </section>
+  <section><h2>Akun</h2><div class="scroll" id="accounts"></div></section>
+  <section><h2>Ronde terakhir</h2><div class="scroll" id="recent"></div></section>
+  <section><h2>Email</h2><p id="mailInfo" class="empty"></p><button id="mailTest">Kirim email percobaan ke alamatku</button></section>
+</div>
+</main><script type="module" src="dist/admin.js"></script></body>
+</html>

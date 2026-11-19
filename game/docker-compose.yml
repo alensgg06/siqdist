@@ -13,6 +13,7 @@ services:
     environment:
       - PORT=8080
       - ARKANA_INVITE=${ARKANA_INVITE:-}
+      - ARKANA_ADMINS=${ARKANA_ADMINS:-}   # nama pengguna pengelola, dipisah koma; kosong = halaman admin mati
       # pengirim email (lupa kata sandi); kosong = fitur email mati. Isi di .env, jangan di sini.
       - SMTP_HOST=${SMTP_HOST:-}
       - SMTP_PORT=${SMTP_PORT:-587}

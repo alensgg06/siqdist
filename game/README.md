@@ -156,6 +156,22 @@ docker compose exec arkana node tools/akun.js hapus <nama>
 - Lewat alamat `https://` kata sandi terenkripsi di perjalanan. Lewat `http://IP:port` di jaringan rumah tidak, jadi pakai alamat https untuk mendaftar dan masuk.
 - `ARKANA_AUTH=off` mematikan kewajiban akun; hanya untuk uji dan pengembangan.
 
+## Halaman admin
+
+Buka `/admin.html` di alamat game dari browser, lalu masuk dengan akun pengelola. Isinya: ringkasan (pemain di arena, jumlah akun, event berjalan), room yang sedang dimainkan, event (mulai sekarang, jadwalkan, hentikan, batalkan), akun (ganti kata sandi, atur email, keluarkan dari arena, blokir, hapus), ronde terakhir, dan email percobaan.
+
+Menyiapkan pengelola:
+
+```bash
+docker compose exec arkana node tools/akun.js buat <nama> <kata-sandi>   # buat akun pengelola
+# lalu di .env:  ARKANA_ADMINS=<nama>     (beberapa nama dipisah koma)
+docker compose up -d
+```
+
+- Nama di `ARKANA_ADMINS` tidak bisa didaftarkan dari halaman umum, supaya tidak direbut orang; akunnya dibuat lewat perintah di atas. Bila `ARKANA_ADMINS` kosong, halaman admin mati untuk semua orang.
+- Setiap tindakan dicatat di `data/admin.log` (siapa, apa, kapan; tanpa kata sandi).
+- Akun pengelola tidak bisa dihapus atau diblokir dari halaman ini; itu hanya lewat `tools/akun.js` di server.
+
 ## Email (lupa kata sandi)
 
 Server tidak mengirim email sendiri; ia menitipkannya ke SMTP penyedia email (Gmail, atau layanan email transaksional). Mengirim langsung dari internet rumah hampir pasti ditolak atau masuk spam, jadi itu sengaja tidak dibuat.

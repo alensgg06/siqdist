@@ -55,6 +55,32 @@ export class Events {
     this.list = list;
     if (list.length) console.log(`events.json dimuat: ${list.length} event.`);
   }
+  // ---- dipakai halaman admin: menulis events.json lalu memuat ulang ----
+  write(raw) { fs.mkdirSync(this.dir, { recursive: true }); fs.writeFileSync(eventsFile(this.dir), JSON.stringify(raw, null, 2) + '\n'); this.mtime = -1; this.reload(); }
+  // mulai/selesai: milidetik. Mengembalikan pesan galat atau null.
+  add(tipe, start, end, nama, target) {
+    this.reload();
+    const raw = readRaw(this.dir); if (raw.error) return 'events.json rusak; perbaiki dulu berkasnya.';
+    if (!EVENT_TYPES[tipe]) return 'Tipe event tidak dikenal.';
+    if (this.list.some((e) => start < e.end && e.start < end)) return 'Waktunya bertabrakan dengan event lain.';
+    const wib = (ms) => new Date(ms + 7 * 3600e3).toISOString().slice(0, 19);
+    const e = { id: `${tipe}-${wib(start).replace(/[-:T]/g, '').slice(2)}${Math.floor(Math.random() * 90 + 10)}`, tipe, mulai: wib(start), selesai: wib(end) };
+    if (nama) e.nama = String(nama).slice(0, 40);
+    if (target !== undefined && target !== null && target !== '') e.target = Number(target);
+    const { errors } = validate([...raw, e]);
+    if (errors.length) return errors[errors.length - 1];
+    this.write([...raw, e]); return null;
+  }
+  // menghentikan event berjalan, atau membatalkan event yang belum mulai
+  end(id) {
+    this.reload();
+    const raw = readRaw(this.dir); if (raw.error) return 'events.json rusak; perbaiki dulu berkasnya.';
+    const cur = this.list.find((e) => e.id === id), now = Date.now(); if (!cur) return 'Event tidak ditemukan.';
+    if (cur.end <= now) return 'Event itu sudah selesai.';
+    const wib = (ms) => new Date(ms + 7 * 3600e3).toISOString().slice(0, 19);
+    if (cur.start > now) this.write(raw.filter((e) => e.id !== id)); else { raw.find((e) => e.id === id).selesai = wib(now); this.write(raw); }
+    return null;
+  }
   active(now = Date.now()) { return this.list.find((e) => e.start <= now && now < e.end) || null; }
   next(now = Date.now()) { return this.list.filter((e) => e.start > now).sort((a, b) => a.start - b.start)[0] || null; }
   last(now = Date.now()) { return this.list.filter((e) => e.end <= now && now - e.end < 7 * 86400e3).sort((a, b) => b.end - a.end)[0] || null; }

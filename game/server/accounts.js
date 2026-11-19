@@ -104,13 +104,14 @@ export class Accounts {
     const got = Buffer.from(hashPass(String(pass || '').slice(0, PASS_MAX), u ? u.salt : '00'.repeat(16)), 'hex');
     const ok = u && crypto.timingSafeEqual(got, Buffer.from(u.hash, 'hex'));
     if (!ok) return { error: 'Nama pengguna atau kata sandi salah.' };
+    if (u.banned) return { error: 'Akun ini diblokir. Hubungi pengelola.' };
     return { token: this.issue(u), name: u.name, pid: u.pid };
   }
   byToken(token) {
     if (typeof token !== 'string' || token.length < 20 || token.length > 100) return null;
     this.sync();
     const h = sha(token), now = Date.now();
-    for (const u of Object.values(this.users)) if ((u.sessions || []).some((s) => s.h === h && s.exp > now)) return u;
+    for (const u of Object.values(this.users)) if ((u.sessions || []).some((s) => s.h === h && s.exp > now)) return u.banned ? null : u;
     return null;
   }
   logout(token) {
@@ -118,7 +119,10 @@ export class Accounts {
     const h = sha(token); u.sessions = u.sessions.filter((s) => s.h !== h); this.save();
   }
   // ---- untuk tools/akun.js ----
-  list() { this.sync(); return Object.values(this.users).map((u) => ({ name: u.name, email: u.email || '', created: u.created, sessions: (u.sessions || []).filter((s) => s.exp > Date.now()).length })); }
+  // blokir: tidak bisa masuk; sesi yang ada dimatikan
+  ban(name, on) { this.sync(); const u = this.users[String(name).toLowerCase()]; if (!u) return 'Akun tidak ditemukan.'; if (on) { u.banned = true; u.sessions = []; } else delete u.banned; this.save(); return null; }
+  find(name) { this.sync(); return this.users[String(name).toLowerCase()] || null; }
+  list() { this.sync(); return Object.values(this.users).map((u) => ({ name: u.name, email: u.email || '', pid: u.pid, banned: !!u.banned, created: u.created, sessions: (u.sessions || []).filter((s) => s.exp > Date.now()).length })); }
   setPass(name, pass) {
     this.sync();
     const u = this.users[String(name).toLowerCase()]; if (!u) return 'Akun tidak ditemukan.';
