@@ -71,9 +71,9 @@ export function buildHarbor(scene, glowTex) {
   root.add(moon, moon.target); world.sun = moon;
 
   // --- dermaga dan air ---
-  const planks = plankTexture(); planks.repeat.set(24, 24);
+  const planks = plankTexture(); planks.repeat.set(Math.round(ARENA * 0.55), Math.round(ARENA * 0.55));
   const deck = new THREE.Mesh(new THREE.PlaneGeometry(ARENA * 2 + 4, ARENA * 2 + 4), bump(new THREE.MeshStandardMaterial({ map: planks, roughness: 0.78, color: 0xc8b8b0 }), 3, 1, 'planks'));
-  bakeFloor(deck.material, 'bake/harbor.png', 52, 0.42);
+  bakeFloor(deck.material, 'bake/harbor.png', ARENA + 8, 0.42);
   deck.rotation.x = -Math.PI / 2; deck.receiveShadow = true; root.add(deck);
   const water = new THREE.Mesh(
     new THREE.PlaneGeometry(900, 900, 1, 1),
@@ -98,7 +98,7 @@ export function buildHarbor(scene, glowTex) {
           vec3 c=mix(vec3(0.015,0.04,0.075),skyCol(r),fr);
           c+=vec3(1.0,0.97,0.88)*pow(max(dot(r,moon),0.0),260.0)*2.4;   // kilau bulan
           c+=vec3(0.6,0.7,0.95)*pow(max(dot(r,moon),0.0),24.0)*0.22;    // jejak cahaya bulan
-          float edge=max(abs(vW.x),abs(vW.z))-46.0;                       // buih di tepi dermaga
+          float edge=max(abs(vW.x),abs(vW.z))-${(ARENA + 2).toFixed(1)};                       // buih di tepi dermaga
           float foam=smoothstep(2.6,0.0,edge)*step(0.0,edge)*(0.5+0.5*sin(edge*4.0-time*2.0+sin(vW.x*0.8+vW.z*0.7)*2.0));
           c+=vec3(0.55,0.65,0.75)*foam*0.35;
           gl_FragColor=vec4(c,1.0);
@@ -120,7 +120,8 @@ export function buildHarbor(scene, glowTex) {
   // tepi dermaga: tembok batu rendah dan tonggak tambat
   const W = ARENA + 1;
   for (const [x, z, w, d] of [[0, W, 2 * W + 2, 2], [0, -W, 2 * W + 2, 2], [W, 0, 2, 2 * W + 2], [-W, 0, 2, 2 * W + 2]]) add(new THREE.BoxGeometry(w, 1.4, d), stone, x, 0.2, z);
-  for (let i = -40; i <= 40; i += 10) for (const [x, z] of [[i, W], [i, -W], [W, i], [-W, i]]) add(new THREE.CylinderGeometry(0.35, 0.45, 1.2, 8), darkWood, x, 1.3, z);
+  const BL = Math.floor((ARENA - 4) / 10) * 10;
+  for (let i = -BL; i <= BL; i += 10) for (const [x, z] of [[i, W], [i, -W], [W, i], [-W, i]]) add(new THREE.CylinderGeometry(0.35, 0.45, 1.2, 8), darkWood, x, 1.3, z);
 
   const lantern = (x, y, z, light) => {
     const g = new THREE.Group();
@@ -204,7 +205,7 @@ export function buildHarbor(scene, glowTex) {
 
   // --- kabut tipis yang melayang (pengganti kunang-kunang) ---
   const NF = 220, fp = new Float32Array(NF * 3), fph = new Float32Array(NF);
-  for (let i = 0; i < NF; i++) { fp[i * 3] = (R() - 0.5) * 100; fp[i * 3 + 1] = 0.4 + R() * 5; fp[i * 3 + 2] = (R() - 0.5) * 100; fph[i] = R() * 100; }
+  for (let i = 0; i < NF; i++) { fp[i * 3] = (R() - 0.5) * ARENA * 2.2; fp[i * 3 + 1] = 0.4 + R() * 5; fp[i * 3 + 2] = (R() - 0.5) * ARENA * 2.2; fph[i] = R() * 100; }
   const fg = new THREE.BufferGeometry();
   fg.setAttribute('position', new THREE.BufferAttribute(fp, 3)); fg.setAttribute('ph', new THREE.BufferAttribute(fph, 1));
   const flies = new THREE.Points(fg, new THREE.ShaderMaterial({

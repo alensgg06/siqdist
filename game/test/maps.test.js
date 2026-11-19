@@ -4,6 +4,7 @@ import path from 'node:path';
 import WebSocket from 'ws';
 import { fileURLToPath } from 'node:url';
 import { setMap } from '../shared/sim.js';
+import { MAPS } from '../shared/config.js';
 import { navStep } from './nav.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -29,7 +30,8 @@ function client(join) {
 }
 const until = async (fn, ms) => { const t = Date.now(); while (Date.now() - t < ms) { if (fn()) return true; await sleep(50); } return false; };
 
-// Titik (13,13) adalah pilar di Reruntuhan tetapi lantai terbuka di Pelabuhan.
+// Titik (PX,PX) adalah pilar di Reruntuhan tetapi lantai terbuka di Pelabuhan; diambil dari tata letak, bukan angka tetap.
+const PX = MAPS.ruins.obst.find((o) => o.kind === 'pillar' && o.x > 0 && o.x === o.z && o.x < 20).x;
 const H = client({ name: 'Pelaut', map: 'harbor' }), R = client({ name: 'Peziarah', map: 'ruins' });
 await until(() => H.snap && R.snap, 3000);
 if (H.w.map !== 'harbor' || R.w.map !== 'ruins') fail(`peta room salah: ${H.w.map}, ${R.w.map}`);
@@ -40,12 +42,12 @@ const drive = (c, nav, mapId) => setInterval(() => {
   const me = c.me(); if (!me) return;
   setMap(mapId);
   let mx, mz;
-  if (mapId === 'ruins' && (nav.push || Math.hypot(me[1] - 13, me[2] - 10.5) < 0.8)) { nav.push = true; const dx = 13 - me[1], dz = 13 - me[2], d = Math.hypot(dx, dz) || 1; mx = dx / d; mz = dz / d; }
-  else [mx, mz] = navStep(nav, me[1], me[2], 13, mapId === 'ruins' ? 10.5 : 13);
+  if (mapId === 'ruins' && (nav.push || Math.hypot(me[1] - PX, me[2] - (PX - 2.5)) < 0.8)) { nav.push = true; const dx = PX - me[1], dz = PX - me[2], d = Math.hypot(dx, dz) || 1; mx = dx / d; mz = dz / d; }
+  else [mx, mz] = navStep(nav, me[1], me[2], PX, mapId === 'ruins' ? PX - 2.5 : PX);
   c.ws.send(JSON.stringify({ t: 'in', s: ++c.seq, mx, mz, y: 0, f: 0, k: 0 }));
 }, 33);
 const ivH = drive(H, navH, 'harbor'), ivR = drive(R, navR, 'ruins');
-const dist = (c) => { const m = c.me(); return m ? Math.hypot(m[1] - 13, m[2] - 13) : 99; };
+const dist = (c) => { const m = c.me(); return m ? Math.hypot(m[1] - PX, m[2] - PX) : 99; };
 // keduanya diberi waktu cukup untuk berjalan dari spawn terjauh; jarak terdekat Reruntuhan dipantau sepanjang uji
 let minR = 99; const trail = [];
 const tr = setInterval(() => { const m = R.me(); if (m) trail.push(`${m[1].toFixed(1)},${m[2].toFixed(1)}${navR.push ? '*' : ''}`); }, 1000);
@@ -54,11 +56,11 @@ const reached = await until(() => dist(H) < 0.8, 20000);
 const approached = await until(() => navR.push && dist(R) < 2.6, 15000); // terbukti sudah menekan sisi pilar
 await sleep(1500);
 clearInterval(watch); clearInterval(ivH); clearInterval(ivR);
-if (!reached) fail(`pemain di Pelabuhan tidak bisa berdiri di (13,13): jarak ${dist(H).toFixed(2)}`);
+if (!reached) fail(`pemain di Pelabuhan tidak bisa berdiri di (${PX},${PX}): jarak ${dist(H).toFixed(2)}`);
 clearInterval(tr);
 if (!approached) fail(`pemain di Reruntuhan tidak sampai ke sisi pilar (jarak ${dist(R).toFixed(2)}); uji tidak sah; jejak ${trail.join(' ')}`);
 if (minR < 1.9) fail(`pemain di Reruntuhan menembus pilar: jarak ${minR.toFixed(2)}`);
-console.log(`OK peta per room: di Pelabuhan sampai ke (13,13), di Reruntuhan tertahan pilar (jarak terdekat ${minR.toFixed(2)}).`);
+console.log(`OK peta per room: di Pelabuhan sampai ke (${PX},${PX}), di Reruntuhan tertahan pilar (jarak terdekat ${minR.toFixed(2)}).`);
 H.ws.close(); R.ws.close();
 
 // Room "bergantian": ronde 6 detik, peta harus berganti setelah ronde berakhir.

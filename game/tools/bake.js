@@ -9,7 +9,8 @@ import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { MAPS } from '../shared/config.js';
 
-export const EXT = 52, SIZE = 512;        // gambar mencakup -EXT..EXT pada x dan z
+import { ARENA } from '../shared/config.js';
+export const EXT = ARENA + 8, SIZE = 512;        // gambar mencakup -EXT..EXT pada x dan z
 const LIGHT = { ruins: [-0.62, 0.4, -0.68], harbor: [0.55, 0.5, -0.67] }; // sama dengan SUN_DIR dan MOON_DIR di klien
 const AO_N = 40, AO_DIST = 7, SUN_N = 28, SUN_SPREAD = 0.07;
 const OUT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'client', 'bake');

@@ -270,6 +270,8 @@ Pemain yang tidak bergerak dan tidak memakai jurus selama 30 menit dikeluarkan d
 
 ## Peta
 
+Arena berukuran 116 x 116 langkah (`ARENA = 58` di `shared/config.js`, semula 44). Tata letak lama digeser keluar sebanding dan lingkar luarnya diberi perlindungan tambahan. Bila ukuran atau letak penghalang diubah, jalankan `node tools/bake.js` supaya cahaya lantai ikut diperbarui.
+
 - **Reruntuhan Senja**: reruntuhan batu di bawah langit senja, altar kristal di tengah.
 - **Pelabuhan Bulan**: dermaga kayu di malam purnama, menara lonceng di tengah, gudang, peti,
   tiang kapal berlentera, air dan mercusuar di kejauhan.

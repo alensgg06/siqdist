@@ -197,7 +197,7 @@ export function buildWorld(scene) {
   );
   ground.material.map.repeat.set(60, 60);
   bump(ground.material, 2.6, 0.9, 'ground');
-  bakeFloor(ground.material, 'bake/ruins.png', 52, 0.36);
+  bakeFloor(ground.material, 'bake/ruins.png', ARENA + 8, 0.36);
   ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true;
   root.add(ground);
 
@@ -307,18 +307,18 @@ export function buildWorld(scene) {
   // --- batu & rumput ---
   const rockGeo = new THREE.DodecahedronGeometry(0.5, 0);
   for (let i = 0; i < 60; i++) {
-    const x = (R() - 0.5) * 84, z = (R() - 0.5) * 84;
+    const x = (R() - 0.5) * ARENA * 1.9, z = (R() - 0.5) * ARENA * 1.9;
     if (blocked(x, z, 1.2) || Math.hypot(x, z) < 12) continue;
     const m = addShadow(new THREE.Mesh(rockGeo, darkStone));
     const s = 0.3 + R() * 0.5; m.scale.set(s, s * 0.6, s); m.position.set(x, s * 0.15, z); m.rotation.set(R() * 3, R() * 3, 0);
     root.add(m);
   }
-  const NG = 4200;
+  const NG = 6200;
   const bladeGeo = tuftGeo();
   const grass = new THREE.InstancedMesh(bladeGeo, new THREE.MeshStandardMaterial({ map: tuftTexture(), alphaTest: 0.45, roughness: 1 }), NG);
   const col = new THREE.Color();
   for (let i = 0; i < NG; i++) {
-    const cx = (R() - 0.5) * 86, cz = (R() - 0.5) * 86;
+    const cx = (R() - 0.5) * ARENA * 1.95, cz = (R() - 0.5) * ARENA * 1.95;
     const x = cx + (R() - 0.5) * 2.5, z = cz + (R() - 0.5) * 2.5;
     const s = blocked(x, z, 0.3) ? 0 : 0.7 + R() * 1.1;
     dummy.position.set(x, 0, z); dummy.scale.set(s, s, s); dummy.rotation.set(0, R() * 6, 0); dummy.updateMatrix();
@@ -329,7 +329,7 @@ export function buildWorld(scene) {
 
   // --- kunang-kunang ---
   const NF = 260, fp = new Float32Array(NF * 3), fph = new Float32Array(NF);
-  for (let i = 0; i < NF; i++) { fp[i * 3] = (R() - 0.5) * 96; fp[i * 3 + 1] = 0.6 + R() * 7; fp[i * 3 + 2] = (R() - 0.5) * 96; fph[i] = R() * 100; }
+  for (let i = 0; i < NF; i++) { fp[i * 3] = (R() - 0.5) * ARENA * 2.2; fp[i * 3 + 1] = 0.6 + R() * 7; fp[i * 3 + 2] = (R() - 0.5) * ARENA * 2.2; fph[i] = R() * 100; }
   const fg = new THREE.BufferGeometry();
   fg.setAttribute('position', new THREE.BufferAttribute(fp, 3)); fg.setAttribute('ph', new THREE.BufferAttribute(fph, 1));
   const flies = new THREE.Points(fg, new THREE.ShaderMaterial({

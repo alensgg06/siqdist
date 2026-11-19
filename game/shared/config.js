@@ -1,7 +1,10 @@
 // Konstanta bersama klien & server. Jangan impor modul khusus Node/browser di sini.
 export const TICK = 30;
 export const DT = 1 / TICK;
-export const ARENA = 44;          // setengah sisi arena
+export const ARENA = 58;          // setengah sisi arena (semula 44)
+// Tata letak lama dirancang untuk arena 44: posisinya digeser keluar sebanding, ukuran benda tetap.
+const SC = ARENA / 44;
+const sc = (v) => Math.round(v * SC * 2) / 2;
 export const PLAYER_R = 0.7;
 export const DASH_SPEED = 30;
 export const DASH_TIME = 0.18;
@@ -53,13 +56,13 @@ export function levelHp(cls, lvl) { return cls.hp + 12 * (lvl - 1); }
 
 // ---- Peta: simetris empat arah ----
 const O = [];
-const cyl = (x, z, r, h, kind) => O.push({ t: 'cyl', x, z, r, h, kind });
-const box = (x, z, w, d, h, kind) => O.push({ t: 'box', x, z, w, d, h, kind });
+const cyl = (x, z, r, h, kind) => O.push({ t: 'cyl', x: sc(x), z: sc(z), r, h, kind });
+const box = (x, z, w, d, h, kind) => O.push({ t: 'box', x: sc(x), z: sc(z), w, d, h, kind });
 cyl(0, 0, 3.2, 1.4, 'altar');
 for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
   cyl(sx * 13, sz * 13, 1.3, 9, 'pillar');
   box(sx * 30, sz * 26, 12, 2, 4.5, 'wall');
-  box(sx * 35, sz * 31, 2, 10, 4.5, 'wall');
+  O.push({ t: 'box', x: sx * 46, z: sz * 40.5, w: 2, d: 10, h: 4.5, kind: 'wall' }); // tetap menyambung dengan tembok di atas membentuk siku
   box(sx * 9, sz * 33, 3, 3, 2.6, 'block');
   box(sx * 33, sz * 9, 3, 3, 2.6, 'block');
 }
@@ -69,17 +72,25 @@ for (const s of [-1, 1]) {
   box(0, s * 21, 16, 2, 4, 'wall');
   box(s * 21, 0, 2, 16, 4, 'wall');
 }
+// tambahan untuk arena yang diperluas (koordinat sebenarnya): tembok dan tiang di lingkar luar supaya ruang baru tetap punya perlindungan
+for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+  O.push({ t: 'box', x: sx * 22, z: sz * 45, w: 10, d: 2, h: 4, kind: 'wall' });
+  O.push({ t: 'box', x: sx * 45, z: sz * 22, w: 2, d: 10, h: 4, kind: 'wall' });
+  O.push({ t: 'cyl', x: sx * 30, z: sz * 29, r: 1.3, h: 9, kind: 'pillar' });
+  O.push({ t: 'box', x: sx * 12, z: sz * 21, w: 3, d: 3, h: 2.6, kind: 'block' });
+  O.push({ t: 'box', x: sx * 21, z: sz * 12, w: 3, d: 3, h: 2.6, kind: 'block' });
+}
 export const OBST = O;
 
 export const SPAWNS = [
   [40, 7], [-40, -7], [-7, 40], [7, -40],
   [38, 18], [38, -18], [-38, 18], [-38, -18],
   [18, 38], [-18, 38], [18, -38], [-18, -38],
-];
+].map(([x, z]) => [sc(x), sc(z)]);
 export const ORBS = [
   [12, 0], [-12, 0], [0, 12], [0, -12],
   [39, 39], [-39, 39], [39, -39], [-39, -39],
-];
+].map(([x, z]) => [sc(x), sc(z)]);
 
 // ---- Paket B ----
 export const MODES = { dm: 'Deathmatch', koth: 'Rebut Altar' };
@@ -96,7 +107,7 @@ export const RUNE_INFO = {
 export const RUNES = [
   { x: 0, z: 26, type: 'dmg' }, { x: 0, z: -26, type: 'dmg' },
   { x: 18, z: 18, type: 'spd' }, { x: -18, z: -18, type: 'spd' },
-];
+].map((r) => ({ ...r, x: sc(r.x), z: sc(r.z) }));
 export const INTERP = 0.11;         // klien menampilkan lawan 110 ms di belakang
 export const LAG_MAX = 0.45;        // batas putar-mundur kompensasi lag (detik), setara RTT ~340 ms + interpolasi
 
@@ -112,8 +123,8 @@ export const TEAMS = [
 
 // ---- Peta kedua: Pelabuhan Bulan (malam, dermaga kayu), juga simetris empat arah ----
 const H = [];
-const hcyl = (x, z, r, h, kind) => H.push({ t: 'cyl', x, z, r, h, kind });
-const hbox = (x, z, w, d, h, kind) => H.push({ t: 'box', x, z, w, d, h, kind });
+const hcyl = (x, z, r, h, kind) => H.push({ t: 'cyl', x: sc(x), z: sc(z), r, h, kind });
+const hbox = (x, z, w, d, h, kind) => H.push({ t: 'box', x: sc(x), z: sc(z), w, d, h, kind });
 hcyl(0, 0, 2.6, 2.2, 'bell');                       // menara lonceng di tengah (pusat Rebut Altar)
 for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
   hbox(sx * 31, sz * 13, 12, 4, 5, 'shed');           // gudang memanjang
@@ -129,13 +140,20 @@ for (const s of [-1, 1]) {
   hcyl(s * 10.5, s * -10.5, 0.6, 7, 'post');          // tiang tambat
   hcyl(s * -10.5, s * -10.5, 0.6, 7, 'post');
 }
+// tambahan untuk dermaga yang diperluas (koordinat sebenarnya)
+for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+  H.push({ t: 'box', x: sx * 49, z: sz * 8, w: 3, d: 6, h: 2.4, kind: 'crate' });
+  H.push({ t: 'box', x: sx * 8, z: sz * 49, w: 6, d: 3, h: 2.4, kind: 'crate' });
+  H.push({ t: 'box', x: sx * 36, z: sz * 44, w: 3, d: 3, h: 1.8, kind: 'crate' });
+  H.push({ t: 'cyl', x: sx * 44, z: sz * 30, r: 0.6, h: 7, kind: 'post' });
+}
 export const MAPS = {
   ruins: { name: 'Reruntuhan Senja', obst: OBST, spawns: SPAWNS, orbs: ORBS, runes: RUNES },
   harbor: {
     name: 'Pelabuhan Bulan', obst: H,
-    spawns: [[40, 0], [-40, 0], [0, 40], [0, -40], [39, 22], [39, -22], [-39, 22], [-39, -22], [22, 39], [-22, 39], [22, -39], [-22, -39]],
-    orbs: [[10, 0], [-10, 0], [0, 10], [0, -10], [27, 27], [-27, 27], [27, -27], [-27, -27]],
-    runes: [{ x: 0, z: 30, type: 'dmg' }, { x: 0, z: -30, type: 'dmg' }, { x: 30, z: 0, type: 'spd' }, { x: -30, z: 0, type: 'spd' }],
+    spawns: [[40, 0], [-40, 0], [0, 40], [0, -40], [39, 22], [39, -22], [-39, 22], [-39, -22], [22, 39], [-22, 39], [22, -39], [-22, -39]].map(([x, z]) => [sc(x), sc(z)]),
+    orbs: [[10, 0], [-10, 0], [0, 10], [0, -10], [27, 27], [-27, 27], [27, -27], [-27, -27]].map(([x, z]) => [sc(x), sc(z)]),
+    runes: [{ x: 0, z: 30, type: 'dmg' }, { x: 0, z: -30, type: 'dmg' }, { x: 30, z: 0, type: 'spd' }, { x: -30, z: 0, type: 'spd' }].map((r) => ({ ...r, x: sc(r.x), z: sc(r.z) })),
   },
 };
 export const MAP_KEYS = Object.keys(MAPS);
@@ -271,7 +289,7 @@ Object.assign(MONSTERS, {
 Object.assign(ALL_CLASSES, CLASSES, MONSTERS);
 // tong meledak (hanya di Pelabuhan): ditembak -> ledakan area, muncul lagi setelah 20 dtk
 MAPS.ruins.barrels = [];
-MAPS.harbor.barrels = [[19, 7], [-19, -7], [7, -19], [-7, 19], [26, 20], [-26, -20]];
+MAPS.harbor.barrels = [[19, 7], [-19, -7], [7, -19], [-7, 19], [26, 20], [-26, -20]].map(([x, z]) => [sc(x), sc(z)]);
 export const BARREL_R = 5, BARREL_DMG = 40, BARREL_RESPAWN = 20;
 // mode akhir pekan untuk room publik (Sabtu-Minggu WIB), bergilir tiap minggu
 export const MUTATORS = {

@@ -97,7 +97,8 @@ const NB = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]
 const WAYPOINTS = {};
 for (const id of MAP_KEYS) {
   setMap(id); WAYPOINTS[id] = [];
-  for (let x = -40; x <= 40; x += 8) for (let z = -40; z <= 40; z += 8) if (!blocked(x, z, 1.5)) WAYPOINTS[id].push([x, z]);
+  const WP = Math.floor((ARENA - 4) / 8) * 8;
+  for (let x = -WP; x <= WP; x += 8) for (let z = -WP; z <= WP; z += 8) if (!blocked(x, z, 1.5)) WAYPOINTS[id].push([x, z]);
 }
 setMap('ruins');
 

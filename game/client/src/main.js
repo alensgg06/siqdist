@@ -74,7 +74,7 @@ function applyQuality(q) {
   for (const rt of [composer.renderTarget1, composer.renderTarget2]) if (rt.samples !== ms4) { rt.samples = ms4; rt.dispose(); }
   const ms = q === 'high' ? 2048 : 1024;
   if (world.sun.shadow.mapSize.x !== ms) { world.sun.shadow.mapSize.set(ms, ms); world.sun.shadow.map?.dispose(); world.sun.shadow.map = null; }
-  if (world.grass) world.grass.count = q === 'low' ? 700 : q === 'medium' ? 2200 : world.grassMax;
+  if (world.grass) world.grass.count = q === 'low' ? 1000 : q === 'medium' ? 3200 : world.grassMax;
   for (const l of world.pointLights) l.visible = q !== 'low';
   fx.lightsOn = q !== 'low';
   $('quality').value = q;
