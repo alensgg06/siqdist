@@ -306,6 +306,21 @@ Gambar dirender di perangkat pemain (WebGL), bukan di server. Tiga tingkat kuali
 
 Kualitas turun sendiri bila fps di bawah 27 selama beberapa detik, kecuali pemain memilih tingkatnya sendiri. Tekstur timbul, pantulan langit, dan cahaya tepi karakter dibuat di perangkat dari aset yang sama (`client/src/gfx.js`), jadi ukuran unduhan hampir tidak bertambah.
 
+## Tekstur dari GPU (opsional)
+
+Tekstur batu, tanah, papan dermaga, dan peti bisa diganti versi resolusi tinggi yang dibuat model gambar (SDXL) di GPU NVIDIA milik server. Ini proses sekali jalan, bukan bagian dari server game; game tetap digambar di perangkat pemain.
+
+```bash
+docker compose --profile gfx build gfx
+docker compose --profile gfx run --rm gfx                 # semua tekstur
+GFX_ONLY=stone GFX_SEED=5 docker compose --profile gfx run --rm gfx   # ulang satu tekstur dengan hasil lain
+```
+
+- Butuh runtime `nvidia` di Docker (`docker info | grep -i runtime`) dan sekitar 6 GB memori GPU bebas. Jalan pertama mengunduh image dan model, total belasan GB; setelahnya tersimpan di volume `arkana-hf`.
+- Hasil masuk ke `assets/` di volume data dan langsung dipakai setelah halaman game dimuat ulang, tanpa membangun ulang container. Kualitas Rendah tidak mengunduhnya.
+- Skrip melaporkan apakah tepi tiap tekstur menyambung; bila tidak, ulangi dengan `GFX_SEED` lain.
+- Kembali ke tekstur bawaan: `docker compose exec -u root arkana rm -rf /app/data/assets`.
+
 ## Suara
 
 Semua bunyi disintesis di perangkat pemain (`client/src/audio.js`), tanpa berkas audio. Tiap bunyi berlapis (hentakan, badan, ekor) dengan nada yang sedikit diacak, dan tembakan pemain lain diredam sesuai jarak. Buka `/suara.html` di server game untuk mendengar tiap bunyi tanpa bermain.

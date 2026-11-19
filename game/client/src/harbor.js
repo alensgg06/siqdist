@@ -72,7 +72,7 @@ export function buildHarbor(scene, glowTex) {
 
   // --- dermaga dan air ---
   const planks = plankTexture(); planks.repeat.set(24, 24);
-  const deck = new THREE.Mesh(new THREE.PlaneGeometry(ARENA * 2 + 4, ARENA * 2 + 4), bump(new THREE.MeshStandardMaterial({ map: planks, roughness: 0.78, color: 0xc8b8b0 }), 3, 1));
+  const deck = new THREE.Mesh(new THREE.PlaneGeometry(ARENA * 2 + 4, ARENA * 2 + 4), bump(new THREE.MeshStandardMaterial({ map: planks, roughness: 0.78, color: 0xc8b8b0 }), 3, 1, 'planks'));
   deck.rotation.x = -Math.PI / 2; deck.receiveShadow = true; root.add(deck);
   const water = new THREE.Mesh(
     new THREE.PlaneGeometry(900, 900, 1, 1),
@@ -108,9 +108,9 @@ export function buildHarbor(scene, glowTex) {
   water.rotation.x = -Math.PI / 2; water.position.y = -0.6; root.add(water); world.water = water;
 
   const stone = new THREE.MeshStandardMaterial({ color: 0x5d6270, roughness: 0.95 });
-  const wood = bump(new THREE.MeshStandardMaterial({ map: planks, color: 0x8a6a58, roughness: 0.9 }), 3, 1);
+  const wood = bump(new THREE.MeshStandardMaterial({ map: planks, color: 0x8a6a58, roughness: 0.9 }), 3, 1, 'planks');
   const darkWood = new THREE.MeshStandardMaterial({ color: 0x3b2a24, roughness: 0.9 });
-  const crateMat = bump(new THREE.MeshStandardMaterial({ map: crateTexture(), roughness: 0.85 }), 3, 1);
+  const crateMat = bump(new THREE.MeshStandardMaterial({ map: crateTexture(), roughness: 0.85 }), 3, 1, 'crate');
   const roofMat = new THREE.MeshStandardMaterial({ color: 0x2c3a52, roughness: 0.8, flatShading: true });
   const metal = new THREE.MeshStandardMaterial({ color: 0x8f7a4a, roughness: 0.35, metalness: 0.9 });
   const sh = (m) => { m.castShadow = true; m.receiveShadow = true; return m; };

@@ -9,7 +9,7 @@ import { buildWorld, buildExtras } from './world.js';
 import { buildHarbor } from './harbor.js';
 import { Avatar, Monster } from './chars.js';
 import { Fx } from './fx.js';
-import { setDetail, skyEnv, gradePass } from './gfx.js';
+import { setDetail, skyEnv, gradePass, loadHd } from './gfx.js';
 import { input, setupInput, isTouch } from './input.js';
 import { initAudio, sfx, setMuted, setMusic, setVolume, setActive, audioRunning, step } from './audio.js';
 
@@ -64,6 +64,7 @@ function applyQuality(q) {
   renderer.setPixelRatio(pr); composer.setPixelRatio(pr);
   world.sun.castShadow = q !== 'low';
   setDetail(q !== 'low');
+  if (q !== 'low') loadHd(); // tekstur resolusi tinggi dari server, bila ada; kualitas rendah tidak mengunduhnya
   // pantulan langit pada batu basah, logam, dan kayu; dimatikan di kualitas rendah
   if (q !== 'low') world.env ??= skyEnv(renderer, world.sky);
   scene.environment = q === 'low' ? null : world.env; scene.environmentIntensity = 0.55;

@@ -150,8 +150,8 @@ export function buildWorld(scene) {
   const R = rng(1234);
   const glowTex = glowTexture();
   const stoneTex = stoneTexture();
-  const stone = bump(new THREE.MeshStandardMaterial({ map: stoneTex, roughness: 0.9, metalness: 0.02 }), 3.2, 1.1);
-  const darkStone = bump(new THREE.MeshStandardMaterial({ map: stoneTex, color: 0xb0a6bc, roughness: 0.95 }), 3.2, 1.1);
+  const stone = bump(new THREE.MeshStandardMaterial({ map: stoneTex, roughness: 0.9, metalness: 0.02 }), 3.2, 1.1, 'stone');
+  const darkStone = bump(new THREE.MeshStandardMaterial({ map: stoneTex, color: 0xb0a6bc, roughness: 0.95 }), 3.2, 1.1, 'stone');
   const world = { root, glowTex, orbs: [], spin: [], grass: null, sun: null, pointLights: [] };
 
   // --- langit ---
@@ -196,7 +196,7 @@ export function buildWorld(scene) {
     new THREE.MeshStandardMaterial({ map: groundTexture(), roughness: 0.96 }),
   );
   ground.material.map.repeat.set(60, 60);
-  bump(ground.material, 2.6, 0.9);
+  bump(ground.material, 2.6, 0.9, 'ground');
   ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true;
   root.add(ground);
 

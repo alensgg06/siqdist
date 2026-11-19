@@ -49,5 +49,20 @@ services:
       - TUNNEL_TOKEN=${TUNNEL_TOKEN:-}
     depends_on: [arkana]
 
+  # Pembuat tekstur dari GPU. Tidak ikut menyala; dijalankan sekali:
+  #   docker compose --profile gfx run --rm gfx
+  gfx:
+    build: ./tools/gfx
+    profiles: ["gfx"]
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - GFX_ONLY=${GFX_ONLY:-}
+      - GFX_SEED=${GFX_SEED:-1}
+    volumes:
+      - arkana-data:/out          # hasil masuk ke folder data game (assets/)
+      - arkana-hf:/cache          # model yang diunduh, supaya tidak diunduh ulang
+
 volumes:
   arkana-data:
+  arkana-hf:

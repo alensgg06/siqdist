@@ -3,11 +3,13 @@
 import * as THREE from 'three';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 
-// ---- peta tonjolan (normal map) dari terang-gelap sebuah tekstur kanvas ----
+// ---- peta tonjolan (normal map) dari terang-gelap sebuah gambar ----
 const bumped = [];
-export function bump(mat, strength = 2, scale = 1) {
-  const src = mat.map.image, s = src.width;
-  const px = src.getContext('2d').getImageData(0, 0, s, s).data;
+function normalFrom(src, strength) {
+  const s = Math.min(1024, src.width);
+  let read = src;
+  if (!src.getContext || src.width !== s) { read = document.createElement('canvas'); read.width = read.height = s; read.getContext('2d').drawImage(src, 0, 0, s, s); }
+  const px = read.getContext('2d').getImageData(0, 0, s, s).data;
   const h = new Float32Array(s * s);
   for (let i = 0; i < s * s; i++) h[i] = (px[i * 4] * 0.3 + px[i * 4 + 1] * 0.59 + px[i * 4 + 2] * 0.11) / 255;
   const c = document.createElement('canvas'); c.width = c.height = s;
@@ -19,11 +21,49 @@ export function bump(mat, strength = 2, scale = 1) {
     out.data[i] = (-dx * l * 0.5 + 0.5) * 255; out.data[i + 1] = (dy * l * 0.5 + 0.5) * 255; out.data[i + 2] = (l * 0.5 + 0.5) * 255; out.data[i + 3] = 255;
   }
   g.putImageData(out, 0, 0);
-  const t = new THREE.CanvasTexture(c);
-  t.wrapS = mat.map.wrapS; t.wrapT = mat.map.wrapT; t.repeat.copy(mat.map.repeat); t.anisotropy = mat.map.anisotropy;
+  return new THREE.CanvasTexture(c);
+}
+const like = (t, map) => { t.wrapS = map.wrapS; t.wrapT = map.wrapT; t.repeat.copy(map.repeat); t.anisotropy = map.anisotropy; return t; };
+// slot: nama tekstur yang bisa diganti versi resolusi tinggi dari server (lihat loadHd)
+const slots = {}, hdTex = {};
+export function bump(mat, strength = 2, scale = 1, slot = '') {
+  const b = { mat, tex: like(normalFrom(mat.map.image, strength), mat.map), strength };
   mat.normalScale = new THREE.Vector2(scale, scale);
-  bumped.push({ mat, tex: t });
+  bumped.push(b);
+  if (slot) { (slots[slot] ||= []).push(b); if (hdTex[slot]) applyHd(slot); }
   return mat;
+}
+function applyHd(slot) {
+  const hd = hdTex[slot];
+  for (const b of slots[slot] || []) {
+    if (b.hd) continue;
+    b.hd = true;
+    const on = b.mat.normalMap === b.tex;
+    // tekstur buatan model lebih halus daripada tekstur bawaan, jadi tonjolannya diperkuat sedikit
+    hd.normal ||= normalFrom(hd.image, b.strength * 1.6);
+    const map = like(new THREE.Texture(hd.image), b.mat.map); map.colorSpace = THREE.SRGBColorSpace; map.needsUpdate = true;
+    b.tex = like(hd.normal.clone(), b.mat.map); b.tex.needsUpdate = true;
+    b.mat.map = map; if (on) b.mat.normalMap = b.tex;
+    b.mat.needsUpdate = true;
+  }
+}
+// Mengambil tekstur resolusi tinggi bila server punya (dibuat tools/gfx di GPU). Tanpa itu, tekstur bawaan tetap dipakai.
+let hdAsked = false;
+export async function loadHd() {
+  if (hdAsked) return 0;
+  hdAsked = true;
+  let n = 0;
+  try {
+    const r = await fetch('/assets/manifest.json'); if (!r.ok) return 0;
+    const m = await r.json();
+    await Promise.all(Object.entries(m.tex || {}).map(async ([slot, file]) => {
+      if (!/^[a-z0-9_-]{1,40}\.webp$/.test(file)) return;
+      const img = new Image(); img.src = `/assets/${file}?v=${m.v || 0}`;
+      try { await img.decode(); } catch { return; }
+      hdTex[slot] = { image: img, normal: null }; applyHd(slot); n++;
+    }));
+  } catch { /* tanpa aset: tekstur bawaan */ }
+  return n;
 }
 // kualitas rendah: tanpa peta tonjolan
 let detailOn = null;

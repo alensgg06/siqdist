@@ -1260,6 +1260,18 @@ const server = http.createServer((req, res) => {
     });
     return;
   }
+  // tekstur buatan GPU (tools/gfx): disajikan dari folder data, hanya nama dan jenis berkas yang dikenal
+  if (url.startsWith('/assets/')) {
+    const m = /^\/assets\/([a-z0-9_-]{1,40}\.(webp|json))$/.exec(url);
+    if (!m) { res.writeHead(404); res.end('Tidak ditemukan'); return; }
+    fs.readFile(path.join(DATA_DIR, 'assets', m[1]), (err, data) => {
+      if (err) { res.writeHead(404, { 'cache-control': 'no-store' }); res.end('Tidak ditemukan'); return; }
+      // gambar diminta dengan ?v= dari manifest, jadi boleh disimpan lama; manifest selalu diambil baru
+      res.writeHead(200, { 'content-type': m[2] === 'json' ? 'application/json' : 'image/webp', 'cache-control': m[2] === 'json' ? 'no-store' : 'public, max-age=604800' });
+      res.end(data);
+    });
+    return;
+  }
   if (url === '/health') { res.writeHead(200, { 'content-type': 'application/json' }); res.end('{"ok":true}'); return; }
   const file = path.normalize(path.join(ROOT, url === '/' ? 'index.html' : url));
   if (!file.startsWith(ROOT)) { res.writeHead(403); res.end(); return; }
