@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { ARENA, MAPS } from '../../shared/config.js';
 import { rng, canvasTex } from './world.js';
+import { bump } from './gfx.js';
 
 const MOON_DIR = new THREE.Vector3(0.55, 0.5, -0.67).normalize();
 
@@ -59,7 +60,7 @@ export function buildHarbor(scene, glowTex) {
           gl_FragColor=vec4(c,1.0); }`,
     }),
   );
-  sky.renderOrder = -10; sky.frustumCulled = false; root.add(sky);
+  sky.renderOrder = -10; sky.frustumCulled = false; root.add(sky); world.sky = sky;
 
   root.add(new THREE.HemisphereLight(0x8fa8ec, 0x3a2a30, 1.7));
   root.add(new THREE.AmbientLight(0x6a7aaa, 0.8));
@@ -71,7 +72,7 @@ export function buildHarbor(scene, glowTex) {
 
   // --- dermaga dan air ---
   const planks = plankTexture(); planks.repeat.set(24, 24);
-  const deck = new THREE.Mesh(new THREE.PlaneGeometry(ARENA * 2 + 4, ARENA * 2 + 4), new THREE.MeshStandardMaterial({ map: planks, roughness: 0.85, color: 0xc8b8b0 }));
+  const deck = new THREE.Mesh(new THREE.PlaneGeometry(ARENA * 2 + 4, ARENA * 2 + 4), bump(new THREE.MeshStandardMaterial({ map: planks, roughness: 0.78, color: 0xc8b8b0 }), 3, 1));
   deck.rotation.x = -Math.PI / 2; deck.receiveShadow = true; root.add(deck);
   const water = new THREE.Mesh(
     new THREE.PlaneGeometry(900, 900, 1, 1),
@@ -84,11 +85,21 @@ export function buildHarbor(scene, glowTex) {
         }`,
       fragmentShader: `varying vec3 vW; uniform float time; uniform vec3 moon;
 #include <fog_pars_fragment>
-        void main(){ float w=sin(vW.x*0.35+time*1.2)*0.5+sin(vW.z*0.27-time*0.9)*0.5+sin((vW.x+vW.z)*0.9+time*2.3)*0.25;
-          vec3 c=vec3(0.03,0.07,0.13)+vec3(0.02,0.05,0.08)*w;
-          float glint=pow(max(0.0,sin(vW.x*1.7+time*3.0)*sin(vW.z*1.3-time*2.0)),24.0);
-          float path=exp(-pow((vW.x*moon.z-vW.z*moon.x)*0.03,2.0)); // jejak cahaya bulan di air
-          c+=vec3(0.75,0.82,1.0)*glint*(0.25+1.2*path);
+        vec3 skyCol(vec3 d){ vec3 c=mix(vec3(0.12,0.2,0.33),vec3(0.03,0.05,0.12),smoothstep(-0.02,0.5,d.y)); return c+vec3(0.55,0.65,0.85)*pow(max(dot(d,moon),0.0),18.0)*0.5; }
+        void main(){
+          // kemiringan permukaan dari beberapa gelombang sinus
+          float ax=vW.x*0.35+time*1.2, az=vW.z*0.27-time*0.9, ad=(vW.x+vW.z)*0.9+time*2.3, ar=vW.x*1.9-vW.z*1.4+time*3.1;
+          vec2 g=vec2(cos(ax)*0.175+cos(ad)*0.225+cos(ar)*0.19, cos(az)*0.135+cos(ad)*0.225-cos(ar)*0.14);
+          vec3 n=normalize(vec3(-g.x*0.55,1.0,-g.y*0.55));
+          vec3 v=normalize(cameraPosition-vW);
+          float fr=0.03+0.97*pow(1.0-max(dot(n,v),0.0),5.0);
+          vec3 r=reflect(-v,n); r.y=abs(r.y);
+          vec3 c=mix(vec3(0.015,0.04,0.075),skyCol(r),fr);
+          c+=vec3(1.0,0.97,0.88)*pow(max(dot(r,moon),0.0),260.0)*2.4;   // kilau bulan
+          c+=vec3(0.6,0.7,0.95)*pow(max(dot(r,moon),0.0),24.0)*0.22;    // jejak cahaya bulan
+          float edge=max(abs(vW.x),abs(vW.z))-46.0;                       // buih di tepi dermaga
+          float foam=smoothstep(2.6,0.0,edge)*step(0.0,edge)*(0.5+0.5*sin(edge*4.0-time*2.0+sin(vW.x*0.8+vW.z*0.7)*2.0));
+          c+=vec3(0.55,0.65,0.75)*foam*0.35;
           gl_FragColor=vec4(c,1.0);
 #include <fog_fragment>
         }`,
@@ -97,9 +108,9 @@ export function buildHarbor(scene, glowTex) {
   water.rotation.x = -Math.PI / 2; water.position.y = -0.6; root.add(water); world.water = water;
 
   const stone = new THREE.MeshStandardMaterial({ color: 0x5d6270, roughness: 0.95 });
-  const wood = new THREE.MeshStandardMaterial({ map: planks, color: 0x8a6a58, roughness: 0.9 });
+  const wood = bump(new THREE.MeshStandardMaterial({ map: planks, color: 0x8a6a58, roughness: 0.9 }), 3, 1);
   const darkWood = new THREE.MeshStandardMaterial({ color: 0x3b2a24, roughness: 0.9 });
-  const crateMat = new THREE.MeshStandardMaterial({ map: crateTexture(), roughness: 0.85 });
+  const crateMat = bump(new THREE.MeshStandardMaterial({ map: crateTexture(), roughness: 0.85 }), 3, 1);
   const roofMat = new THREE.MeshStandardMaterial({ color: 0x2c3a52, roughness: 0.8, flatShading: true });
   const metal = new THREE.MeshStandardMaterial({ color: 0x8f7a4a, roughness: 0.35, metalness: 0.9 });
   const sh = (m) => { m.castShadow = true; m.receiveShadow = true; return m; };

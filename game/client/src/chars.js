@@ -1,9 +1,10 @@
 // Avatar prosedural: tubuh, jubah, senjata per kelas, animasi langkah/tembak/gugur.
 import * as THREE from 'three';
 import { CLASSES, SKINS } from '../../shared/config.js';
+import { rim } from './gfx.js';
 
-const cloth = new THREE.MeshStandardMaterial({ color: 0x2a2d44, roughness: 0.85 });
-const skin = new THREE.MeshStandardMaterial({ color: 0xd9a47c, roughness: 0.7 });
+const cloth = rim(new THREE.MeshStandardMaterial({ color: 0x2a2d44, roughness: 0.85 }));
+const skin = rim(new THREE.MeshStandardMaterial({ color: 0xd9a47c, roughness: 0.7 }), 0x8a86c8, 0.3);
 const metal = new THREE.MeshStandardMaterial({ color: 0x9aa0bc, roughness: 0.35, metalness: 0.85 });
 const wood = new THREE.MeshStandardMaterial({ color: 0x5b3a25, roughness: 0.9 });
 const geo = {
@@ -24,7 +25,7 @@ export class Avatar {
     this.shown = { hp: -1, maxHp: -1, lvl: -1 };
     const root = this.group = new THREE.Group();
     const body = this.body = new THREE.Group(); root.add(body);
-    const accent = new THREE.MeshStandardMaterial({ color: sk.accent !== undefined ? new THREE.Color(sk.accent) : color.clone().multiplyScalar(0.38), roughness: 0.8, side: THREE.DoubleSide, metalness: sk.id === 'raja' || sk.id === 'bulan' ? 0.5 : 0 });
+    const accent = rim(new THREE.MeshStandardMaterial({ color: sk.accent !== undefined ? new THREE.Color(sk.accent) : color.clone().multiplyScalar(0.38), roughness: 0.8, side: THREE.DoubleSide, metalness: sk.id === 'raja' || sk.id === 'bulan' ? 0.5 : 0 }));
     const glow = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 3, roughness: 0.3 });
 
     this.legL = new THREE.Group(); this.legL.position.set(0.2, 1.0, 0);
@@ -197,7 +198,7 @@ export class Monster {
     const eye = (color) => new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 4 });
     if (kind === 'ghoul') {
       // makhluk rawa bungkuk, lengan panjang, mata hijau
-      const skin = new THREE.MeshStandardMaterial({ color: 0x3d5240, roughness: 0.9 });
+      const skin = rim(new THREE.MeshStandardMaterial({ color: 0x3d5240, roughness: 0.9 }));
       const torso = m(new THREE.SphereGeometry(0.5, 12, 10), skin, 0, 1.2, -0.1); torso.scale.set(1, 1.2, 0.9); torso.rotation.x = 0.6;
       m(new THREE.SphereGeometry(0.3, 12, 10), skin, 0, 1.75, 0.35);
       for (const s of [-1, 1]) m(new THREE.SphereGeometry(0.06, 8, 6), eye(0x8bff6a), s * 0.12, 1.8, 0.62);
@@ -209,7 +210,7 @@ export class Monster {
     } else if (kind === 'caster' || kind === 'frost') {
       const cc = kind === 'frost' ? 0x7fd8ff : 0xc86bff;
       // dukun berjubah melayang dengan bola ungu
-      const robe = new THREE.MeshStandardMaterial({ color: kind === 'frost' ? 0x1a2c44 : 0x241a33, roughness: 0.8, side: THREE.DoubleSide });
+      const robe = rim(new THREE.MeshStandardMaterial({ color: kind === 'frost' ? 0x1a2c44 : 0x241a33, roughness: 0.8, side: THREE.DoubleSide }));
       m(new THREE.ConeGeometry(0.6, 1.8, 12, 1, true), robe, 0, 1.15, 0);
       const hood = m(new THREE.SphereGeometry(0.34, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.6), robe, 0, 2.05, 0); hood.rotation.x = -0.2;
       for (const s of [-1, 1]) m(new THREE.SphereGeometry(0.05, 8, 6), eye(cc), s * 0.1, 1.98, 0.27);
@@ -220,7 +221,7 @@ export class Monster {
     } else if (kind === 'spiderling' || kind === 'queen') {
       // laba-laba: perut besar, kepala, delapan kaki; Ratu jauh lebih besar dengan corak merah
       const q = kind === 'queen', sc = q ? 2.4 : 0.75; this.baseScale = sc;
-      const shell = new THREE.MeshStandardMaterial({ color: q ? 0x3a0f1c : 0x2a2230, roughness: 0.6 });
+      const shell = rim(new THREE.MeshStandardMaterial({ color: q ? 0x3a0f1c : 0x2a2230, roughness: 0.6 }));
       const ab = m(new THREE.SphereGeometry(0.55, 12, 10), shell, 0, 0.7, -0.45); ab.scale.set(1, 0.85, 1.25);
       m(new THREE.SphereGeometry(0.32, 12, 10), shell, 0, 0.6, 0.3);
       if (q) m(new THREE.BoxGeometry(0.5, 0.06, 0.7), eye(0xff2e5a), 0, 1.17, -0.45);
@@ -235,7 +236,7 @@ export class Monster {
       this.tipY = 0.7 * sc;
     } else {
       // golem batu raksasa dengan retakan menyala
-      const rock = new THREE.MeshStandardMaterial({ color: 0x6b5d52, roughness: 1, flatShading: true });
+      const rock = rim(new THREE.MeshStandardMaterial({ color: 0x6b5d52, roughness: 1, flatShading: true }));
       const lava = eye(0xff8a2a);
       const torso = m(new THREE.DodecahedronGeometry(1.1, 0), rock, 0, 2.3, 0); torso.scale.set(1.2, 1, 0.9);
       m(new THREE.BoxGeometry(0.9, 0.12, 0.1), lava, 0, 2.3, 0.85);

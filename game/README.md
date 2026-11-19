@@ -237,6 +237,18 @@ docker compose exec arkana node tools/stats.js     # di server Docker
 npm run stats                                       # tanpa Docker
 ```
 
+## Grafis
+
+Gambar dirender di perangkat pemain (WebGL), bukan di server. Tiga tingkat kualitas di menu Pengaturan:
+
+| Tingkat | Isi |
+|---|---|
+| Rendah | tanpa bayangan, tanpa efek layar, tanpa tekstur timbul dan pantulan langit |
+| Sedang | bayangan, cahaya berpendar, gradasi warna, tekstur timbul pada batu, tanah, dan kayu, pantulan langit |
+| Tinggi | semua di atas, ditambah penghalus tepi, bayangan lebih tajam, dan resolusi penuh |
+
+Kualitas turun sendiri bila fps di bawah 27 selama beberapa detik, kecuali pemain memilih tingkatnya sendiri. Tekstur timbul, pantulan langit, dan cahaya tepi karakter dibuat di perangkat dari aset yang sama (`client/src/gfx.js`), jadi ukuran unduhan hampir tidak bertambah.
+
 ## Suara
 
 Semua bunyi disintesis di perangkat pemain (`client/src/audio.js`), tanpa berkas audio. Tiap bunyi berlapis (hentakan, badan, ekor) dengan nada yang sedikit diacak, dan tembakan pemain lain diredam sesuai jarak. Buka `/suara.html` di server game untuk mendengar tiap bunyi tanpa bermain.

@@ -9,6 +9,7 @@ import { buildWorld, buildExtras } from './world.js';
 import { buildHarbor } from './harbor.js';
 import { Avatar, Monster } from './chars.js';
 import { Fx } from './fx.js';
+import { setDetail, skyEnv, gradePass } from './gfx.js';
 import { input, setupInput, isTouch } from './input.js';
 import { initAudio, sfx, setMuted, setMusic, setVolume, setActive, audioRunning, step } from './audio.js';
 
@@ -52,6 +53,7 @@ const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
 const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.42, 0.5, 0.9);
 composer.addPass(bloom);
+composer.addPass(gradePass());
 composer.addPass(new OutputPass());
 
 let quality = store.get('quality', isTouch ? 'medium' : 'high');
@@ -61,6 +63,13 @@ function applyQuality(q) {
   const pr = Math.min(devicePixelRatio || 1, q === 'low' ? 1 : q === 'medium' ? 1.5 : 2);
   renderer.setPixelRatio(pr); composer.setPixelRatio(pr);
   world.sun.castShadow = q !== 'low';
+  setDetail(q !== 'low');
+  // pantulan langit pada batu basah, logam, dan kayu; dimatikan di kualitas rendah
+  if (q !== 'low') world.env ??= skyEnv(renderer, world.sky);
+  scene.environment = q === 'low' ? null : world.env; scene.environmentIntensity = 0.55;
+  // penghalus tepi (MSAA) hanya di kualitas tinggi
+  const ms4 = q === 'high' ? 4 : 0;
+  for (const rt of [composer.renderTarget1, composer.renderTarget2]) if (rt.samples !== ms4) { rt.samples = ms4; rt.dispose(); }
   const ms = q === 'high' ? 2048 : 1024;
   if (world.sun.shadow.mapSize.x !== ms) { world.sun.shadow.mapSize.set(ms, ms); world.sun.shadow.map?.dispose(); world.sun.shadow.map = null; }
   if (world.grass) world.grass.count = q === 'low' ? 700 : q === 'medium' ? 2200 : world.grassMax;
