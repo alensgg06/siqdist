@@ -66,13 +66,28 @@ if (file.includes('rahasia123') || file.includes(reg.token)) fail('kata sandi at
 if ((fs.statSync(DATA + '/1/accounts.json').mode & 0o077) !== 0) fail('accounts.json seharusnya hanya terbaca pemiliknya');
 console.log('OK sesi: token dikenali, nama dan statistik diambil dari akun, kata sandi dan token tidak tersimpan polos.');
 
-// ---------- 4. masuk di perangkat lain, keluar ----------
+// ---------- 4. satu perangkat per akun: yang baru masuk menggeser yang lama ----------
+c = await join(P1, { tok: reg.token, mode: 'create' });
+if (!c.w) fail('perangkat pertama tidak bisa bergabung');
+let closed = false, why = null; c.ws.on('message', (raw) => { const m = JSON.parse(raw); if (m.t === 'e') why = m; }); c.ws.on('close', () => { closed = true; });
 const lg = await api(P1, '/api/login', { name: 'arya', pass: 'rahasia123' }, null, '10.0.0.4');
 if (!lg.token || lg.user.pid !== PID || lg.token === reg.token) fail(`masuk gagal: ${JSON.stringify(lg)}`);
+await sleep(400);
+if (!closed || !why?.auth || !/perangkat lain/.test(why.m)) fail(`perangkat lama seharusnya dikeluarkan dari arena dengan pesan: ${JSON.stringify(why)}`);
+if ((await api(P1, '/api/me', null, reg.token)).user) fail('sesi perangkat lama masih berlaku setelah masuk di perangkat baru');
+if (!(await api(P1, '/api/me', null, lg.token)).user) fail('sesi perangkat baru tidak berlaku');
+c = await join(P1, { tok: reg.token });
+if (c.w || !c.err?.auth) fail('perangkat lama masih bisa bergabung');
+// tab ganda dengan sesi yang sama: sambungan lama ditutup
+const t1 = await join(P1, { tok: lg.token, mode: 'create' }); let t1closed = false; t1.ws.on('close', () => { t1closed = true; });
+const t2 = await join(P1, { tok: lg.token, mode: 'create' });
+await sleep(300);
+if (!t1.w || !t2.w || !t1closed || t2.ws.readyState !== 1) fail('satu sesi seharusnya hanya bisa berada di satu arena');
+t2.ws.close();
 await api(P1, '/api/logout', {}, lg.token);
 if ((await api(P1, '/api/me', null, lg.token)).user) fail('token masih berlaku setelah keluar');
-if (!(await api(P1, '/api/me', null, reg.token)).user) fail('keluar di satu perangkat tidak boleh mengeluarkan perangkat lain');
-console.log('OK masuk dan keluar: perangkat lain mendapat statistik yang sama; keluar hanya mematikan token perangkat itu.');
+reg.token = (await api(P1, '/api/login', { name: 'arya', pass: 'rahasia123' }, null, '10.0.0.7')).token;
+console.log('OK satu perangkat per akun: masuk di perangkat baru mengeluarkan yang lama (juga dari arena), tab ganda ditutup, keluar mematikan sesi.');
 
 // ---------- 5. reset kata sandi lewat alat ----------
 const tool = (...a) => execFileSync(process.execPath, ['tools/akun.js', ...a], { cwd: ROOT, env: { ...process.env, DATA_DIR: DATA + '/1' }, encoding: 'utf8' });

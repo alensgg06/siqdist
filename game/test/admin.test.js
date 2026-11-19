@@ -50,6 +50,17 @@ const reg2 = await api(P2, '/api/register', { name: 'Bos', pass: 'rahasia-bos1' 
 if ((await api(P2, '/api/admin/state', null, reg2.token)).code !== 403) fail('tanpa ARKANA_ADMINS, halaman admin seharusnya mati untuk semua orang');
 console.log('OK hak akses: hanya nama di ARKANA_ADMINS; pemain biasa, token palsu, dan tamu ditolak; tanpa daftar pengelola semuanya ditolak; data tidak membocorkan rahasia.');
 
+// batas perangkat: pengelola dua, pemain satu
+const bos2 = await api(P1, '/api/login', { name: 'Bos', pass: 'rahasia-bos1' });
+if (!(await api(P1, '/api/me', null, bos.token)).user || !(await api(P1, '/api/me', null, bos2.token)).user) fail('pengelola seharusnya boleh masuk di dua perangkat');
+const bos3 = await api(P1, '/api/login', { name: 'Bos', pass: 'rahasia-bos1' });
+if ((await api(P1, '/api/me', null, bos.token)).user || !(await api(P1, '/api/me', null, bos2.token)).user || !(await api(P1, '/api/me', null, bos3.token)).user) fail('perangkat ketiga pengelola seharusnya menggeser yang tertua saja');
+bos.token = bos3.token;
+const arya2 = await api(P1, '/api/login', { name: 'Arya', pass: 'rahasia123' });
+if ((await api(P1, '/api/me', null, arya.token)).user || !(await api(P1, '/api/me', null, arya2.token)).user) fail('pemain biasa seharusnya hanya satu perangkat');
+arya.token = arya2.token;
+console.log('OK batas perangkat: pengelola dua, pemain satu; perangkat baru menggeser yang tertua.');
+
 // ---------- 2. pemain di arena, keluarkan, blokir ----------
 const play = (tok) => new Promise((res) => { const ws = new WebSocket(`ws://localhost:${P1}/ws`), c = { ws, w: null, closed: false }; ws.on('open', () => ws.send(JSON.stringify({ t: 'join', cls: 'ranger', mode: 'create', gm: 'dm', tok }))); ws.on('message', (raw) => { const m = JSON.parse(raw); if (m.t === 'w') { c.w = m; res(c); } }); ws.on('close', () => { c.closed = true; res(c); }); });
 let c = await play(arya.token);

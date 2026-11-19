@@ -8,14 +8,15 @@ const NAME_RE = /^[A-Za-z0-9_]{3,14}$/;
 const MAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,180}\.[^\s@]{2,24}$/;
 const CODE_MS = 15 * 60e3, CODE_TRIES = 5;
 const SESSION_MS = 30 * 86400e3;
-const MAX_SESSIONS = 5;          // per akun; yang tertua dibuang
 export const PASS_MIN = 8, PASS_MAX = 72;
 const sha = (s) => crypto.createHash('sha256').update(s).digest('hex');
 const hashPass = (pass, salt) => crypto.scryptSync(pass, Buffer.from(salt, 'hex'), 32, { N: 16384, r: 8, p: 1 }).toString('hex');
 export const newPid = () => crypto.randomBytes(15).toString('hex').slice(0, 24);
 
 export class Accounts {
-  constructor(dir) { this.dir = dir; this.file = path.join(dir, 'accounts.json'); this.users = {}; this.mtime = -1; this.tries = new Map(); this.sync(); }
+  constructor(dir) { this.dir = dir; this.file = path.join(dir, 'accounts.json'); this.users = {}; this.mtime = -1; this.tries = new Map(); this.sync();
+    // jumlah perangkat yang boleh masuk bersamaan per akun; server mengisinya (pengelola boleh lebih)
+    this.maxSessions = () => 1; this.onEvict = () => {}; }
   // muat ulang bila berkas diubah dari luar (tools/akun.js)
   sync() {
     let mt = 0;
@@ -78,8 +79,12 @@ export class Accounts {
 
   issue(u) {
     const token = crypto.randomBytes(32).toString('base64url');
-    u.sessions = (u.sessions || []).filter((s) => s.exp > Date.now()).slice(-(MAX_SESSIONS - 1));
+    // perangkat yang baru masuk menang: sesi tertua di atas batas dikeluarkan
+    const live = (u.sessions || []).filter((s) => s.exp > Date.now()), keep = Math.max(1, this.maxSessions(u)) - 1;
+    const out = live.slice(0, Math.max(0, live.length - keep));
+    u.sessions = live.slice(live.length - Math.min(keep, live.length));
     u.sessions.push({ h: sha(token), exp: Date.now() + SESSION_MS });
+    if (out.length) this.onEvict(u, out.map((s) => s.h));
     this.save();
     return token;
   }
@@ -107,6 +112,7 @@ export class Accounts {
     if (u.banned) return { error: 'Akun ini diblokir. Hubungi pengelola.' };
     return { token: this.issue(u), name: u.name, pid: u.pid };
   }
+  sid(token) { return typeof token === 'string' ? sha(token) : ''; }
   byToken(token) {
     if (typeof token !== 'string' || token.length < 20 || token.length > 100) return null;
     this.sync();

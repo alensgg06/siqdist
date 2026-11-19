@@ -144,6 +144,7 @@ Pemain wajib masuk dengan akun sebelum bermain; yang belum punya mendaftar dulu 
 
 - Kata sandi disimpan sebagai hasil scrypt bergaram di `data/accounts.json`, token sesi sebagai SHA-256; keduanya tidak pernah tersimpan polos. Sesi berlaku 30 hari.
 - Percobaan masuk dibatasi 8 kali per 10 menit, per nama dan per alamat.
+- Satu akun pemain hanya bisa masuk di satu perangkat, akun pengelola di dua. Masuk di perangkat baru mengeluarkan perangkat tertua, termasuk dari arena.
 - Tidak ada pemulihan lewat email. Lupa kata sandi direset oleh pengelola server:
 
 ```bash

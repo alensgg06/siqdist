@@ -46,7 +46,10 @@ const AUTH = process.env.ARKANA_AUTH !== 'off';   // 'off' hanya untuk uji dan p
 const INVITE = process.env.ARKANA_INVITE || '';
 // nama pengguna yang boleh membuka halaman admin, dipisah koma; kosong = halaman admin mati
 const ADMINS = new Set((process.env.ARKANA_ADMINS || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean));
-const isAdmin = (u) => !!u && ADMINS.has(u.name.toLowerCase());   // bila diisi, mendaftar butuh kode ini
+const isAdmin = (u) => !!u && ADMINS.has(u.name.toLowerCase());
+// batas perangkat per akun: 1 untuk pemain, 2 untuk pengelola. Perangkat yang baru masuk menggeser yang tertua.
+accounts.maxSessions = (u) => (isAdmin(u) ? 2 : 1);
+accounts.onEvict = (u, sids) => { for (const r of rooms) for (const p of r.players.values()) if (!p.bot && sids.includes(p.sid)) { try { p.ws?.send(JSON.stringify({ t: 'e', m: 'Akunmu masuk di perangkat lain. Perangkat ini dikeluarkan.', auth: 1 })); p.ws?.close(); } catch { /* sudah putus */ } } };   // bila diisi, mendaftar butuh kode ini
 const KING_WIN = Number(process.env.KING_LIMIT) || KING_LIMIT;
 const FILL = process.env.BOTS !== undefined ? Number(process.env.BOTS) : BOT_FILL; // jumlah pengisi bot (bisa 0 untuk uji)
 const KOTH_WIN = Number(process.env.KOTH_LIMIT) || KOTH_LIMIT;
@@ -1317,7 +1320,7 @@ wss.on('connection', (ws) => {
     if (m.t === 'join' && !me) {
       const clsKey = CLASS_KEYS.includes(m.cls) ? m.cls : 'ranger';
       const acct = AUTH ? accounts.byToken(m.tok) : null;
-      if (AUTH && !acct) { ws.send(JSON.stringify({ t: 'e', m: 'Sesi berakhir. Silakan masuk lagi.', auth: 1 })); ws.close(); return; }
+      if (AUTH && !acct) { ws.send(JSON.stringify({ t: 'e', m: 'Sesi berakhir, atau akunmu masuk di perangkat lain. Silakan masuk lagi.', auth: 1 })); ws.close(); return; }
       // dengan akun: nama dan id statistik berasal dari akun, bukan dari kiriman klien
       const name = acct ? acct.name : String(m.name || '').replace(/[^\p{L}\p{N} _\-]/gu, '').trim().slice(0, 14) || 'Pengembara';
       if (acct) m.pid = acct.pid;
@@ -1342,7 +1345,13 @@ wss.on('connection', (ws) => {
         if (!room) { room = new Room(); rooms.push(room); }
       }
       setMap(room.map);
+      if (acct) {
+        // satu sesi hanya boleh berada di satu arena: sambungan lama dari sesi yang sama ditutup (mis. tab ganda)
+        const sid = accounts.sid(m.tok);
+        for (const r of rooms) for (const p of r.players.values()) if (!p.bot && p.sid === sid && p.ws !== ws) { try { p.ws?.close(); } catch { /* sudah putus */ } }
+      }
       me = room.addPlayer(name, clsKey, ws);
+      if (acct) me.sid = accounts.sid(m.tok);
       if (stats.validId(m.pid)) { me.pid = m.pid; stats.touch(m.pid, name); if (room.event) stats.eventAttend(m.pid, name, room.event); }
       const skin = SKINS.find((k) => k.id === m.skin);
       me.skin = skin && skinUnlocked(skin, stats.get(me.pid)) ? skin.id : 'default'; // jubah terkunci ditolak di server
