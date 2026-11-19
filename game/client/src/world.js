@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { ARENA, OBST, ORBS } from '../../shared/config.js';
 import { blocked } from '../../shared/sim.js';
-import { bump } from './gfx.js';
+import { bump, bakeFloor } from './gfx.js';
 
 export const SUN_DIR = new THREE.Vector3(-0.62, 0.4, -0.68).normalize();
 
@@ -197,6 +197,7 @@ export function buildWorld(scene) {
   );
   ground.material.map.repeat.set(60, 60);
   bump(ground.material, 2.6, 0.9, 'ground');
+  bakeFloor(ground.material, 'bake/ruins.png', 52, 0.36);
   ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true;
   root.add(ground);
 

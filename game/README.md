@@ -303,11 +303,15 @@ Gambar dirender di perangkat pemain (WebGL), bukan di server. Tiga tingkat kuali
 
 | Tingkat | Isi |
 |---|---|
-| Rendah | tanpa bayangan, tanpa efek layar, tanpa tekstur timbul dan pantulan langit |
+| Rendah | bayangan bangunan dari panggangan (karakter tanpa bayangan), tanpa efek layar, tanpa tekstur timbul dan pantulan langit |
 | Sedang | bayangan, cahaya berpendar, gradasi warna, tekstur timbul pada batu, tanah, dan kayu, pantulan langit |
 | Tinggi | semua di atas, ditambah penghalus tepi, bayangan lebih tajam, dan resolusi penuh |
 
 Kualitas turun sendiri bila fps di bawah 27 selama beberapa detik, kecuali pemain memilih tingkatnya sendiri. Tekstur timbul, pantulan langit, dan cahaya tepi karakter dibuat di perangkat dari aset yang sama (`client/src/gfx.js`), jadi ukuran unduhan hampir tidak bertambah.
+
+## Cahaya lantai yang dipanggang
+
+`node tools/bake.js` menghitung, untuk tiap peta, gelap-sudut di sekitar penghalang dan bayangan matahari atau bulan di lantai, lalu menyimpannya sebagai gambar di `client/bake/` (ikut di-commit). Game menempelkannya ke lantai dengan satu pembacaan tekstur: gelap-sudut tampil di semua tingkat kualitas, dan di tingkat Rendah, yang tidak punya bayangan langsung, lantai memakai bayangan panggangan. Jalankan ulang perintah itu bila letak penghalang di `shared/config.js` berubah.
 
 ## Tekstur dari GPU (opsional)
 

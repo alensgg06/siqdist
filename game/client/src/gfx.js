@@ -73,6 +73,31 @@ export function setDetail(on) {
   for (const b of bumped) { b.done = true; if ((b.mat.normalMap === b.tex) !== on) { b.mat.normalMap = on ? b.tex : null; b.mat.needsUpdate = true; } }
 }
 
+// ---- cahaya lantai yang dipanggang (tools/bake.js): gelap-sudut di semua tingkat, bayangan diam di tingkat rendah ----
+const white = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1); white.needsUpdate = true;
+const bakeU = []; // uniform tiap lantai, untuk mengganti kekuatan saat kualitas berubah
+export function bakeFloor(mat, url, ext, shade = 0.5) {
+  const u = { bakeMap: { value: white }, bakeExt: { value: ext }, bakeAo: { value: 0.75 }, bakeSun: { value: 0 }, bakeShade: { value: shade } };
+  bakeU.push(u);
+  new THREE.TextureLoader().load(url, (t) => { t.flipY = false; t.colorSpace = THREE.NoColorSpace; t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; t.generateMipmaps = true; u.bakeMap.value = t; });
+  mat.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, u);
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec2 vBakeXZ;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvBakeXZ = (modelMatrix * vec4(position, 1.0)).xz;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec2 vBakeXZ; uniform sampler2D bakeMap; uniform float bakeExt, bakeAo, bakeSun, bakeShade;')
+      .replace('#include <map_fragment>', `#include <map_fragment>
+        { vec2 buv = vBakeXZ / (2.0 * bakeExt) + 0.5;
+          if (buv.x > 0.0 && buv.x < 1.0 && buv.y > 0.0 && buv.y < 1.0) {
+            vec4 bk = texture2D(bakeMap, buv);
+            diffuseColor.rgb *= mix(1.0, bk.r, bakeAo) * mix(1.0, mix(bakeShade, 1.0, bk.g), bakeSun);
+          } }`);
+  };
+  mat.customProgramCacheKey = () => 'bake';
+  return mat;
+}
+// bayangan langsung (shadow map) aktif: bayangan panggangan dimatikan supaya tidak dobel
+export function setBakedSun(on) { for (const u of bakeU) u.bakeSun.value = on ? 1 : 0; }
+
 // ---- pantulan langit: peta lingkungan kecil dari kubah langit tiap peta ----
 export function skyEnv(renderer, sky) {
   const s = new THREE.Scene(), m = sky.clone(); m.scale.setScalar(0.1); s.add(m);

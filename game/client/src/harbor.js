@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { ARENA, MAPS } from '../../shared/config.js';
 import { rng, canvasTex } from './world.js';
-import { bump } from './gfx.js';
+import { bump, bakeFloor } from './gfx.js';
 
 const MOON_DIR = new THREE.Vector3(0.55, 0.5, -0.67).normalize();
 
@@ -73,6 +73,7 @@ export function buildHarbor(scene, glowTex) {
   // --- dermaga dan air ---
   const planks = plankTexture(); planks.repeat.set(24, 24);
   const deck = new THREE.Mesh(new THREE.PlaneGeometry(ARENA * 2 + 4, ARENA * 2 + 4), bump(new THREE.MeshStandardMaterial({ map: planks, roughness: 0.78, color: 0xc8b8b0 }), 3, 1, 'planks'));
+  bakeFloor(deck.material, 'bake/harbor.png', 52, 0.42);
   deck.rotation.x = -Math.PI / 2; deck.receiveShadow = true; root.add(deck);
   const water = new THREE.Mesh(
     new THREE.PlaneGeometry(900, 900, 1, 1),
