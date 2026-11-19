@@ -1,0 +1,68 @@
+# Server saja (jaringan lokal):        docker compose up -d --build
+# + tunnel cepat tanpa akun:           docker compose --profile quick up -d --build
+# + tunnel tetap (akun Cloudflare):    docker compose --profile tunnel up -d --build
+services:
+  arkana:
+    build: .
+    container_name: arkana
+    restart: unless-stopped
+    ports:
+      # port di host untuk akses dari Wi-Fi yang sama; atur lewat ARKANA_PORT di .env
+      # (tunnel tidak memakai port ini, ia tersambung langsung ke arkana:8080 di jaringan Docker)
+      - "${ARKANA_PORT:-18080}:8080"
+    environment:
+      - PORT=8080
+      - ARKANA_INVITE=${ARKANA_INVITE:-}
+      - ARKANA_ADMINS=${ARKANA_ADMINS:-}   # nama pengguna pengelola, dipisah koma; kosong = halaman admin mati
+      # pengirim email (lupa kata sandi); kosong = fitur email mati. Isi di .env, jangan di sini.
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - SMTP_FROM=${SMTP_FROM:-}   # kode undangan untuk mendaftar; kosong = siapa pun boleh mendaftar
+    volumes:
+      - arkana-data:/app/data   # akun, statistik, jadwal event, catatan pertandingan; tetap ada saat image dibangun ulang
+    mem_limit: 256m
+    logging:
+      driver: json-file
+      options: { max-size: "5m", max-file: "3" }
+
+  # Tunnel cepat: tanpa akun dan tanpa domain, tetapi alamatnya ACAK dan BERGANTI setiap
+  # container ini dimulai ulang. Lihat alamatnya dengan:  docker compose logs tunnel-quick
+  tunnel-quick:
+    image: cloudflare/cloudflared:latest
+    container_name: arkana-tunnel-quick
+    profiles: ["quick"]
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --url http://arkana:8080
+    depends_on: [arkana]
+
+  # Tunnel tetap: alamat tidak berubah. Butuh akun Cloudflare dan domain yang dikelola di sana.
+  # Isi TUNNEL_TOKEN di file .env (lihat .env.example).
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: arkana-tunnel
+    profiles: ["tunnel"]
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN:-}
+    depends_on: [arkana]
+
+  # Pembuat tekstur dari GPU. Tidak ikut menyala; dijalankan sekali:
+  #   docker compose --profile gfx run --rm gfx
+  gfx:
+    build: ./tools/gfx
+    profiles: ["gfx"]
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - GFX_ONLY=${GFX_ONLY:-}
+      - GFX_SEED=${GFX_SEED:-1}
+    volumes:
+      - arkana-data:/out          # hasil masuk ke folder data game (assets/)
+      - arkana-hf:/cache          # model yang diunduh, supaya tidak diunduh ulang
+
+volumes:
+  arkana-data:
+  arkana-hf:

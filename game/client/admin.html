@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Arkana: pengelola</title>
+<style>
+:root{--bg:#120c1c;--panel:#1d1429;--line:#4a3b60;--gold:#f2c66d;--text:#eadff5;--dim:#b3a4c8;--bad:#ff8f7a;--ok:#7be0a0}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:1240px;margin:auto;padding:16px}
+header{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+h1{font:600 22px Georgia,serif;color:var(--gold);margin:0}
+h2{font:600 12px system-ui;letter-spacing:.09em;text-transform:uppercase;color:var(--gold);margin:0 0 10px}
+#who{color:var(--dim);font-size:13px;margin-left:auto}
+section{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin-top:14px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.tile{border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.tile b{display:block;font:600 22px Georgia,serif;color:#fff}
+.tile span{font-size:12px;color:var(--dim)}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:560px}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid rgba(255,255,255,.07);vertical-align:top}
+th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);font-weight:600}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+.tag{display:inline-block;padding:1px 7px;border-radius:99px;font-size:11px;border:1px solid var(--line);color:var(--dim)}
+.tag.on{color:var(--ok);border-color:var(--ok)} .tag.bad{color:var(--bad);border-color:var(--bad)} .tag.gold{color:var(--gold);border-color:var(--gold)}
+button,select,input{font:inherit;color:var(--text);background:#281b39;border:1px solid var(--line);border-radius:8px;padding:7px 10px;min-height:36px}
+button{cursor:pointer} button:hover{border-color:var(--gold)} button.danger{color:var(--bad)} button.primary{background:var(--gold);color:#2a1606;border-color:var(--gold);font-weight:700}
+button:disabled{opacity:.5;cursor:default}
+td .acts{display:flex;gap:6px;flex-wrap:wrap}
+td .acts button{padding:4px 8px;min-height:30px;font-size:12px}
+form.row{display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-bottom:12px}
+form.row label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--dim)}
+#msg{position:sticky;top:0;z-index:5;margin-top:10px;padding:9px 12px;border-radius:9px;background:#2a1d3c;border:1px solid var(--line);min-height:38px}
+#msg.bad{color:var(--bad);border-color:var(--bad)} #msg.ok{color:var(--ok);border-color:var(--ok)}
+.empty{color:var(--dim);padding:6px 0}
+.meters{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.meter{border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.meter .top{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:var(--dim)}
+.meter .val{font:600 18px Georgia,serif;color:#fff;margin:2px 0 6px}
+.meter .bar{height:8px;border-radius:99px;background:#33254a;overflow:hidden}
+.meter .bar i{display:block;height:100%;border-radius:99px;background:var(--ok)}
+.meter.warn .bar i{background:var(--gold)} .meter.crit .bar i{background:var(--bad)}
+.meter small{display:block;margin-top:6px;font-size:11px;color:var(--dim)}
+.charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin-top:12px}
+.chart{border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.chart .top{display:flex;justify-content:space-between;font-size:12px;color:var(--dim)}
+.chart svg{display:block;width:100%;height:56px;margin-top:6px}
+.info{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:6px 18px}
+.info div{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.07)}
+.info span{color:var(--dim)} .info b{font-weight:600;text-align:right}
+#login{max-width:360px;margin:60px auto}
+#login label{display:block;margin-top:10px;font-size:13px;color:var(--dim)}
+#login input{display:block;width:100%;margin-top:4px;font-size:16px}
+#login button{width:100%;margin-top:14px}
+.hidden{display:none!important}
+/* menu di kolom kiri; di layar sempit menjadi baris yang bisa digeser */
+#app{display:grid;grid-template-columns:190px minmax(0,1fr);gap:18px;align-items:start}
+#nav{position:sticky;top:12px;display:flex;flex-direction:column;gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px}
+#nav button{display:flex;justify-content:space-between;align-items:center;gap:8px;text-align:left;border:1px solid transparent;background:transparent;padding:10px 12px;min-height:44px;font-weight:600;color:var(--dim)}
+#nav button:hover{color:var(--text);border-color:var(--line)}
+#nav button[aria-current="page"]{background:rgba(242,198,109,.14);color:var(--gold);border-color:var(--gold)}
+#nav button small{font-weight:600;font-size:11px;padding:1px 7px;border-radius:99px;border:1px solid var(--line);color:var(--dim)}
+#nav button small.on{color:var(--ok);border-color:var(--ok)}
+#views{display:flex;flex-direction:column;gap:14px;min-width:0}
+#views>section,#views>#msg{margin-top:0}
+#msg:empty{display:none}
+@media (max-width:760px){
+  main{padding:10px}
+  header{align-items:center;margin-bottom:8px}
+  h1{font-size:18px}
+  #who{font-size:12px}
+  #app{grid-template-columns:minmax(0,1fr);gap:10px}
+  /* menu: lima tombol sama lebar, menempel di atas */
+  #nav{position:sticky;top:0;z-index:6;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:2px;padding:4px;border-radius:10px;box-shadow:0 6px 14px rgba(0,0,0,.45)}
+  #nav button{flex-direction:column;justify-content:center;gap:3px;padding:6px 2px;min-height:48px;font-size:12px;text-align:center}
+  #nav button small{font-size:10px;padding:0 6px}
+  #views{gap:10px}
+  #msg{top:62px}
+  section{padding:12px}
+  .tiles{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .tile{padding:9px 10px;min-width:0}
+  .tile b{font-size:18px;overflow-wrap:anywhere}
+  .meters,.charts,.info{grid-template-columns:minmax(0,1fr)}
+  /* isian: satu jari, tanpa pembesaran otomatis di iOS */
+  button,select,input{font-size:16px;min-height:44px}
+  form.row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  form.row label{min-width:0}
+  form.row label:first-child,form.row button{grid-column:1/-1}
+  form.row input,form.row select{width:100%!important}
+  /* tabel menjadi kartu: tanpa geser ke samping */
+  .scroll{overflow:visible}
+  table{min-width:0;display:block}
+  table tr:first-child{display:none}
+  table tr{display:block;border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin-bottom:8px}
+  table td{display:flex;justify-content:space-between;gap:12px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.06);text-align:right;overflow-wrap:anywhere}
+  table td:last-child{border-bottom:0}
+  table td::before{content:attr(data-label);flex:none;color:var(--dim);font-size:11px;letter-spacing:.06em;text-transform:uppercase;text-align:left;padding-top:2px}
+  table td:first-child{font-weight:700;font-size:15px;color:#fff}
+  table td.none{display:none}
+  table td[data-label=""]{display:block;padding-top:8px}
+  table td[data-label=""]::before{content:none}
+  td .acts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+  td .acts button{min-height:42px;padding:6px 4px;font-size:13px}
+  /* kartu akun: empat angka statistik berjajar dalam satu baris */
+  #accounts table tr{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));column-gap:8px}
+  #accounts table td{grid-column:1/-1}
+  #accounts table td.num{grid-column:auto;flex-direction:column;justify-content:flex-start;gap:2px;text-align:left;border-bottom:1px solid rgba(255,255,255,.06);font-weight:700}
+  #accounts table tr:first-child{display:none}
+  #who button{min-height:38px;padding:4px 12px;font-size:14px}
+  #login{margin:24px auto}
+}
+</style>
+</head>
+<body><main>
+<header><h1>Arkana · Pengelola</h1><span id="who"></span></header>
+<form id="login" class="hidden"><section>
+  <h2>Masuk sebagai pengelola</h2>
+  <label>Nama pengguna<input id="lName" autocomplete="username" autocapitalize="none" required></label>
+  <label>Kata sandi<input id="lPass" type="password" autocomplete="current-password" required></label>
+  <button class="primary" type="submit">Masuk</button>
+  <p id="lMsg" class="empty" role="alert"></p>
+</section></form>
+<div id="app" class="hidden">
+  <nav id="nav" aria-label="Menu pengelola">
+    <button type="button" data-go="arena">Arena</button>
+    <button type="button" data-go="akun">Akun</button>
+    <button type="button" data-go="event">Event</button>
+    <button type="button" data-go="server">Server</button>
+    <button type="button" data-go="email">Email</button>
+  </nav>
+  <div id="views">
+  <div id="msg" role="status" aria-live="polite"></div>
+  <section data-view="arena"><h2>Arena</h2><div class="tiles" id="tilesArena"></div></section>
+  <section data-view="akun"><h2>Akun</h2><div class="tiles" id="tilesAkun"></div></section>
+  <section data-view="event"><h2>Event</h2><div class="tiles" id="tilesEvent"></div></section>
+  <section data-view="server"><h2>Server</h2><div class="tiles" id="tilesServer"></div></section>
+  <section data-view="email"><h2>Email</h2><div class="tiles" id="tilesEmail"></div></section>
+  <section data-view="server"><h2>Beban server</h2>
+    <div class="meters" id="meters"></div>
+    <div class="charts" id="charts"></div>
+    <p class="empty" id="loadNote"></p>
+  </section>
+  <section data-view="arena"><h2>Sedang bermain</h2><div class="scroll" id="rooms"></div></section>
+  <section data-view="event"><h2>Buat dan kelola event</h2>
+    <form class="row" id="evForm">
+      <label>Tipe<select id="evType"></select></label>
+      <label>Nama (opsional)<input id="evName" maxlength="40" size="16"></label>
+      <label>Target (opsional)<input id="evTarget" type="number" min="1" max="999" style="width:90px"></label>
+      <label>Mulai<select id="evWhen"><option value="now">Sekarang</option><option value="plan">Dijadwalkan</option></select></label>
+      <label id="evMinRow">Lama (menit)<input id="evMin" type="number" min="1" max="1440" value="60" style="width:90px"></label>
+      <label id="evStartRow" class="hidden">Mulai (waktu perangkat ini)<input id="evStart" type="datetime-local"></label>
+      <label id="evEndRow" class="hidden">Selesai<input id="evEnd" type="datetime-local"></label>
+      <button class="primary" type="submit">Buat event</button>
+    </form>
+    <div class="scroll" id="events"></div>
+  </section>
+  <section data-view="event"><h2>Jadwal mingguan</h2>
+    <form class="row" id="wkForm">
+      <label>Tipe<select id="wkType"><option value="bergantian">Bergantian tiap minggu</option></select></label>
+      <label>Hari<select id="wkDay"><option value="1">Senin</option><option value="2">Selasa</option><option value="3">Rabu</option><option value="4">Kamis</option><option value="5">Jumat</option><option value="6" selected>Sabtu</option><option value="0">Minggu</option></select></label>
+      <label>Jam (WIB)<input id="wkTime" type="time" value="20:00" required></label>
+      <label>Lama (menit)<input id="wkLen" type="number" min="10" max="1440" value="120" style="width:90px"></label>
+      <button class="primary" type="submit">Tambah jadwal</button>
+    </form>
+    <div class="scroll" id="weekly"></div>
+    <p class="empty">Event dari jadwal mingguan mulai sendiri tanpa perlu ditekan. Menghentikan atau membatalkan salah satunya hanya melewati minggu itu; jadwalnya tetap.</p>
+  </section>
+  <section data-view="akun"><h2>Daftar akun</h2><div class="scroll" id="accounts"></div></section>
+  <section data-view="arena"><h2>Ronde terakhir</h2><div class="scroll" id="recent"></div></section>
+  <section data-view="server"><h2>Informasi server</h2><div class="info" id="info"></div><h2 style="margin-top:16px">Berkas data</h2><div class="scroll" id="files"></div></section>
+  <section data-view="email"><h2>Pengirim email</h2><p id="mailInfo" class="empty"></p><button id="mailTest">Kirim email percobaan ke alamatku</button></section>
+  </div>
+</div>
+</main><script type="module" src="dist/admin.js"></script></body>
+</html>

@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#120a1c">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Arkana">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<title>Arkana: Reruntuhan Senja</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="hud" class="hidden">
+  <div id="vignette"></div>
+  <div id="touchLayer"></div>
+  <div id="dmgLayer"></div>
+  <div id="cross"><i></i><i></i><i></i><i></i><b></b></div>
+
+  <div id="hitDir"></div>
+  <div id="top">
+    <button class="pill room hidden" id="roomPill" aria-label="Bagikan kode room"></button>
+    <div class="pill" id="rank">#1</div>
+    <div class="pill big" id="timer">5:00</div>
+    <div class="pill" id="myScore">0 / 20</div>
+  </div>
+  <canvas id="minimap" width="132" height="132"></canvas>
+  <div id="feed"></div>
+  <div id="net"></div>
+  <button id="pauseBtn" aria-label="Menu">☰</button>
+  <button id="pingBtn" aria-label="Isyarat cepat">!</button>
+  <div id="pingMenu" class="hidden"></div>
+  <div id="specTag" class="hidden"></div>
+  <div id="toast"></div>
+
+  <div id="zoneTag" class="hidden"></div>
+  <div id="buffs"></div>
+  <div id="status">
+    <div id="lvl">1</div>
+    <div class="bars">
+      <div class="bar hp"><div id="hpFill"></div><span id="hpText">100</span></div>
+      <div class="bar xp"><div id="xpFill"></div></div>
+    </div>
+  </div>
+
+  <div id="stick"><div id="knob"></div></div>
+  <button id="fireBtn" aria-label="Tembak"><svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="9" fill="none" stroke="currentColor" stroke-width="3"/><path d="M24 4v10M24 34v10M4 24h10M34 24h10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg></button>
+  <button id="skillBtn" aria-label="Skill"><span id="skillName">Kilat</span><div id="skillCd"></div><em id="skillNum"></em></button>
+  <button id="ultBtn" aria-label="Jurus pamungkas"><svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="28" class="track"/><circle id="ultRing" cx="32" cy="32" r="28" class="ring"/></svg><span id="ultName">Pamungkas</span></button>
+  <div id="eventTag" class="hidden"></div>
+  <div id="threats"></div>
+  <div id="downTags"></div>
+  <div id="perkBar"></div>
+  <div id="perks" class="hidden" role="dialog" aria-label="Pilih berkah">
+    <h2>Pilih satu berkah</h2>
+    <div id="perkCards"></div>
+    <p id="perkHint">Berkah bertahan sampai permainan berakhir. Tidak memilih = dipilihkan acak.</p>
+  </div>
+
+  <div id="tutor" class="hidden" aria-live="polite">
+    <div id="tutorDots"></div>
+    <p id="tutorText"></p>
+    <div class="tbtns"><button id="tutorSkip" class="ghost">Lewati latihan</button><button id="tutorGo" class="hidden">Masuk arena</button></div>
+  </div>
+
+  <div id="death" class="panel hidden"><h2>Kamu Gugur</h2><p id="deathBy"></p><p id="deathT"></p></div>
+  <div id="score" class="panel hidden"><h2 id="scoreTitle">Papan Skor</h2><table id="scoreTable"></table><p id="scoreNext"></p></div>
+  <div id="pause" class="panel hidden">
+    <h2>Pengaturan</h2>
+    <label>Kualitas grafis
+      <select id="quality"><option value="low">Rendah</option><option value="medium">Sedang</option><option value="high">Tinggi</option></select>
+    </label>
+    <label>Sensitivitas bidik <input id="sens" type="range" min="0.4" max="2.2" step="0.1" value="1"></label>
+    <label class="row"><input id="autoFire" type="checkbox"> Tembak otomatis saat bidikan mengenai lawan</label>
+    <label class="row"><input id="aimAssist" type="checkbox"> Bantuan bidik</label>
+    <label class="row"><input id="vibrate" type="checkbox"> Getar saat terkena dan menumbangkan lawan</label>
+    <label>Musik latar <input type="range" data-vol="music" min="0" max="1" step="0.05" aria-label="Volume musik latar"></label>
+    <label>Efek suara <input type="range" data-vol="sfx" min="0" max="1" step="0.05" aria-label="Volume efek suara"></label>
+    <label class="row"><input id="mute" type="checkbox"> Matikan suara</label>
+    <div class="btns"><button id="resume">Lanjut</button><button id="leave" class="ghost">Keluar ke menu</button></div>
+  </div>
+</div>
+
+<div id="installHint" class="hidden" role="note">
+  <img src="icons/icon-192.png" alt="" width="40" height="40">
+  <p id="installText"></p>
+  <button id="installGo" class="hidden" type="button">Pasang</button>
+  <button id="installX" type="button" aria-label="Tutup petunjuk">×</button>
+</div>
+
+<div id="auth" class="hidden">
+  <form class="card" id="authForm" autocomplete="on">
+    <h1>ARKANA</h1>
+    <h3>Reruntuhan Senja</h3>
+    <div class="tabs" id="authTabs" role="tablist"><button type="button" id="tabLogin" class="on" role="tab" aria-selected="true">Masuk</button><button type="button" id="tabReg" role="tab" aria-selected="false">Daftar akun baru</button></div>
+    <label>Nama pengguna<input id="authName" name="username" maxlength="14" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
+    <label id="authMailRow" class="hidden">Email (untuk pemulihan kata sandi)<input id="authMail" name="email" type="email" maxlength="254" autocomplete="email" autocapitalize="none" spellcheck="false"></label>
+    <label id="authCodeRow" class="hidden">Kode dari email (6 angka)<input id="authCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code"></label>
+    <label id="authPassRow"><span id="authPassLabel">Kata sandi</span><input id="authPass" name="password" type="password" maxlength="72" autocomplete="current-password"></label>
+    <label id="authPass2Row" class="hidden">Ulangi kata sandi<input id="authPass2" type="password" maxlength="72" autocomplete="new-password"></label>
+    <label id="authInviteRow" class="hidden">Kode undangan<input id="authInvite" maxlength="40" autocomplete="off" spellcheck="false"></label>
+    <p id="authHint" class="hint hidden">Nama pengguna 3-14 karakter (huruf, angka, garis bawah) dan menjadi nama tampilanmu. Kata sandi minimal 8 karakter. <span id="authNoMail">Tidak ada pemulihan lewat email: bila lupa kata sandi, minta pengelola server meresetnya.</span></p>
+    <p id="authMsg" role="alert"></p>
+    <button id="authGo" type="submit">Masuk</button>
+    <p class="authLinks"><button type="button" id="authForgot" class="link hidden">Lupa kata sandi?</button><button type="button" id="authBack" class="link hidden">Kembali ke halaman masuk</button></p>
+  </form>
+</div>
+
+<div id="menu">
+  <div class="card">
+    <h1>ARKANA</h1>
+    <h3>Reruntuhan Senja</h3>
+    <div id="eventBanner" class="hidden"><div><b id="evName"></b><small id="evInfo"></small></div><button id="evJoin" class="hidden">Ikut event</button></div>
+    <input id="name" maxlength="14" placeholder="Nama pengembara" autocomplete="off" spellcheck="false">
+    <p id="who" class="hidden">Masuk sebagai <b id="whoName"></b> · <button id="logout" class="link" type="button">Keluar</button></p>
+    <div id="classes"></div>
+    <div id="lobby" class="hidden"><h4>Sedang bermain</h4><div id="lobbyList"></div></div>
+    <button id="play">Main Bersama</button>
+    <p class="hint" id="playHint"></p>
+    <button id="rejoin" class="sec hidden"></button>
+    <div id="rooms">
+      <div class="modes" role="radiogroup" aria-label="Mode room privat">
+        <button class="mode on" data-gm="pve" role="radio" aria-checked="true">Bertahan Bersama</button>
+        <button class="mode" data-gm="tdm" role="radio" aria-checked="false">Tim</button>
+        <button class="mode" data-gm="king" role="radio" aria-checked="false">Perburuan Raja</button>
+      </div>
+      <button id="moreModes" class="link" type="button" aria-expanded="false">Mode lain</button>
+      <div class="modes hidden" id="otherModes" role="radiogroup" aria-label="Mode lain">
+        <button class="mode" data-gm="dm" role="radio" aria-checked="false">Deathmatch</button>
+        <button class="mode" data-gm="koth" role="radio" aria-checked="false">Rebut Altar</button>
+        <button class="mode" data-gm="coop" role="radio" aria-checked="false">Lawan Bot</button>
+      </div>
+      <div class="modes maps" role="radiogroup" aria-label="Peta room privat">
+        <button class="mode mapb" data-map="rotate" role="radio">Peta bergantian</button>
+        <button class="mode mapb" data-map="ruins" role="radio">Reruntuhan</button>
+        <button class="mode mapb" data-map="harbor" role="radio">Pelabuhan</button>
+        <button class="mode mapb" data-map="cave" role="radio">Gua Kristal</button>
+        <button class="mode mapb" data-map="temple" role="radio">Kuil Salju</button>
+      </div>
+      <div class="modes diffs" role="radiogroup" aria-label="Tingkat bot room privat">
+        <button class="mode diffb" data-diff="easy" role="radio">Bot mudah</button>
+        <button class="mode diffb" data-diff="normal" role="radio">Bot normal</button>
+        <button class="mode diffb" data-diff="hard" role="radio">Bot sulit</button>
+      </div>
+      <button id="create" class="sec">Buat room privat</button>
+      <div class="join"><input id="code" maxlength="4" placeholder="KODE" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Kode room"><button id="joinBtn" class="sec">Gabung</button></div>
+    </div>
+    <div class="links"><button id="practice" class="link">Latihan dan tutorial</button><button id="ranksBtn" class="link">Peringkat dan jubah</button></div>
+    <div class="vols"><label>Musik <input type="range" data-vol="music" min="0" max="1" step="0.05" aria-label="Volume musik latar"></label><label>Efek <input type="range" data-vol="sfx" min="0" max="1" step="0.05" aria-label="Volume efek suara"></label></div>
+    <p id="menuMsg"></p>
+    <p class="hint" id="hint"></p>
+  </div>
+</div>
+<div id="ranks" class="hidden" role="dialog" aria-label="Peringkat dan jubah">
+  <div class="card wide">
+    <div class="rhead"><h2>Peringkat dan jubah</h2><button id="ranksClose" class="sec" aria-label="Tutup">Tutup</button></div>
+    <p id="myStats" class="hint"></p>
+    <div class="rgrid">
+      <section><h4 id="weekTitle">Minggu ini</h4><table id="weekTable"></table></section>
+      <section><h4>Tantangan hari ini</h4><ul id="daily"></ul><h4>Bertahan Bersama minggu ini</h4><table id="waveTable"></table></section>
+      <section><h4>Jubah</h4><div id="skins"></div><p id="skinMsg" class="skinmsg" aria-live="polite"></p><h4>Pencapaian</h4><div id="achv"></div><p class="hint">Jubah terbuka dari statistikmu: selesaikan ronde di arena (bukan latihan). Jubah yang dipilih dipakai mulai ronde berikutnya.</p></section>
+    </div>
+  </div>
+</div>
+<script type="module" src="dist/bundle.js"></script>
+</body>
+</html>

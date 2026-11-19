@@ -1,0 +1,23 @@
+{
+  "name": "arkana-reruntuhan-senja",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Arena shooter PvP fantasi, mobile-first, multiplayer online",
+  "scripts": {
+    "build": "esbuild client/src/main.js --bundle --minify --format=esm --outfile=client/dist/bundle.js && esbuild client/src/soundtest.js --bundle --minify --format=esm --outfile=client/dist/suara.js && esbuild client/src/admin.js --bundle --minify --format=esm --outfile=client/dist/admin.js",
+    "postinstall": "npm run build",
+    "start": "node server/server.js",
+    "test": "bash test/run-all.sh",
+    "stats": "node tools/stats.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "esbuild": "^0.24.0",
+    "nodemailer": "^10.6.0",
+    "three": "^0.170.0",
+    "ws": "^8.18.0"
+  }
+}
