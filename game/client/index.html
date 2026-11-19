@@ -6,6 +6,12 @@
 <meta name="theme-color" content="#120a1c">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Arkana">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
 <title>Arkana: Reruntuhan Senja</title>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -80,6 +86,13 @@
     <label class="row"><input id="mute" type="checkbox"> Matikan suara</label>
     <div class="btns"><button id="resume">Lanjut</button><button id="leave" class="ghost">Keluar ke menu</button></div>
   </div>
+</div>
+
+<div id="installHint" class="hidden" role="note">
+  <img src="icons/icon-192.png" alt="" width="40" height="40">
+  <p id="installText"></p>
+  <button id="installGo" class="hidden" type="button">Pasang</button>
+  <button id="installX" type="button" aria-label="Tutup petunjuk">×</button>
 </div>
 
 <div id="auth" class="hidden">

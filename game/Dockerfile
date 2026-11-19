@@ -19,9 +19,10 @@ COPY --from=build /app/node_modules/nodemailer ./node_modules/nodemailer
 COPY --from=build /app/shared ./shared
 COPY --from=build /app/server ./server
 COPY --from=build /app/tools ./tools
-COPY --from=build /app/client/index.html /app/client/suara.html /app/client/admin.html /app/client/style.css ./client/
+COPY --from=build /app/client/index.html /app/client/suara.html /app/client/admin.html /app/client/style.css /app/client/manifest.webmanifest ./client/
 COPY --from=build /app/client/dist ./client/dist
 COPY --from=build /app/client/bake ./client/bake
+COPY --from=build /app/client/icons ./client/icons
 # folder catatan pertandingan; volume bernama mewarisi pemilik ini saat pertama dibuat
 RUN mkdir -p /app/data && chown node:node /app/data
 ENV DATA_DIR=/app/data

@@ -156,6 +156,28 @@ function serverUrl() {
   return (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
 }
 
+// ---------- pasang ke layar utama (iPhone lewat Safari, Android lewat Chrome) ----------
+const ua = navigator.userAgent;
+const install = {
+  standalone: matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches || navigator.standalone === true,
+  inApk: /; wv\)/.test(ua),                                   // pembungkus APK: sudah terpasang
+  ios: /iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1),
+  prompt: null,
+};
+function updateInstall() {
+  const off = install.standalone || install.inApk || G.phase === 'play' || store.get('installNo', '') === '1' || !(install.ios || install.prompt);
+  $('installHint').classList.toggle('hidden', off);
+  if (off) return;
+  $('installGo').classList.toggle('hidden', !install.prompt);
+  // teks tetap; tidak ada data dari luar yang masuk ke sini
+  $('installText').innerHTML = install.prompt ? 'Pasang <b>Arkana</b> ke layar utama supaya terbuka layar penuh seperti aplikasi.'
+    : 'Pasang <b>Arkana</b> ke layar utama: ketuk tombol <b>Bagikan</b> di Safari, lalu pilih <b>Tambah ke Layar Utama</b>.';
+}
+addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); install.prompt = e; updateInstall(); });
+addEventListener('appinstalled', () => { install.standalone = true; updateInstall(); });
+$('installGo').addEventListener('click', async () => { const p = install.prompt; if (!p) return; install.prompt = null; try { await p.prompt(); } catch { /* dibatalkan */ } updateInstall(); });
+$('installX').addEventListener('click', () => { store.set('installNo', '1'); updateInstall(); });
+
 // ---------- akun: masuk dan daftar ----------
 const auth = { token: store.get('token', ''), on: false, reg: false };
 function signedIn(token, user) {
@@ -223,6 +245,7 @@ $('logout').addEventListener('click', () => {
   } catch { /* server belum terjangkau: menu tetap tampil, bergabung akan gagal dengan pesan */ }
 })();
 
+updateInstall();
 const menuBtns = ['play', 'create', 'joinBtn', 'practice', 'rejoin', 'evJoin'];
 const cleanCode = (v) => String(v || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4);
 {
@@ -440,7 +463,7 @@ function leaveGame() {
   for (const p of G.players.values()) p.av.dispose(scene);
   G.players.clear(); G.roster.clear(); G.pending.length = 0;
   for (const id of [...fx.projs.keys()]) fx.removeProj(id);
-  G.phase = 'menu'; input.enabled = false; input.reset?.(); setMusic('menu');
+  G.phase = 'menu'; input.enabled = false; input.reset?.(); setMusic('menu'); updateInstall();
   if (G.menuCls) G.clsKey = G.menuCls;
   showRejoin();
   document.exitPointerLock?.();
@@ -452,7 +475,7 @@ function leaveGame() {
 // ---------- jaringan ----------
 function onMessage(m) {
   if (m.t === 'w') {
-    G.myId = m.id; G.limit = m.limit || KILL_LIMIT; G.menuCls = G.clsKey; if (CLASSES[m.cls]) G.clsKey = m.cls; G.cls = CLASSES[G.clsKey]; G.phase = 'play'; setMusic('battle'); G.ended = false;
+    G.myId = m.id; G.limit = m.limit || KILL_LIMIT; G.menuCls = G.clsKey; if (CLASSES[m.cls]) G.clsKey = m.cls; G.cls = CLASSES[G.clsKey]; G.phase = 'play'; setMusic('battle'); updateInstall(); G.ended = false;
     G.mut = m.mut || null; if (G.mut) setTimeout(() => toast(`Mode akhir pekan: ${MUTATORS[G.mut].name}`), 2200);
     if (m.code) { store.set('lastRoom', m.code); } G.barrelMask = 0;
     G.seq = 0; G.pending.length = 0; G.me.xp = 0; G.me.lvl = 1;

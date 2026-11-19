@@ -92,6 +92,12 @@ dan pemain tidak bisa menggantinya; alamat baru berarti APK baru.
 Simpan file kunci tanda tangan (`~/.arkana/arkana.jks`): versi baru hanya bisa menimpa
 versi lama bila ditandatangani kunci yang sama.
 
+## iPhone dan pasang tanpa APK
+
+Game ini halaman web, jadi iPhone memainkannya lewat Safari tanpa aplikasi dari App Store. Supaya terasa seperti aplikasi: buka alamat game di Safari, ketuk **Bagikan**, pilih **Tambah ke Layar Utama**. Ikon Arkana muncul di layar utama dan game terbuka layar penuh. Halaman menampilkan petunjuk ini sendiri di iPhone; di Chrome Android ia menawarkan tombol **Pasang** bila peramban mengizinkan. Petunjuk tidak muncul di dalam APK, di desktop, atau setelah ditutup.
+
+Catatan iPhone: getar tidak didukung Safari; layar tidak bisa dikunci mendatar (putar HP sendiri); suara mengikuti saklar senyap; aplikasi dari layar utama menyimpan datanya terpisah dari Safari, jadi masuk akun sekali lagi di sana. Ikon dibuat dengan `python3 tools/icons.py`.
+
 ## Bermain bersama teman
 
 - **Room privat**: di menu, *Buat room privat*. Kode 4 huruf muncul di atas layar; ketuk untuk

@@ -291,3 +291,12 @@ h4{margin-top:8px}
 #who b{color:var(--gold)}
 .authLinks{margin:10px 0 0;text-align:center;min-height:20px}
 #auth .tabs.hidden{display:none}
+
+/* ---------- petunjuk pasang ke layar utama ---------- */
+#installHint{position:fixed;left:10px;right:10px;bottom:calc(10px + var(--sb));z-index:40;display:flex;align-items:center;gap:10px;max-width:520px;margin:auto;
+  padding:10px 12px;border-radius:12px;background:#241733;border:1px solid var(--gold);box-shadow:0 8px 24px rgba(0,0,0,.55)}
+#installHint img{flex:none;border-radius:9px}
+#installHint p{flex:1;margin:0;font-size:13px;line-height:1.4;color:#eadff5}
+#installHint b{color:var(--gold)}
+#installGo{flex:none;padding:9px 14px;min-height:40px;border-radius:9px;font-weight:800;background:linear-gradient(180deg,#ffdf9a,#e0a23f);color:#2a1606}
+#installX{flex:none;width:36px;height:36px;border-radius:9px;font-size:20px;line-height:1;color:#cdbfe0;background:transparent;border:1px solid var(--line)}
