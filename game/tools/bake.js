@@ -40,7 +40,7 @@ function hit(ob, ox, oz, d) {
 const inside = (ob, x, z) => (ob.t === 'box' ? Math.abs(x - ob.x) < ob.w / 2 && Math.abs(z - ob.z) < ob.d / 2 : Math.hypot(x - ob.x, z - ob.z) < ob.r);
 
 export function bake(id) {
-  const obst = MAPS[id].obst, L = norm(LIGHT[id]), R = rng(977);
+  const obst = MAPS[id].obst, L = norm(MAPS[id].light || LIGHT[id]), R = rng(977); // peta baru menyimpan arah cahayanya di config
   // arah contoh dibuat sekali; tiap titik memutarnya dengan sudut acak supaya polanya tidak bergaris
   const ao = Array.from({ length: AO_N }, (_, i) => { const u = (i + 0.5) / AO_N, r = Math.sqrt(u), a = i * 2.39996; return [r * Math.cos(a), Math.sqrt(1 - u), r * Math.sin(a)]; });
   const up = Math.abs(L[1]) < 0.99 ? [0, 1, 0] : [1, 0, 0];

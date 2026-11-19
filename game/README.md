@@ -270,6 +270,8 @@ Pemain yang tidak bergerak dan tidak memakai jurus selama 30 menit dikeluarkan d
 
 ## Peta
 
+Empat peta: Reruntuhan Senja, Pelabuhan Bulan, **Gua Kristal** (cincin batu dan gugus kristal, banyak sudut pendek), dan **Kuil Salju** (tembok panjang dan lorong, jarak tembak jauh). Dua yang terakhir dibangun oleh `client/src/arena.js` dari satu tabel tema, jadi peta berikutnya cukup menambah tata letak di `shared/config.js` dan tema di berkas itu, lalu menjalankan `node tools/bake.js`.
+
 Arena berukuran 116 x 116 langkah (`ARENA = 58` di `shared/config.js`, semula 44). Tata letak lama digeser keluar sebanding dan lingkar luarnya diberi perlindungan tambahan. Bila ukuran atau letak penghalang diubah, jalankan `node tools/bake.js` supaya cahaya lantai ikut diperbarui.
 
 - **Reruntuhan Senja**: reruntuhan batu di bawah langit senja, altar kristal di tengah.

@@ -73,6 +73,14 @@ await sleep(9000);
 if (fixed.maps.size !== 1) fail(`room dengan peta tetap ikut berganti: ${[...fixed.maps]}`);
 console.log(`OK rotasi: room bergantian memakai ${[...Z.maps].join(' lalu ')}; room berpeta tetap tidak berganti.`);
 Z.ws.close(); fixed.ws.close();
+// peta baru: bisa dipilih, dan penghalangnya menahan pemain di server
+for (const id of ['cave', 'temple']) {
+  const N = client({ name: 'Baru', map: id });
+  if (!await until(() => N.snap && N.w, 3000) || N.w.map !== id) fail(`room dengan peta ${id} tidak dibuat: ${JSON.stringify(N.w)}`);
+  N.ws.close();
+  if (!MAPS[id].name || MAPS[id].spawns.length !== 12 || MAPS[id].orbs.length !== 8 || MAPS[id].runes.length !== 4) fail(`peta ${id} tidak lengkap`);
+}
+console.log(`OK peta baru: ${['cave', 'temple'].map((id) => MAPS[id].name).join(' dan ')} bisa dipilih dan lengkap.`);
 for (const p of srvs) p.kill();
 console.log('SEMUA UJI PETA LULUS');
 process.exit(0);

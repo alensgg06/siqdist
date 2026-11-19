@@ -7,6 +7,7 @@ import { DT, CLASSES, CLASS_KEYS, ARENA, MAPS, XP_LV, MAX_LEVEL, NOVA_R, KILL_LI
 import { stepPlayer, blocked, los, angDiff, setMap } from '../../shared/sim.js';
 import { buildWorld, buildExtras } from './world.js';
 import { buildHarbor } from './harbor.js';
+import { buildArena } from './arena.js';
 import { Avatar, Monster } from './chars.js';
 import { Fx } from './fx.js';
 import { setDetail, skyEnv, gradePass, loadHd, setBakedSun } from './gfx.js';
@@ -83,7 +84,7 @@ function applyQuality(q) {
 function useMap(id) {
   if (!MAPS[id]) id = 'ruins';
   if (!worlds[id]) {
-    worlds[id] = buildHarbor(scene, worlds.ruins.glowTex);
+    worlds[id] = id === 'harbor' ? buildHarbor(scene, worlds.ruins.glowTex) : buildArena(scene, worlds.ruins.glowTex, id);
     extrasBy[id] = buildExtras(worlds[id].root, worlds.ruins.glowTex, MAPS[id].runes, RUNE_INFO, KOTH_R);
   }
   for (const [k, w] of Object.entries(worlds)) w.root.visible = k === id;

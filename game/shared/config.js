@@ -288,6 +288,52 @@ Object.assign(MONSTERS, {
 });
 Object.assign(ALL_CLASSES, CLASSES, MONSTERS);
 // tong meledak (hanya di Pelabuhan): ditembak -> ledakan area, muncul lagi setelah 20 dtk
+// ---- Peta ketiga dan keempat (koordinat sebenarnya untuk arena 58), simetris empat arah ----
+// Gua Kristal: cincin-cincin batu dan gugus kristal mengelilingi pusat; banyak sudut pendek untuk bersembunyi.
+const CV = [];
+CV.push({ t: 'cyl', x: 0, z: 0, r: 2.8, h: 2, kind: 'heart' });
+for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+  CV.push({ t: 'cyl', x: sx * 16.5, z: sz * 7, r: 1.5, h: 6, kind: 'crystal' });
+  CV.push({ t: 'cyl', x: sx * 7, z: sz * 16.5, r: 1.5, h: 6, kind: 'crystal' });
+  CV.push({ t: 'cyl', x: sx * 24, z: sz * 24, r: 2.2, h: 4, kind: 'rock' });
+  CV.push({ t: 'box', x: sx * 32, z: sz * 10, w: 3, d: 12, h: 5, kind: 'rockwall' });
+  CV.push({ t: 'box', x: sx * 10, z: sz * 32, w: 12, d: 3, h: 5, kind: 'rockwall' });
+  CV.push({ t: 'cyl', x: sx * 40, z: sz * 40, r: 3, h: 5, kind: 'rock' });
+  CV.push({ t: 'box', x: sx * 44, z: sz * 22, w: 2, d: 8, h: 4, kind: 'rockwall' });
+  CV.push({ t: 'box', x: sx * 22, z: sz * 44, w: 8, d: 2, h: 4, kind: 'rockwall' });
+  CV.push({ t: 'cyl', x: sx * 36, z: sz * 28, r: 1.2, h: 7, kind: 'crystal' });
+  CV.push({ t: 'cyl', x: sx * 28, z: sz * 36, r: 1.2, h: 7, kind: 'crystal' });
+}
+// Kuil Salju: tembok panjang membentuk lorong dan halaman; jarak tembak jauh, cocok untuk Pemanah.
+const TP = [];
+TP.push({ t: 'cyl', x: 0, z: 0, r: 2.6, h: 2, kind: 'brazier' });
+for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+  TP.push({ t: 'box', x: sx * 12, z: sz * 24, w: 2, d: 16, h: 4.5, kind: 'icewall' });
+  TP.push({ t: 'box', x: sx * 24, z: sz * 12, w: 16, d: 2, h: 4.5, kind: 'icewall' });
+  TP.push({ t: 'cyl', x: sx * 36, z: sz * 12, r: 1.2, h: 8, kind: 'column' });
+  TP.push({ t: 'cyl', x: sx * 12, z: sz * 36, r: 1.2, h: 8, kind: 'column' });
+  TP.push({ t: 'cyl', x: sx * 36, z: sz * 36, r: 1.2, h: 8, kind: 'column' });
+  TP.push({ t: 'box', x: sx * 46, z: sz * 30, w: 2, d: 12, h: 4.5, kind: 'icewall' });
+  TP.push({ t: 'box', x: sx * 30, z: sz * 46, w: 12, d: 2, h: 4.5, kind: 'icewall' });
+  TP.push({ t: 'box', x: sx * 22, z: sz * 40, w: 3, d: 3, h: 2.6, kind: 'iceblock' });
+  TP.push({ t: 'box', x: sx * 40, z: sz * 22, w: 3, d: 3, h: 2.6, kind: 'iceblock' });
+}
+const quad = (l) => l.flatMap(([x, z]) => (x && z ? [[x, z], [-x, z], [x, -z], [-x, -z]] : x ? [[x, 0], [-x, 0]] : [[0, z], [0, -z]]));
+MAPS.cave = {
+  name: 'Gua Kristal', obst: CV, light: [0.35, 0.78, 0.52],
+  spawns: [[52, 6], [-52, -6], [-6, 52], [6, -52], ...quad([[50, 26], [26, 50]])],
+  orbs: [...quad([[13, 0], [0, 13]]), ...quad([[33, 33]])],
+  runes: [{ x: 0, z: 26, type: 'dmg' }, { x: 0, z: -26, type: 'dmg' }, { x: 26, z: 0, type: 'spd' }, { x: -26, z: 0, type: 'spd' }],
+  barrels: [],
+};
+MAPS.temple = {
+  name: 'Kuil Salju', obst: TP, light: [-0.5, 0.62, 0.6],
+  spawns: [...quad([[52, 0], [0, 52]]), ...quad([[50, 20], [20, 50]])],
+  orbs: [...quad([[10, 0], [0, 10]]), ...quad([[30, 30]])],
+  runes: [{ x: 0, z: 34, type: 'dmg' }, { x: 0, z: -34, type: 'dmg' }, { x: 34, z: 0, type: 'spd' }, { x: -34, z: 0, type: 'spd' }],
+  barrels: [],
+};
+MAP_KEYS.push('cave', 'temple'); // ikut rotasi peta
 MAPS.ruins.barrels = [];
 MAPS.harbor.barrels = [[19, 7], [-19, -7], [7, -19], [-7, 19], [26, 20], [-26, -20]].map(([x, z]) => [sc(x), sc(z)]);
 export const BARREL_R = 5, BARREL_DMG = 40, BARREL_RESPAWN = 20;
