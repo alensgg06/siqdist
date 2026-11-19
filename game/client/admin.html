@@ -68,9 +68,49 @@ form.row label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:v
 #views>section,#views>#msg{margin-top:0}
 #msg:empty{display:none}
 @media (max-width:760px){
+  main{padding:10px}
+  header{align-items:center;margin-bottom:8px}
+  h1{font-size:18px}
+  #who{font-size:12px}
   #app{grid-template-columns:minmax(0,1fr);gap:10px}
-  #nav{position:sticky;top:0;z-index:6;flex-direction:row;overflow-x:auto;padding:6px}
-  #nav button{flex:none;min-height:40px;padding:8px 12px}
+  /* menu: lima tombol sama lebar, menempel di atas */
+  #nav{position:sticky;top:0;z-index:6;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:2px;padding:4px;border-radius:10px;box-shadow:0 6px 14px rgba(0,0,0,.45)}
+  #nav button{flex-direction:column;justify-content:center;gap:3px;padding:6px 2px;min-height:48px;font-size:12px;text-align:center}
+  #nav button small{font-size:10px;padding:0 6px}
+  #views{gap:10px}
+  #msg{top:62px}
+  section{padding:12px}
+  .tiles{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .tile{padding:9px 10px;min-width:0}
+  .tile b{font-size:18px;overflow-wrap:anywhere}
+  .meters,.charts,.info{grid-template-columns:minmax(0,1fr)}
+  /* isian: satu jari, tanpa pembesaran otomatis di iOS */
+  button,select,input{font-size:16px;min-height:44px}
+  form.row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  form.row label{min-width:0}
+  form.row label:first-child,form.row button{grid-column:1/-1}
+  form.row input,form.row select{width:100%!important}
+  /* tabel menjadi kartu: tanpa geser ke samping */
+  .scroll{overflow:visible}
+  table{min-width:0;display:block}
+  table tr:first-child{display:none}
+  table tr{display:block;border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin-bottom:8px}
+  table td{display:flex;justify-content:space-between;gap:12px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.06);text-align:right;overflow-wrap:anywhere}
+  table td:last-child{border-bottom:0}
+  table td::before{content:attr(data-label);flex:none;color:var(--dim);font-size:11px;letter-spacing:.06em;text-transform:uppercase;text-align:left;padding-top:2px}
+  table td:first-child{font-weight:700;font-size:15px;color:#fff}
+  table td.none{display:none}
+  table td[data-label=""]{display:block;padding-top:8px}
+  table td[data-label=""]::before{content:none}
+  td .acts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+  td .acts button{min-height:42px;padding:6px 4px;font-size:13px}
+  /* kartu akun: empat angka statistik berjajar dalam satu baris */
+  #accounts table tr{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));column-gap:8px}
+  #accounts table td{grid-column:1/-1}
+  #accounts table td.num{grid-column:auto;flex-direction:column;justify-content:flex-start;gap:2px;text-align:left;border-bottom:1px solid rgba(255,255,255,.06);font-weight:700}
+  #accounts table tr:first-child{display:none}
+  #who button{min-height:38px;padding:4px 12px;font-size:14px}
+  #login{margin:24px auto}
 }
 </style>
 </head>

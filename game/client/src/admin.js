@@ -17,7 +17,8 @@ function table(host, heads, rows, empty) {
   if (!rows.length) return host.append(el('p', { className: 'empty', textContent: empty }));
   const t = el('table');
   t.append(el('tr', {}, ...heads.map((h) => el('th', { textContent: h.replace(/^#/, ''), className: h.startsWith('#') ? 'num' : '' }))));
-  for (const r of rows) t.append(el('tr', {}, ...r.map((c, i) => { const td = el('td', { className: heads[i].startsWith('#') ? 'num' : '' }); td.append(c instanceof Node ? c : String(c)); return td; })));
+  // data-label: di layar sempit tiap baris menjadi kartu dan label kolom tampil di samping nilainya
+  for (const r of rows) t.append(el('tr', {}, ...r.map((c, i) => { const td = el('td', { className: heads[i].startsWith('#') ? 'num' : '' }); td.dataset.label = heads[i].replace(/^#/, ''); if (c === '' || c === null) td.classList.add('none'); td.append(c instanceof Node ? c : String(c)); return td; })));
   host.append(t);
 }
 const tag = (text, cls = '') => el('span', { className: 'tag ' + cls, textContent: text });
