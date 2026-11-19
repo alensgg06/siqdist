@@ -93,7 +93,7 @@ function render() {
   const inNow = s.accounts.filter((a) => a.sessions > 0).length, banned = s.accounts.filter((a) => a.banned).length;
   tiles('tilesArena', [[online, 'pemain di arena'], [s.rooms.length, 'room berisi pemain'], [s.sys.peak, 'puncak pemain sejak menyala'], [s.info.bots, 'bot di arena'], [s.recent.length, 'ronde terakhir tercatat']]);
   tiles('tilesAkun', [[s.accounts.length, 'akun terdaftar'], [inNow, 'sedang masuk'], [banned, 'diblokir'], [s.invite ? 'dengan kode' : 'terbuka', 'pendaftaran'], [s.auth ? 'ya' : 'tidak', 'wajib akun']]);
-  tiles('tilesEvent', [[cur ? cur.name : 'tidak ada', 'event berjalan'], [s.events.filter((e) => e.state === 'akan datang').length, 'dijadwalkan'], [s.events.filter((e) => e.state === 'selesai').length, 'selesai']]);
+  tiles('tilesEvent', [[cur ? cur.name : 'tidak ada', 'event berjalan'], [s.events.filter((e) => e.state === 'akan datang').length, 'dijadwalkan'], [s.weekly.length, 'jadwal mingguan'], [s.events.filter((e) => e.state === 'selesai').length, 'selesai']]);
   tiles('tilesServer', [[dur(s.uptime), 'server menyala'], [l ? `${l.cpu}%` : '…', 'CPU server game'], [l ? `${l.tick} ms` : '…', `waktu hitung (anggaran ${s.sys.budget} ms)`], [gb(s.sys.memLimit ? (s.sys.memUsed ?? s.sys.rss) : s.sys.rss), 'memori server game'], [s.info.version, 'versi game']]);
   tiles('tilesEmail', [[s.mail ? 'aktif' : 'mati', 'pengirim email'], [s.accounts.filter((a) => a.email).length, 'akun punya email'], [s.accounts.filter((a) => !a.email).length, 'akun tanpa email']]);
   // lencana di menu: angka yang paling sering dicari
@@ -101,10 +101,14 @@ function render() {
   for (const b of document.querySelectorAll('#nav button')) { const [t, on] = badge[b.dataset.go]; let sm = b.querySelector('small'); if (t === '' ) { sm?.remove(); continue; } if (!sm) { sm = el('small'); b.append(sm); } sm.textContent = String(t); sm.className = on ? 'on' : ''; }
   table($('rooms'), ['Room', 'Mode', 'Peta', 'Pemain', '#Bot'], s.rooms.map((r) => [r.code ? `${r.kind} ${r.code}` : r.kind, (MODE[r.mode] || r.mode) + (r.wave ? ` · gelombang ${r.wave}` : ''), r.map, r.humans.join(', '), r.bots]), 'Tidak ada yang sedang bermain.');
   table($('events'), ['Event', 'Status', 'Waktu', 'Target', 'Terdepan', ''], s.events.map((e) => [
-    e.name, tag(e.state, e.state === 'berjalan' ? 'on' : e.state === 'akan datang' ? 'gold' : ''), `${fmtT(e.start)} – ${fmtT(e.end)}`, e.target,
+    e.weekly ? el('span', {}, e.name, ' ', tag('mingguan', 'gold')) : e.name, tag(e.state, e.state === 'berjalan' ? 'on' : e.state === 'akan datang' ? 'gold' : ''), `${fmtT(e.start)} – ${fmtT(e.end)}`, e.target,
     e.top.map((t) => `${t.name} (${t.score})`).join(', ') || '–',
     e.state === 'selesai' ? '' : el('div', { className: 'acts' }, btn(e.state === 'berjalan' ? 'Hentikan' : 'Batalkan', () => { if (confirm(`${e.state === 'berjalan' ? 'Hentikan' : 'Batalkan'} event "${e.name}"?`)) act({ do: 'eventEnd', id: e.id }, 'Event diubah.'); }, 'danger')),
   ]), 'Belum ada event.');
+  const DAY = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'], tname = (t) => (t === 'bergantian' ? 'Bergantian' : s.eventTypes.find((x) => x.id === t)?.name || t);
+  table($('weekly'), ['Jadwal', 'Tipe', '#Lama', ''], s.weekly.map((w) => [`Tiap ${DAY[w.hari]} ${w.jam} WIB`, tname(w.tipe), `${w.lama} mnt`,
+    el('div', { className: 'acts' }, btn('Hapus jadwal', () => { if (confirm(`Hapus jadwal tiap ${DAY[w.hari]} ${w.jam}? Event minggu-minggu berikutnya tidak akan dibuat lagi.`)) act({ do: 'weeklyDel', id: w.id }, 'Jadwal mingguan dihapus.'); }, 'danger'))]), 'Belum ada jadwal mingguan.');
+  if ($('wkType').options.length === 1) for (const t of s.eventTypes) $('wkType').append(el('option', { value: t.id, textContent: `${t.name} tiap minggu` }));
   table($('accounts'), ['Nama', 'Email', 'Dibuat', '#Ronde', '#K/D', '#Menang', '#Gelombang', 'Status', ''], s.accounts.slice().sort((a, b) => b.created - a.created).map((a) => {
     const st = el('span'); if (a.admin) st.append(tag('pengelola', 'gold'), ' '); st.append(a.banned ? tag('diblokir', 'bad') : tag(a.sessions ? `${a.sessions} perangkat` : 'keluar', a.sessions ? 'on' : ''));
     const acts = el('div', { className: 'acts' },
@@ -129,6 +133,7 @@ $('evForm').addEventListener('submit', (e) => {
   if (!st || !en) return say('Isi waktu mulai dan selesai.', 'bad');
   act({ do: 'eventPlan', start: st, end: en, ...base }, 'Event dijadwalkan.');
 });
+$('wkForm').addEventListener('submit', (e) => { e.preventDefault(); act({ do: 'weeklyAdd', tipe: $('wkType').value, hari: Number($('wkDay').value), jam: $('wkTime').value, lama: Number($('wkLen').value) }, 'Jadwal mingguan ditambahkan.'); });
 $('mailTest').addEventListener('click', () => act({ do: 'mailTest' }, 'Email percobaan diterima server SMTP. Periksa kotak masuk dan folder spam.'));
 
 // ---- menu kiri: satu kelompok tampil pada satu waktu; pilihan disimpan di alamat (#akun) ----

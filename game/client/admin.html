@@ -157,6 +157,17 @@ form.row label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:v
     </form>
     <div class="scroll" id="events"></div>
   </section>
+  <section data-view="event"><h2>Jadwal mingguan</h2>
+    <form class="row" id="wkForm">
+      <label>Tipe<select id="wkType"><option value="bergantian">Bergantian tiap minggu</option></select></label>
+      <label>Hari<select id="wkDay"><option value="1">Senin</option><option value="2">Selasa</option><option value="3">Rabu</option><option value="4">Kamis</option><option value="5">Jumat</option><option value="6" selected>Sabtu</option><option value="0">Minggu</option></select></label>
+      <label>Jam (WIB)<input id="wkTime" type="time" value="20:00" required></label>
+      <label>Lama (menit)<input id="wkLen" type="number" min="10" max="1440" value="120" style="width:90px"></label>
+      <button class="primary" type="submit">Tambah jadwal</button>
+    </form>
+    <div class="scroll" id="weekly"></div>
+    <p class="empty">Event dari jadwal mingguan mulai sendiri tanpa perlu ditekan. Menghentikan atau membatalkan salah satunya hanya melewati minggu itu; jadwalnya tetap.</p>
+  </section>
   <section data-view="akun"><h2>Daftar akun</h2><div class="scroll" id="accounts"></div></section>
   <section data-view="arena"><h2>Ronde terakhir</h2><div class="scroll" id="recent"></div></section>
   <section data-view="server"><h2>Informasi server</h2><div class="info" id="info"></div><h2 style="margin-top:16px">Berkas data</h2><div class="scroll" id="files"></div></section>

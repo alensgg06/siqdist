@@ -1166,7 +1166,8 @@ function adminState() {
     },
     rooms: rooms.map((r) => ({ code: r.code || '', kind: r.event ? 'event' : r.practice ? 'latihan' : r.code ? 'privat' : 'publik', mode: r.mode, map: r.map, wave: r.pve ? r.wave : null, humans: [...r.players.values()].filter((p) => !p.bot).map((p) => p.name), bots: [...r.players.values()].filter((p) => p.bot && !p.monster).length })).filter((r) => r.humans.length),
     accounts: accounts.list().map((a) => { const s = stats.get(a.pid); return { name: a.name, email: a.email, banned: a.banned, created: a.created, sessions: a.sessions, admin: ADMINS.has(a.name.toLowerCase()), matches: s?.matches || 0, kills: s?.kills || 0, deaths: s?.deaths || 0, wins: s?.wins || 0, wave: s?.bestWave || 0 }; }),
-    events: events.list.map((e) => ({ id: e.id, type: e.type, name: e.name, start: e.start, end: e.end, target: e.target.text, state: e.start <= now && now < e.end ? 'berjalan' : e.start > now ? 'akan datang' : 'selesai', top: stats.eventTop(e.id, 3) })).sort((a, b) => b.start - a.start).slice(0, 12),
+    weekly: events.rules,
+    events: events.list.map((e) => ({ id: e.id, weekly: !!e.rule, type: e.type, name: e.name, start: e.start, end: e.end, target: e.target.text, state: e.start <= now && now < e.end ? 'berjalan' : e.start > now ? 'akan datang' : 'selesai', top: stats.eventTop(e.id, 3) })).sort((a, b) => b.start - a.start).slice(0, 12),
     eventTypes: Object.entries(EVENT_TYPES).map(([k, t]) => ({ id: k, name: t.name, target: t.target.n })),
     recent,
   };
@@ -1184,6 +1185,8 @@ async function adminDo(b, admin) {
     case 'eventStart': { const min = Number(b.minutes); if (!(min >= 1 && min <= 1440)) return 'Lama event 1-1440 menit.'; return events.add(b.tipe, Date.now() - 1000, Date.now() + min * 60e3, b.nama, b.target); }
     case 'eventPlan': { const st = Number(b.start), en = Number(b.end); if (!(st > Date.now() - 60e3) || !(en > st)) return 'Waktu mulai harus di masa depan dan selesai setelah mulai.'; return events.add(b.tipe, st, en, b.nama, b.target); }
     case 'eventEnd': return events.end(b.id);
+    case 'weeklyAdd': return events.addWeekly(b.tipe, b.hari, b.jam, b.lama, b.nama);
+    case 'weeklyDel': return events.removeRule(b.id);
     case 'mailTest': if (!mailOn) return 'Pengirim email belum diatur.'; if (!admin.email) return 'Akun pengelola belum punya email. Isi dulu di daftar akun.'; await verifyMail(); await sendMail(admin.email, 'Arkana: email percobaan', 'Email percobaan dari halaman admin Arkana.\n'); return null;
     default: return 'Tindakan tidak dikenal.';
   }
@@ -1232,6 +1235,17 @@ const server = http.createServer((req, res) => {
       send(err ? 400 : 200, err ? { error: err } : { ok: true, state: adminState() });
     });
     return;
+  }
+  // siapa yang sedang bermain, untuk menu. Dengan akun diwajibkan, hanya yang sudah masuk yang boleh melihat.
+  if (url === '/api/lobby') {
+    const h = req.headers.authorization || '';
+    if (AUTH && !accounts.byToken(h.startsWith('Bearer ') ? h.slice(7) : '')) { res.writeHead(403, { 'content-type': 'application/json' }); res.end('{"rooms":[]}'); return; }
+    const list = rooms.filter((r) => !r.practice && r.humans() > 0).map((r) => ({
+      code: r.code || '', kind: r.event ? 'event' : r.code ? 'privat' : 'publik', mode: r.mode, map: r.map, wave: r.pve ? r.wave : 0,
+      names: [...r.players.values()].filter((p) => !p.bot).map((p) => p.name), max: MAX_HUMANS,
+    })).sort((a, b) => b.names.length - a.names.length);
+    res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+    res.end(JSON.stringify({ rooms: list })); return;
   }
   if (url === '/api/me' || url === '/api/register' || url === '/api/login' || url === '/api/logout' || url === '/api/forgot' || url === '/api/reset') {
     const send = (code, body) => { res.writeHead(code, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify(body)); };
@@ -1327,7 +1341,14 @@ wss.on('connection', (ws) => {
       // dengan akun: nama dan id statistik berasal dari akun, bukan dari kiriman klien
       const name = acct ? acct.name : String(m.name || '').replace(/[^\p{L}\p{N} _\-]/gu, '').trim().slice(0, 14) || 'Pengembara';
       if (acct) m.pid = acct.pid;
-      const mode = ['public', 'create', 'join', 'practice', 'event'].includes(m.mode) ? m.mode : 'public';
+      let mode = ['public', 'create', 'join', 'practice', 'event', 'quick'].includes(m.mode) ? m.mode : 'public';
+      // 'quick' (tombol Main Bersama): event yang berjalan, kalau tidak ada room teman yang paling ramai, kalau tidak ada buat room baru
+      if (mode === 'quick') {
+        const busy = rooms.filter((r) => !r.practice && !r.event && r.humans() > 0 && r.humans() < MAX_HUMANS).sort((a, b) => b.humans() - a.humans())[0];
+        if (events.active()) mode = 'event';
+        else if (busy) { mode = busy.code ? 'join' : 'public'; m.code = busy.code; }
+        else mode = 'create';
+      }
       const fail = (msg) => { ws.send(JSON.stringify({ t: 'e', m: msg })); ws.close(); };
       if (mode === 'join') {
         const code = String(m.code || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4);

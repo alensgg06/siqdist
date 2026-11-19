@@ -126,7 +126,7 @@ const G = {
   autoFire: store.get('autoFire', isTouch ? '1' : '') === '1', aimAssist: store.get('aimAssist', isTouch ? '1' : '') === '1',
   lastShotTick: new Map(), shake: 0, time: 0,
   vibrate: store.get('vibrate', '1') === '1', code: null, practice: false, joinErr: '', buzzT: 0,
-  createDiff: store.get('diff', 'normal'), pid: playerId(), skin: store.get('skin', 'default'), mapId: 'ruins', createMap: store.get('map', 'rotate'), tut: null, stepT: 0, team: -1, teamScore: [0, 0], gm: 'dm', runeMask: 15, holder: 0, ticks: [], createGm: store.get('gm', 'dm'),
+  createDiff: store.get('diff', 'normal'), pid: playerId(), skin: store.get('skin', 'default'), mapId: 'ruins', createMap: store.get('map', 'rotate'), tut: null, stepT: 0, team: -1, teamScore: [0, 0], gm: 'dm', runeMask: 15, holder: 0, ticks: [], createGm: store.get('gm', 'pve'),
 };
 window.__arkana = G; // dipakai uji otomatis
 
@@ -186,6 +186,7 @@ function signedIn(token, user) {
   $('name').value = user.name; $('name').classList.add('hidden'); store.set('name', user.name);
   $('whoName').textContent = user.name; $('who').classList.remove('hidden');
   $('auth').classList.add('hidden'); $('authPass').value = ''; $('authPass2').value = '';
+  loadLobby();
 }
 function signedOut(msg = '') {
   auth.token = ''; store.set('token', '');
@@ -242,6 +243,7 @@ $('logout').addEventListener('click', () => {
     if (!auth.on) return;
     authView('login');
     if (d.user) signedIn(auth.token, d.user); else signedOut();
+    loadLobby();
   } catch { /* server belum terjangkau: menu tetap tampil, bergabung akan gagal dengan pesan */ }
 })();
 
@@ -268,16 +270,19 @@ function start(mode, code) {
 }
 // Pertama kali bermain: tombol utama membuka latihan bertutorial dulu (bisa dilewati).
 $('play').addEventListener('click', () => {
-  if (!store.get('tutorDone', '')) { G.tut = newTutorial(); start('practice'); } else start('public');
+  if (!store.get('tutorDone', '')) { G.tut = newTutorial(); start('practice'); } else start('quick');
 });
 for (const b of document.querySelectorAll('.mode[data-gm]')) {
   const set = () => {
-    G.createGm = b.dataset.gm; store.set('gm', G.createGm);
+    G.createGm = b.dataset.gm; store.set('gm', G.createGm); if (lobbyRooms) drawLobby();
     for (const o of document.querySelectorAll('.mode[data-gm]')) { o.classList.toggle('on', o === b); o.setAttribute('aria-checked', o === b); }
   };
   b.addEventListener('click', set);
-  if (b.dataset.gm === G.createGm) set();
+  if (b.dataset.gm === G.createGm) { set(); if (b.closest('#otherModes')) showOtherModes(true); }
 }
+// tiga mode utama di depan; sisanya di balik "Mode lain"
+function showOtherModes(on) { $('otherModes').classList.toggle('hidden', !on); $('moreModes').setAttribute('aria-expanded', String(on)); $('moreModes').textContent = on ? 'Sembunyikan mode lain' : 'Mode lain'; }
+$('moreModes').addEventListener('click', () => showOtherModes($('otherModes').classList.contains('hidden')));
 for (const b of document.querySelectorAll('.diffb')) {
   const set = () => {
     G.createDiff = b.dataset.diff; store.set('diff', G.createDiff);
@@ -390,6 +395,32 @@ async function loadEvent() {
 loadEvent(); setInterval(loadEvent, 20000); setInterval(() => { if (G.phase === 'menu') drawEvent(); }, 1000);
 $('evJoin').addEventListener('click', () => start('event'));
 
+// ---------- siapa yang sedang bermain ----------
+const MODE_NAME = { dm: 'Deathmatch', koth: 'Rebut Altar', tdm: 'Tim', coop: 'Lawan Bot', pve: 'Bertahan Bersama', king: 'Perburuan Raja' };
+var lobbyRooms = []; // var: tombol mode di atas memeriksanya sebelum baris ini berjalan
+function drawLobby() {
+  const host = $('lobbyList'); host.replaceChildren();
+  $('lobby').classList.toggle('hidden', !lobbyRooms.length);
+  for (const r of lobbyRooms) {
+    const full = r.names.length >= r.max, row = document.createElement('div'), info = document.createElement('div'), b = document.createElement('b'), sm = document.createElement('small'), btn = document.createElement('button');
+    row.className = 'lobbyRow';
+    b.textContent = `${r.kind === 'event' ? 'Event · ' : ''}${MODE_NAME[r.mode] || r.mode}${r.wave ? ` · gelombang ${r.wave}` : ''}`;
+    sm.textContent = `${r.names.join(', ')} (${r.names.length}/${r.max})`;
+    btn.type = 'button'; btn.textContent = full ? 'Penuh' : 'Gabung'; btn.disabled = full;
+    btn.addEventListener('click', () => (r.kind === 'event' ? start('event') : r.code ? start('join', r.code) : start('public')));
+    info.append(b, sm); row.append(info, btn); host.append(row);
+  }
+  // tombol utama menjelaskan ke mana ia akan membawa pemain
+  const ev = evData?.active && evData.active.left - Math.floor((Date.now() - evAt) / 1000) > 0, open = lobbyRooms.find((r) => r.kind !== 'event' && r.names.length < r.max);
+  $('playHint').textContent = !store.get('tutorDone', '') ? 'Pertama kali: latihan singkat dulu.' : ev ? `Masuk ke event ${evData.active.name}.` : open ? `Bergabung dengan ${open.names.slice(0, 3).join(', ')}.` : `Belum ada yang bermain: membuka room ${MODE_NAME[G.createGm] || ''}.`;
+}
+async function loadLobby() {
+  if (G.phase !== 'menu') return;
+  try { const d = await fetch('/api/lobby', { headers: auth.token ? { authorization: 'Bearer ' + auth.token } : {} }).then((r) => r.json()); lobbyRooms = d.rooms || []; } catch { lobbyRooms = []; }
+  drawLobby();
+}
+setInterval(loadLobby, 8000);
+
 // ---------- peringkat dan jubah ----------
 const hex = (n) => '#' + n.toString(16).padStart(6, '0');
 async function openRanks() {
@@ -463,7 +494,7 @@ function leaveGame() {
   for (const p of G.players.values()) p.av.dispose(scene);
   G.players.clear(); G.roster.clear(); G.pending.length = 0;
   for (const id of [...fx.projs.keys()]) fx.removeProj(id);
-  G.phase = 'menu'; input.enabled = false; input.reset?.(); setMusic('menu'); updateInstall();
+  G.phase = 'menu'; input.enabled = false; input.reset?.(); setMusic('menu'); updateInstall(); loadLobby();
   if (G.menuCls) G.clsKey = G.menuCls;
   showRejoin();
   document.exitPointerLock?.();
@@ -562,9 +593,9 @@ function newTutorial() {
 $('tutorSkip').addEventListener('click', () => {
   store.set('tutorDone', '1');
   if (G.tut?.done) { $('tutor').classList.add('hidden'); G.tut = null; return; }
-  G.tut = null; leaveGame(); start('public');
+  G.tut = null; leaveGame(); start('quick');
 });
-$('tutorGo').addEventListener('click', () => { G.tut = null; leaveGame(); start('public'); });
+$('tutorGo').addEventListener('click', () => { G.tut = null; leaveGame(); start('quick'); });
 for (const ev of ['touchstart', 'touchmove']) $('tutor').addEventListener(ev, (e) => e.stopPropagation());
 
 $('roomPill').addEventListener('click', (e) => {

@@ -300,3 +300,16 @@ h4{margin-top:8px}
 #installHint b{color:var(--gold)}
 #installGo{flex:none;padding:9px 14px;min-height:40px;border-radius:9px;font-weight:800;background:linear-gradient(180deg,#ffdf9a,#e0a23f);color:#2a1606}
 #installX{flex:none;width:36px;height:36px;border-radius:9px;font-size:20px;line-height:1;color:#cdbfe0;background:transparent;border:1px solid var(--line)}
+
+/* ---------- siapa yang sedang bermain ---------- */
+#lobby{margin:0 0 12px;text-align:left}
+#lobby h4{margin:0 0 6px;font:600 11px system-ui;letter-spacing:.09em;text-transform:uppercase;color:var(--gold)}
+.lobbyRow{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;margin-bottom:6px;background:rgba(0,0,0,.25)}
+.lobbyRow div{flex:1;min-width:0}
+.lobbyRow b{display:block;font-size:14px;color:#fff}
+.lobbyRow small{display:block;font-size:12px;color:#cdbfe0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lobbyRow button{flex:none;padding:8px 14px;min-height:40px;border-radius:9px;font-weight:800;font-size:13px;background:linear-gradient(180deg,#ffdf9a,#e0a23f);color:#2a1606}
+.lobbyRow button:disabled{opacity:.5}
+#playHint{margin:6px 0 0;min-height:16px}
+#moreModes{grid-column:1/-1;justify-self:center;padding:6px 10px;min-height:36px}
+#otherModes.hidden{display:none}

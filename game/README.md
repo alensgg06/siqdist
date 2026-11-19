@@ -100,6 +100,12 @@ Catatan iPhone: getar tidak didukung Safari; layar tidak bisa dikunci mendatar (
 
 ## Bermain bersama teman
 
+Menu dirancang supaya pemain saling bertemu:
+
+- **Sedang bermain** menampilkan room yang berisi teman (mode, nama, jumlah) dengan tombol Gabung. Hanya terlihat oleh yang sudah masuk akun; room latihan tidak ditampilkan.
+- **Main Bersama** membawa pemain ke event yang sedang berjalan; bila tidak ada, ke room teman yang paling ramai; bila semuanya kosong, membuat room baru dengan mode yang dipilih.
+- Tiga mode utama di depan (Bertahan Bersama, Tim, Perburuan Raja); Deathmatch, Rebut Altar, dan Lawan Bot ada di balik "Mode lain".
+
 - **Room privat**: di menu, *Buat room privat*. Kode 4 huruf muncul di atas layar; ketuk untuk
   menyalin tautan `…/?room=KODE`, atau sebutkan kodenya. Teman mengisi kode lalu *Gabung*.
   Room privat tidak pernah dimasuki pemain dari tombol *Masuk Arena*.
@@ -214,6 +220,8 @@ Event adalah acara berjangka waktu yang kamu mulai sendiri. Selama event berjala
 | `raja` (Perburuan Raja) | Satu pemain menjadi raja (HP 2,2 kali, 1 poin per detik); yang menumbangkannya merebut mahkota | Kumpulkan 45 poin sebagai raja | Jubah Mahkota |
 
 Hadir di event tercatat (pencapaian Tamu Setia setelah 3 event). Skor terbaik tiap pemain masuk papan event, dan setelah event selesai menu menampilkan tiga besar selama 7 hari. Perburuan Raja juga bisa dimainkan kapan saja sebagai mode biasa lewat room privat, tanpa hadiah event.
+
+**Event mingguan** mulai sendiri pada hari dan jam yang ditetapkan, tanpa perlu ditekan: atur di halaman admin (menu Event, Jadwal mingguan) atau dengan `node tools/event.js mingguan bergantian sabtu 20:00 120`. Tipe `bergantian` menukar Malam Golem dan Perburuan Raja tiap minggu. Menghentikan satu kejadian hanya melewati minggu itu.
 
 Mengatur event (server membaca perubahan dalam sekitar 5 detik, tanpa restart):
 

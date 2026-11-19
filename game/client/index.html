@@ -121,16 +121,21 @@
     <input id="name" maxlength="14" placeholder="Nama pengembara" autocomplete="off" spellcheck="false">
     <p id="who" class="hidden">Masuk sebagai <b id="whoName"></b> · <button id="logout" class="link" type="button">Keluar</button></p>
     <div id="classes"></div>
-    <button id="play">Masuk Arena</button>
+    <div id="lobby" class="hidden"><h4>Sedang bermain</h4><div id="lobbyList"></div></div>
+    <button id="play">Main Bersama</button>
+    <p class="hint" id="playHint"></p>
     <button id="rejoin" class="sec hidden"></button>
     <div id="rooms">
       <div class="modes" role="radiogroup" aria-label="Mode room privat">
-        <button class="mode on" data-gm="dm" role="radio" aria-checked="true">Deathmatch</button>
-        <button class="mode" data-gm="koth" role="radio" aria-checked="false">Rebut Altar</button>
+        <button class="mode on" data-gm="pve" role="radio" aria-checked="true">Bertahan Bersama</button>
         <button class="mode" data-gm="tdm" role="radio" aria-checked="false">Tim</button>
-        <button class="mode" data-gm="coop" role="radio" aria-checked="false">Lawan Bot</button>
-        <button class="mode" data-gm="pve" role="radio" aria-checked="false">Bertahan Bersama</button>
         <button class="mode" data-gm="king" role="radio" aria-checked="false">Perburuan Raja</button>
+      </div>
+      <button id="moreModes" class="link" type="button" aria-expanded="false">Mode lain</button>
+      <div class="modes hidden" id="otherModes" role="radiogroup" aria-label="Mode lain">
+        <button class="mode" data-gm="dm" role="radio" aria-checked="false">Deathmatch</button>
+        <button class="mode" data-gm="koth" role="radio" aria-checked="false">Rebut Altar</button>
+        <button class="mode" data-gm="coop" role="radio" aria-checked="false">Lawan Bot</button>
       </div>
       <div class="modes maps" role="radiogroup" aria-label="Peta room privat">
         <button class="mode mapb" data-map="rotate" role="radio">Peta bergantian</button>
