@@ -87,9 +87,17 @@ function renderLoad() {
 
 function render() {
   renderLoad();
-  const s = state, online = s.rooms.reduce((n, r) => n + r.humans.length, 0), cur = s.events.find((e) => e.state === 'berjalan');
-  $('tiles').replaceChildren(...[[online, 'pemain di arena'], [s.rooms.length, 'room berisi pemain'], [s.accounts.length, 'akun terdaftar'], [cur ? cur.name : 'tidak ada', 'event berjalan'], [dur(s.uptime), 'server menyala'], [s.invite ? 'dengan kode' : 'terbuka', 'pendaftaran'], [s.mail ? 'aktif' : 'mati', 'pengirim email']]
-    .map(([v, l]) => el('div', { className: 'tile' }, el('b', { textContent: String(v) }), el('span', { textContent: l }))));
+  const s = state, online = s.rooms.reduce((n, r) => n + r.humans.length, 0), cur = s.events.find((e) => e.state === 'berjalan'), l = s.sys.last;
+  const tiles = (id, list) => $(id).replaceChildren(...list.map(([v, t]) => el('div', { className: 'tile' }, el('b', { textContent: String(v) }), el('span', { textContent: t }))));
+  const inNow = s.accounts.filter((a) => a.sessions > 0).length, banned = s.accounts.filter((a) => a.banned).length;
+  tiles('tilesArena', [[online, 'pemain di arena'], [s.rooms.length, 'room berisi pemain'], [s.sys.peak, 'puncak pemain sejak menyala'], [s.info.bots, 'bot di arena'], [s.recent.length, 'ronde terakhir tercatat']]);
+  tiles('tilesAkun', [[s.accounts.length, 'akun terdaftar'], [inNow, 'sedang masuk'], [banned, 'diblokir'], [s.invite ? 'dengan kode' : 'terbuka', 'pendaftaran'], [s.auth ? 'ya' : 'tidak', 'wajib akun']]);
+  tiles('tilesEvent', [[cur ? cur.name : 'tidak ada', 'event berjalan'], [s.events.filter((e) => e.state === 'akan datang').length, 'dijadwalkan'], [s.events.filter((e) => e.state === 'selesai').length, 'selesai']]);
+  tiles('tilesServer', [[dur(s.uptime), 'server menyala'], [l ? `${l.cpu}%` : '…', 'CPU server game'], [l ? `${l.tick} ms` : '…', `waktu hitung (anggaran ${s.sys.budget} ms)`], [gb(s.sys.memLimit ? (s.sys.memUsed ?? s.sys.rss) : s.sys.rss), 'memori server game'], [s.info.version, 'versi game']]);
+  tiles('tilesEmail', [[s.mail ? 'aktif' : 'mati', 'pengirim email'], [s.accounts.filter((a) => a.email).length, 'akun punya email'], [s.accounts.filter((a) => !a.email).length, 'akun tanpa email']]);
+  // lencana di menu: angka yang paling sering dicari
+  const badge = { arena: [online, online > 0], akun: [s.accounts.length, false], event: [cur ? 'jalan' : '', !!cur], server: [l && l.tick > s.sys.budget ? 'berat' : '', false], email: [s.mail ? '' : 'mati', false] };
+  for (const b of document.querySelectorAll('#nav button')) { const [t, on] = badge[b.dataset.go]; let sm = b.querySelector('small'); if (t === '' ) { sm?.remove(); continue; } if (!sm) { sm = el('small'); b.append(sm); } sm.textContent = String(t); sm.className = on ? 'on' : ''; }
   table($('rooms'), ['Room', 'Mode', 'Peta', 'Pemain', '#Bot'], s.rooms.map((r) => [r.code ? `${r.kind} ${r.code}` : r.kind, (MODE[r.mode] || r.mode) + (r.wave ? ` · gelombang ${r.wave}` : ''), r.map, r.humans.join(', '), r.bots]), 'Tidak ada yang sedang bermain.');
   table($('events'), ['Event', 'Status', 'Waktu', 'Target', 'Terdepan', ''], s.events.map((e) => [
     e.name, tag(e.state, e.state === 'berjalan' ? 'on' : e.state === 'akan datang' ? 'gold' : ''), `${fmtT(e.start)} – ${fmtT(e.end)}`, e.target,
@@ -121,6 +129,19 @@ $('evForm').addEventListener('submit', (e) => {
   act({ do: 'eventPlan', start: st, end: en, ...base }, 'Event dijadwalkan.');
 });
 $('mailTest').addEventListener('click', () => act({ do: 'mailTest' }, 'Email percobaan diterima server SMTP. Periksa kotak masuk dan folder spam.'));
+
+// ---- menu kiri: satu kelompok tampil pada satu waktu; pilihan disimpan di alamat (#akun) ----
+const VIEWS = ['arena', 'akun', 'event', 'server', 'email'];
+function go(view) {
+  if (!VIEWS.includes(view)) view = 'arena';
+  for (const sec of document.querySelectorAll('[data-view]')) sec.classList.toggle('hidden', sec.dataset.view !== view);
+  for (const b of document.querySelectorAll('#nav button')) { if (b.dataset.go === view) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); }
+  if (location.hash.slice(1) !== view) history.replaceState(null, '', '#' + view);
+  say('');
+}
+for (const b of document.querySelectorAll('#nav button')) b.addEventListener('click', () => go(b.dataset.go));
+addEventListener('hashchange', () => go(location.hash.slice(1)));
+go(location.hash.slice(1));
 
 async function refresh(quiet) {
   try {

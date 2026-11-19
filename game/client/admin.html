@@ -9,7 +9,7 @@
 :root{--bg:#120c1c;--panel:#1d1429;--line:#4a3b60;--gold:#f2c66d;--text:#eadff5;--dim:#b3a4c8;--bad:#ff8f7a;--ok:#7be0a0}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
-main{max-width:1080px;margin:auto;padding:16px}
+main{max-width:1240px;margin:auto;padding:16px}
 header{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:6px}
 h1{font:600 22px Georgia,serif;color:var(--gold);margin:0}
 h2{font:600 12px system-ui;letter-spacing:.09em;text-transform:uppercase;color:var(--gold);margin:0 0 10px}
@@ -56,6 +56,22 @@ form.row label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:v
 #login input{display:block;width:100%;margin-top:4px;font-size:16px}
 #login button{width:100%;margin-top:14px}
 .hidden{display:none!important}
+/* menu di kolom kiri; di layar sempit menjadi baris yang bisa digeser */
+#app{display:grid;grid-template-columns:190px minmax(0,1fr);gap:18px;align-items:start}
+#nav{position:sticky;top:12px;display:flex;flex-direction:column;gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px}
+#nav button{display:flex;justify-content:space-between;align-items:center;gap:8px;text-align:left;border:1px solid transparent;background:transparent;padding:10px 12px;min-height:44px;font-weight:600;color:var(--dim)}
+#nav button:hover{color:var(--text);border-color:var(--line)}
+#nav button[aria-current="page"]{background:rgba(242,198,109,.14);color:var(--gold);border-color:var(--gold)}
+#nav button small{font-weight:600;font-size:11px;padding:1px 7px;border-radius:99px;border:1px solid var(--line);color:var(--dim)}
+#nav button small.on{color:var(--ok);border-color:var(--ok)}
+#views{display:flex;flex-direction:column;gap:14px;min-width:0}
+#views>section,#views>#msg{margin-top:0}
+#msg:empty{display:none}
+@media (max-width:760px){
+  #app{grid-template-columns:minmax(0,1fr);gap:10px}
+  #nav{position:sticky;top:0;z-index:6;flex-direction:row;overflow-x:auto;padding:6px}
+  #nav button{flex:none;min-height:40px;padding:8px 12px}
+}
 </style>
 </head>
 <body><main>
@@ -68,15 +84,27 @@ form.row label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:v
   <p id="lMsg" class="empty" role="alert"></p>
 </section></form>
 <div id="app" class="hidden">
+  <nav id="nav" aria-label="Menu pengelola">
+    <button type="button" data-go="arena">Arena</button>
+    <button type="button" data-go="akun">Akun</button>
+    <button type="button" data-go="event">Event</button>
+    <button type="button" data-go="server">Server</button>
+    <button type="button" data-go="email">Email</button>
+  </nav>
+  <div id="views">
   <div id="msg" role="status" aria-live="polite"></div>
-  <section><h2>Ringkasan</h2><div class="tiles" id="tiles"></div></section>
-  <section><h2>Beban server</h2>
+  <section data-view="arena"><h2>Arena</h2><div class="tiles" id="tilesArena"></div></section>
+  <section data-view="akun"><h2>Akun</h2><div class="tiles" id="tilesAkun"></div></section>
+  <section data-view="event"><h2>Event</h2><div class="tiles" id="tilesEvent"></div></section>
+  <section data-view="server"><h2>Server</h2><div class="tiles" id="tilesServer"></div></section>
+  <section data-view="email"><h2>Email</h2><div class="tiles" id="tilesEmail"></div></section>
+  <section data-view="server"><h2>Beban server</h2>
     <div class="meters" id="meters"></div>
     <div class="charts" id="charts"></div>
     <p class="empty" id="loadNote"></p>
   </section>
-  <section><h2>Sedang bermain</h2><div class="scroll" id="rooms"></div></section>
-  <section><h2>Event</h2>
+  <section data-view="arena"><h2>Sedang bermain</h2><div class="scroll" id="rooms"></div></section>
+  <section data-view="event"><h2>Buat dan kelola event</h2>
     <form class="row" id="evForm">
       <label>Tipe<select id="evType"></select></label>
       <label>Nama (opsional)<input id="evName" maxlength="40" size="16"></label>
@@ -89,10 +117,11 @@ form.row label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:v
     </form>
     <div class="scroll" id="events"></div>
   </section>
-  <section><h2>Akun</h2><div class="scroll" id="accounts"></div></section>
-  <section><h2>Ronde terakhir</h2><div class="scroll" id="recent"></div></section>
-  <section><h2>Informasi server</h2><div class="info" id="info"></div><h2 style="margin-top:16px">Berkas data</h2><div class="scroll" id="files"></div></section>
-  <section><h2>Email</h2><p id="mailInfo" class="empty"></p><button id="mailTest">Kirim email percobaan ke alamatku</button></section>
+  <section data-view="akun"><h2>Daftar akun</h2><div class="scroll" id="accounts"></div></section>
+  <section data-view="arena"><h2>Ronde terakhir</h2><div class="scroll" id="recent"></div></section>
+  <section data-view="server"><h2>Informasi server</h2><div class="info" id="info"></div><h2 style="margin-top:16px">Berkas data</h2><div class="scroll" id="files"></div></section>
+  <section data-view="email"><h2>Pengirim email</h2><p id="mailInfo" class="empty"></p><button id="mailTest">Kirim email percobaan ke alamatku</button></section>
+  </div>
 </div>
 </main><script type="module" src="dist/admin.js"></script></body>
 </html>
