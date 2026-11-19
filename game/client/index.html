@@ -82,12 +82,28 @@
   </div>
 </div>
 
+<div id="auth" class="hidden">
+  <form class="card" id="authForm" autocomplete="on">
+    <h1>ARKANA</h1>
+    <h3>Reruntuhan Senja</h3>
+    <div class="tabs" role="tablist"><button type="button" id="tabLogin" class="on" role="tab" aria-selected="true">Masuk</button><button type="button" id="tabReg" role="tab" aria-selected="false">Daftar akun baru</button></div>
+    <label>Nama pengguna<input id="authName" name="username" maxlength="14" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
+    <label>Kata sandi<input id="authPass" name="password" type="password" maxlength="72" autocomplete="current-password" required></label>
+    <label id="authPass2Row" class="hidden">Ulangi kata sandi<input id="authPass2" type="password" maxlength="72" autocomplete="new-password"></label>
+    <label id="authInviteRow" class="hidden">Kode undangan<input id="authInvite" maxlength="40" autocomplete="off" spellcheck="false"></label>
+    <p id="authHint" class="hint hidden">Nama pengguna 3-14 karakter (huruf, angka, garis bawah) dan menjadi nama tampilanmu. Kata sandi minimal 8 karakter. Tidak ada pemulihan lewat email: bila lupa kata sandi, minta pengelola server meresetnya.</p>
+    <p id="authMsg" role="alert"></p>
+    <button id="authGo" type="submit">Masuk</button>
+  </form>
+</div>
+
 <div id="menu">
   <div class="card">
     <h1>ARKANA</h1>
     <h3>Reruntuhan Senja</h3>
     <div id="eventBanner" class="hidden"><div><b id="evName"></b><small id="evInfo"></small></div><button id="evJoin" class="hidden">Ikut event</button></div>
     <input id="name" maxlength="14" placeholder="Nama pengembara" autocomplete="off" spellcheck="false">
+    <p id="who" class="hidden">Masuk sebagai <b id="whoName"></b> · <button id="logout" class="link" type="button">Keluar</button></p>
     <div id="classes"></div>
     <button id="play">Masuk Arena</button>
     <button id="rejoin" class="sec hidden"></button>

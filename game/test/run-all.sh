@@ -3,6 +3,7 @@
 #   bash test/run-all.sh
 set -u
 export MUTATOR=none   # uji tidak boleh terpengaruh mode akhir pekan
+export ARKANA_AUTH=off   # uji lama bergabung tanpa akun; akun diuji sendiri di auth.test.js
 cd "$(dirname "$0")/.."
 T=$(mktemp -d)
 pids=()
@@ -30,5 +31,6 @@ run c2 node test/c2.test.js
 run bertahan node test/pve.test.js
 run d2 node test/d2.test.js
 run event node test/event.test.js
+run akun node test/auth.test.js
 for f in "$T"/*.log; do if grep -q -i "error\|gagal" "$f"; then grep -H -i -m3 "error\|gagal" "$f"; fail=1; fi; done
 exit $fail

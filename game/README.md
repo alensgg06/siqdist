@@ -138,6 +138,24 @@ Pemain yang tumbang juga bangkit saat gelombang selesai; semua pulih penuh di an
 Permainan berakhir bila semua tumbang bersamaan. Bertahan melewati gelombang 10 dihitung menang.
 Tingkat bot (Mudah/Normal/Sulit) mengatur kekuatan monster.
 
+## Akun
+
+Pemain wajib masuk dengan akun sebelum bermain; yang belum punya mendaftar dulu di halaman yang sama (nama pengguna 3-14 karakter dan kata sandi minimal 8 karakter). Nama pengguna menjadi nama tampilan, dan statistik, jubah, serta pencapaian mengikuti akun di perangkat mana pun. Saat mendaftar, statistik yang sudah ada di perangkat itu ikut ke akun pertama yang dibuat di sana.
+
+- Kata sandi disimpan sebagai hasil scrypt bergaram di `data/accounts.json`, token sesi sebagai SHA-256; keduanya tidak pernah tersimpan polos. Sesi berlaku 30 hari.
+- Percobaan masuk dibatasi 8 kali per 10 menit, per nama dan per alamat.
+- Tidak ada pemulihan lewat email. Lupa kata sandi direset oleh pengelola server:
+
+```bash
+docker compose exec arkana node tools/akun.js daftar
+docker compose exec arkana node tools/akun.js sandi <nama> <kata-sandi-baru>
+docker compose exec arkana node tools/akun.js hapus <nama>
+```
+
+- Isi `ARKANA_INVITE` di `.env` supaya hanya yang tahu kode itu bisa mendaftar; kosong berarti pendaftaran terbuka.
+- Lewat alamat `https://` kata sandi terenkripsi di perjalanan. Lewat `http://IP:port` di jaringan rumah tidak, jadi pakai alamat https untuk mendaftar dan masuk.
+- `ARKANA_AUTH=off` mematikan kewajiban akun; hanya untuk uji dan pengembangan.
+
 ## Event
 
 Event adalah acara berjangka waktu yang kamu mulai sendiri. Selama event berjalan, menu menampilkan spanduk dengan hitung mundur dan tombol **Ikut event**; semua yang menekan tombol itu masuk ke room event yang sama (sampai penuh, lalu room berikutnya).

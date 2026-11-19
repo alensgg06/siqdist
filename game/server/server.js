@@ -20,6 +20,7 @@ import {
 import { stepPlayer, blocked, los, angDiff, setMap, collide } from '../shared/sim.js';
 import { Stats } from './stats.js';
 import { Events } from './events.js';
+import { Accounts } from './accounts.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'client');
 const PORT = Number(process.env.PORT) || 8080;
@@ -37,6 +38,9 @@ function currentMutator() {
 }
 const stats = new Stats(DATA_DIR);
 const events = new Events(DATA_DIR);
+const accounts = new Accounts(DATA_DIR);
+const AUTH = process.env.ARKANA_AUTH !== 'off';   // 'off' hanya untuk uji dan pengembangan
+const INVITE = process.env.ARKANA_INVITE || '';   // bila diisi, mendaftar butuh kode ini
 const KING_WIN = Number(process.env.KING_LIMIT) || KING_LIMIT;
 const FILL = process.env.BOTS !== undefined ? Number(process.env.BOTS) : BOT_FILL; // jumlah pengisi bot (bisa 0 untuk uji)
 const KOTH_WIN = Number(process.env.KOTH_LIMIT) || KOTH_LIMIT;
@@ -1149,6 +1153,38 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
     res.end(JSON.stringify(body)); return;
   }
+  if (url === '/api/me' || url === '/api/register' || url === '/api/login' || url === '/api/logout') {
+    const send = (code, body) => { res.writeHead(code, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify(body)); };
+    const bearer = () => { const h = req.headers.authorization || ''; return h.startsWith('Bearer ') ? h.slice(7) : ''; };
+    const pub = (u) => (u ? { name: u.name, pid: u.pid } : null);
+    if (url === '/api/me') return send(200, { auth: AUTH, invite: !!INVITE, user: pub(accounts.byToken(bearer())) });
+    if (req.method !== 'POST') return send(405, { error: 'Metode tidak didukung.' });
+    let raw = '', over = false;
+    req.on('data', (c) => { raw += c; if (raw.length > 2048) { over = true; req.destroy(); } });
+    req.on('end', () => {
+      if (over) return;
+      let b; try { b = JSON.parse(raw); } catch { return send(400, { error: 'Permintaan tidak sah.' }); }
+      if (!b || typeof b !== 'object') return send(400, { error: 'Permintaan tidak sah.' });
+      if (url === '/api/logout') { accounts.logout(bearer()); return send(200, { ok: true }); }
+      // di belakang Cloudflare Tunnel alamat asli pemain ada di header ini
+      const ip = String(req.headers['cf-connecting-ip'] || req.socket.remoteAddress || '?');
+      const nameKey = 'n:' + String(b.name || '').toLowerCase().slice(0, 20);
+      if (accounts.limited('i:' + ip) || (url === '/api/login' && accounts.limited(nameKey))) return send(429, { error: 'Terlalu banyak percobaan. Coba lagi 10 menit lagi.' });
+      let r;
+      if (url === '/api/register') {
+        accounts.strike('i:' + ip); // pendaftaran juga dibatasi per alamat
+        if (INVITE && b.invite !== INVITE) return send(403, { error: 'Kode undangan salah.' });
+        r = accounts.register(b.name, b.pass, b.pid, stats.validId(b.pid));
+      } else {
+        r = accounts.login(b.name, b.pass);
+        if (r.error) { accounts.strike('i:' + ip); accounts.strike(nameKey); }
+      }
+      if (r.error) return send(400, { error: r.error });
+      stats.touch(r.pid, r.name);
+      send(200, { token: r.token, user: { name: r.name, pid: r.pid } });
+    });
+    return;
+  }
   if (url === '/health') { res.writeHead(200, { 'content-type': 'application/json' }); res.end('{"ok":true}'); return; }
   const file = path.normalize(path.join(ROOT, url === '/' ? 'index.html' : url));
   if (!file.startsWith(ROOT)) { res.writeHead(403); res.end(); return; }
@@ -1180,7 +1216,11 @@ wss.on('connection', (ws) => {
     if (!m || typeof m !== 'object') return;
     if (m.t === 'join' && !me) {
       const clsKey = CLASS_KEYS.includes(m.cls) ? m.cls : 'ranger';
-      const name = String(m.name || '').replace(/[^\p{L}\p{N} _\-]/gu, '').trim().slice(0, 14) || 'Pengembara';
+      const acct = AUTH ? accounts.byToken(m.tok) : null;
+      if (AUTH && !acct) { ws.send(JSON.stringify({ t: 'e', m: 'Sesi berakhir. Silakan masuk lagi.', auth: 1 })); ws.close(); return; }
+      // dengan akun: nama dan id statistik berasal dari akun, bukan dari kiriman klien
+      const name = acct ? acct.name : String(m.name || '').replace(/[^\p{L}\p{N} _\-]/gu, '').trim().slice(0, 14) || 'Pengembara';
+      if (acct) m.pid = acct.pid;
       const mode = ['public', 'create', 'join', 'practice', 'event'].includes(m.mode) ? m.mode : 'public';
       const fail = (msg) => { ws.send(JSON.stringify({ t: 'e', m: msg })); ws.close(); };
       if (mode === 'join') {

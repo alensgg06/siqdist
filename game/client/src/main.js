@@ -154,6 +154,60 @@ function serverUrl() {
   return (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
 }
 
+// ---------- akun: masuk dan daftar ----------
+const auth = { token: store.get('token', ''), on: false, reg: false };
+function signedIn(token, user) {
+  auth.token = token; store.set('token', token);
+  G.pid = user.pid; store.set('pid', user.pid); // statistik mengikuti akun, di perangkat mana pun
+  $('name').value = user.name; $('name').classList.add('hidden'); store.set('name', user.name);
+  $('whoName').textContent = user.name; $('who').classList.remove('hidden');
+  $('auth').classList.add('hidden'); $('authPass').value = ''; $('authPass2').value = '';
+}
+function signedOut(msg = '') {
+  auth.token = ''; store.set('token', '');
+  $('who').classList.add('hidden'); $('authMsg').textContent = msg;
+  if (auth.on) { $('auth').classList.remove('hidden'); $('authName').value ||= store.get('name', ''); }
+}
+function authTab(reg) {
+  auth.reg = reg;
+  $('tabLogin').classList.toggle('on', !reg); $('tabReg').classList.toggle('on', reg);
+  $('tabLogin').setAttribute('aria-selected', String(!reg)); $('tabReg').setAttribute('aria-selected', String(reg));
+  $('authPass2Row').classList.toggle('hidden', !reg); $('authHint').classList.toggle('hidden', !reg);
+  $('authInviteRow').classList.toggle('hidden', !reg || !auth.invite);
+  $('authPass').autocomplete = reg ? 'new-password' : 'current-password';
+  $('authGo').textContent = reg ? 'Daftar' : 'Masuk'; $('authMsg').textContent = '';
+}
+$('tabLogin').addEventListener('click', () => authTab(false));
+$('tabReg').addEventListener('click', () => authTab(true));
+$('authForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = $('authName').value.trim(), pass = $('authPass').value, say = (t) => { $('authMsg').textContent = t; };
+  if (!/^[A-Za-z0-9_]{3,14}$/.test(name)) return say('Nama pengguna 3-14 karakter: huruf, angka, atau garis bawah.');
+  if (pass.length < 8) return say('Kata sandi minimal 8 karakter.');
+  if (auth.reg && pass !== $('authPass2').value) return say('Kedua kata sandi tidak sama.');
+  $('authGo').disabled = true; say(auth.reg ? 'Mendaftarkan…' : 'Memeriksa…');
+  try {
+    const r = await fetch(auth.reg ? '/api/register' : '/api/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name, pass, pid: G.pid, invite: $('authInvite').value.trim() || undefined }) });
+    const d = await r.json();
+    if (d.token) signedIn(d.token, d.user); else say(d.error || 'Gagal. Coba lagi.');
+  } catch { say('Server tidak terjangkau. Periksa koneksi lalu coba lagi.'); }
+  $('authGo').disabled = false;
+});
+$('logout').addEventListener('click', () => {
+  fetch('/api/logout', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + auth.token }, body: '{}' }).catch(() => {});
+  signedOut();
+});
+// saat dibuka: tanya server apakah akun diwajibkan dan apakah token tersimpan masih berlaku
+(async () => {
+  try {
+    const d = await fetch('/api/me', { headers: auth.token ? { authorization: 'Bearer ' + auth.token } : {} }).then((r) => r.json());
+    auth.on = !!d.auth; auth.invite = !!d.invite;
+    if (!auth.on) return;
+    authTab(false);
+    if (d.user) signedIn(auth.token, d.user); else signedOut();
+  } catch { /* server belum terjangkau: menu tetap tampil, bergabung akan gagal dengan pesan */ }
+})();
+
 const menuBtns = ['play', 'create', 'joinBtn', 'practice', 'rejoin', 'evJoin'];
 const cleanCode = (v) => String(v || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4);
 {
@@ -352,7 +406,7 @@ function connect(name, mode, code) {
   let ws;
   try { ws = new WebSocket(serverUrl()); } catch { return menuError('Alamat server tidak valid.'); }
   G.ws = ws; G.joinErr = '';
-  ws.onopen = () => ws.send(JSON.stringify({ t: 'join', name, cls: G.clsKey, mode, code, gm: G.createGm, map: G.createMap, diff: G.createDiff, pid: G.pid, skin: G.skin }));
+  ws.onopen = () => ws.send(JSON.stringify({ t: 'join', name, cls: G.clsKey, mode, code, gm: G.createGm, map: G.createMap, diff: G.createDiff, pid: G.pid, skin: G.skin, tok: auth.token || undefined }));
   ws.onmessage = (e) => onMessage(JSON.parse(e.data));
   ws.onclose = () => {
     if (G.ws !== ws) return;
@@ -406,6 +460,7 @@ function onMessage(m) {
     if (!G.practice || !G.tut) toast(G.code ? `Room ${G.code}: ketuk kode untuk membagikan` : G.practice ? 'Arena latihan' : 'Pertarungan dimulai');
   } else if (m.t === 'e') {
     G.joinErr = m.m; store.set('lastRoom', '');
+    if (m.auth) signedOut(m.m);
   } else if (m.t === 'r') {
     G.roster.clear();
     for (const [id, name, cls, kills, deaths, bot, pts, team, skin] of m.l) G.roster.set(id, { id, name, cls, kills, deaths, bot, pts: pts || 0, team: team ?? -1, skin: skin || 'default' });
