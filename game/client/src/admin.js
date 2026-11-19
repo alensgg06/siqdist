@@ -30,7 +30,63 @@ async function act(body, okText) {
   } catch { say('Server tidak terjangkau.', 'bad'); }
 }
 
+const gb = (b) => (b >= 2 ** 30 ? `${(b / 2 ** 30).toFixed(1)} GB` : b >= 2 ** 20 ? `${(b / 2 ** 20).toFixed(0)} MB` : `${Math.max(0, b / 1024).toFixed(0)} KB`);
+const NS = 'http://www.w3.org/2000/svg';
+// meteran: nilai sekarang terhadap kapasitas; kuning di atas 70%, merah di atas 90%
+function meter(label, value, frac, cap, note) {
+  const f = Math.max(0, Math.min(1, frac || 0)), bar = el('i'); bar.style.width = (f * 100).toFixed(1) + '%';
+  return el('div', { className: 'meter' + (f > 0.9 ? ' crit' : f > 0.7 ? ' warn' : '') },
+    el('div', { className: 'top' }, el('span', { textContent: label }), el('span', { textContent: cap })),
+    el('div', { className: 'val', textContent: value }), el('div', { className: 'bar' }, bar), el('small', { textContent: note }));
+}
+// grafik garis kecil dari riwayat; max: batas atas sumbu (bila tak diisi, mengikuti data)
+function chart(label, hist, idx, unit, color, max, limit) {
+  const vals = hist.map((h) => h[idx]), top = Math.max(max || 0, ...vals, 1e-9), w = 240, h = 56;
+  const svg = document.createElementNS(NS, 'svg'); svg.setAttribute('viewBox', `0 0 ${w} ${h}`); svg.setAttribute('preserveAspectRatio', 'none'); svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', `${label}, 10 menit terakhir`);
+  const y = (v) => h - 2 - (v / top) * (h - 6);
+  if (limit && limit <= top) { const l = document.createElementNS(NS, 'line'); l.setAttribute('x1', 0); l.setAttribute('x2', w); l.setAttribute('y1', y(limit)); l.setAttribute('y2', y(limit)); l.setAttribute('stroke', '#ff8f7a'); l.setAttribute('stroke-dasharray', '4 4'); l.setAttribute('stroke-width', '1'); svg.append(l); }
+  if (vals.length > 1) {
+    const pts = vals.map((v, i) => `${(i / (vals.length - 1) * w).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+    const area = document.createElementNS(NS, 'polygon'); area.setAttribute('points', `0,${h} ${pts} ${w},${h}`); area.setAttribute('fill', color); area.setAttribute('opacity', '0.16'); svg.append(area);
+    const line = document.createElementNS(NS, 'polyline'); line.setAttribute('points', pts); line.setAttribute('fill', 'none'); line.setAttribute('stroke', color); line.setAttribute('stroke-width', '1.6'); line.setAttribute('vector-effect', 'non-scaling-stroke'); svg.append(line);
+  }
+  const cur = vals.length ? vals[vals.length - 1] : 0, peak = vals.length ? Math.max(...vals) : 0, f = (v) => (unit === 'net' ? gb(v) + '/dtk' : `${+v.toFixed(v < 10 ? 1 : 0)}${unit}`);
+  return el('div', { className: 'chart' }, el('div', { className: 'top' }, el('span', { textContent: label }), el('span', { textContent: `kini ${f(cur)} · puncak ${f(peak)}` })), svg);
+}
+function renderLoad() {
+  const y = state.sys, i = state.info, l = y.last;
+  const memCap = y.memLimit || y.memTotal, memNow = y.memLimit ? (y.memUsed ?? y.rss) : y.rss;
+  const cpuCap = y.cpuLimit || y.cores;
+  $('meters').replaceChildren(
+    meter('CPU server game', l ? `${l.cpu}%` : '…', l ? l.cpu / 100 : 0, 'dari 1 inti', 'Server game memakai satu inti; 100% berarti inti itu penuh.'),
+    meter('CPU seluruh mesin', l ? `${l.sys}%` : '…', l ? l.sys / 100 : 0, `${y.cores} inti${y.cpuLimit ? `, dibatasi ${cpuCap}` : ''}`, `Termasuk container lain. Beban rata-rata 1/5/15 mnt: ${y.load.join(' / ')}`),
+    meter('Waktu hitung per tick', l ? `${l.tick} ms` : '…', l ? l.tick / y.budget : 0, `anggaran ${y.budget} ms`, l ? `Terlama ${l.tickMax} ms; ${l.late} tick melewati anggaran dalam ${y.every} dtk terakhir.` : ''),
+    meter('Memori server game', gb(memNow), memNow / memCap, y.memLimit ? `batas container ${gb(y.memLimit)}` : `mesin ${gb(y.memTotal)}`, `Proses ${gb(y.rss)}, data hidup ${gb(y.heap)}.`),
+    meter('Memori mesin', gb(y.memTotal - y.memFree), (y.memTotal - y.memFree) / y.memTotal, `terpasang ${gb(y.memTotal)}`, `Bebas ${gb(y.memFree)}. Termasuk semua container.`),
+    y.disk ? meter('Disk folder data', gb(y.disk.total - y.disk.free), (y.disk.total - y.disk.free) / y.disk.total, `kapasitas ${gb(y.disk.total)}`, `Bebas ${gb(y.disk.free)}.`) : el('div'),
+  );
+  $('charts').replaceChildren(
+    chart('Waktu hitung per tick', y.hist, 3, ' ms', '#7be0a0', y.budget, y.budget),
+    chart('CPU server game', y.hist, 1, '%', '#f2c66d', 100, 100),
+    chart('Pemain di arena', y.hist, 5, '', '#8fb8ff', 4),
+    chart('Data keluar ke pemain', y.hist, 7, 'net', '#d79bff', 1024),
+  );
+  const head = l ? y.budget / Math.max(l.tick, 0.01) : 0;
+  $('loadNote').textContent = !l ? 'Mengumpulkan contoh pertama…' : l.tick > y.budget ? 'Server kewalahan: waktu hitung melewati anggaran, pemain akan merasakan lag.' : `Ruang gerak saat ini sekitar ${head >= 100 ? 'lebih dari 100' : head.toFixed(0)} kali beban sekarang, diukur dari waktu hitung. Garis putus-putus merah adalah batasnya.`;
+  const rows = [
+    ['Versi game', i.version], ['Klien dibangun', i.built ? fmtT(i.built) : '–'], ['Node.js', y.node], ['Sistem', y.platform], ['Prosesor', y.cpuModel || '–'],
+    ['Server menyala', dur(state.uptime)], ['Kecepatan simulasi', `${i.tickHz} tick/dtk`], ['Koneksi pemain', i.connections], ['Puncak pemain sejak menyala', y.peak],
+    ['Room (termasuk kosong)', i.roomsAll], ['Kapasitas per room', `${i.roomCap} pemain`], ['Bot di arena', i.bots], ['Monster hidup', i.monsters], ['Proyektil di udara', i.projs],
+    ['Wajib akun', state.auth ? 'ya' : 'tidak'], ['Pendaftaran', state.invite ? 'dengan kode undangan' : 'terbuka'], ['Pengirim email', state.mail ? 'aktif' : 'mati'],
+    ['Pengelola', i.admins.join(', ') || '–'], ['Tekstur dari GPU', i.hd ? `${i.hd.n} tekstur, ${fmtT(i.hd.at)}` : 'belum dipasang'],
+  ];
+  $('info').replaceChildren(...rows.map(([k, v]) => el('div', {}, el('span', { textContent: k }), el('b', { textContent: String(v) }))));
+  table($('files'), ['Berkas', '#Ukuran'], y.files.map((f) => [f.name, gb(f.size)]), 'Folder data masih kosong.');
+}
+
 function render() {
+  renderLoad();
   const s = state, online = s.rooms.reduce((n, r) => n + r.humans.length, 0), cur = s.events.find((e) => e.state === 'berjalan');
   $('tiles').replaceChildren(...[[online, 'pemain di arena'], [s.rooms.length, 'room berisi pemain'], [s.accounts.length, 'akun terdaftar'], [cur ? cur.name : 'tidak ada', 'event berjalan'], [dur(s.uptime), 'server menyala'], [s.invite ? 'dengan kode' : 'terbuka', 'pendaftaran'], [s.mail ? 'aktif' : 'mati', 'pengirim email']]
     .map(([v, l]) => el('div', { className: 'tile' }, el('b', { textContent: String(v) }), el('span', { textContent: l }))));

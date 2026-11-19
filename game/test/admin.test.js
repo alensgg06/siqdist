@@ -43,6 +43,8 @@ let st = await api(P1, '/api/admin/state', null, bos.token);
 if (st.code !== 200 || st.accounts.length !== 3) fail(`data admin salah: ${JSON.stringify(st).slice(0, 200)}`);
 const leak = JSON.stringify(st);
 if (/"hash"|"salt"|"sessions":\[|"pid"/.test(leak) || leak.includes(arya.token)) fail('data admin membocorkan hash, garam, token, atau id statistik');
+const y = st.sys;
+if (!(y.cores >= 1) || !(y.memTotal > 0) || !(y.rss > 0) || y.budget !== 33.3 || !Array.isArray(y.hist) || !y.files.some((f) => f.name === 'accounts.json') || st.info.tickHz !== 30 || st.info.roomCap !== 8) fail(`data beban server tidak lengkap: ${JSON.stringify({ ...y, hist: y.hist.length })}`);
 if (!st.accounts.find((a) => a.name === 'Bos').admin || st.accounts.find((a) => a.name === 'Arya').admin) fail('penanda pengelola di daftar akun salah');
 const reg2 = await api(P2, '/api/register', { name: 'Bos', pass: 'rahasia-bos1' });
 if ((await api(P2, '/api/admin/state', null, reg2.token)).code !== 403) fail('tanpa ARKANA_ADMINS, halaman admin seharusnya mati untuk semua orang');

@@ -160,6 +160,8 @@ docker compose exec arkana node tools/akun.js hapus <nama>
 
 Buka `/admin.html` di alamat game dari browser, lalu masuk dengan akun pengelola. Isinya: ringkasan (pemain di arena, jumlah akun, event berjalan), room yang sedang dimainkan, event (mulai sekarang, jadwalkan, hentikan, batalkan), akun (ganti kata sandi, atur email, keluarkan dari arena, blokir, hapus), ronde terakhir, dan email percobaan.
 
+Bagian **Beban server** menampilkan kapasitas terpasang dan pemakaian saat ini: CPU server game (dari satu inti), CPU seluruh mesin, waktu hitung per tick terhadap anggarannya (33,3 ms), memori container dan mesin, disk folder data, serta grafik 10 menit terakhir. Waktu hitung per tick adalah ukuran paling langsung: selama jauh di bawah anggaran, server tidak menjadi penyebab lag. Kartu grafis tidak ditampilkan karena server game tidak memakainya.
+
 Menyiapkan pengelola:
 
 ```bash

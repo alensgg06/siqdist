@@ -21,6 +21,7 @@ import { stepPlayer, blocked, los, angDiff, setMap, collide } from '../shared/si
 import { Stats } from './stats.js';
 import { Events } from './events.js';
 import { Accounts } from './accounts.js';
+import { Monitor } from './monitor.js';
 import { sendMail, verifyMail, mailOn } from './mailer.js';
 import { EVENT_TYPES } from '../shared/config.js';
 
@@ -1135,6 +1136,10 @@ class Room {
 }
 
 // ---------- halaman admin ----------
+let PKG_VERSION = '?', BUILT_AT = 0;
+try { PKG_VERSION = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'package.json'), 'utf8')).version; } catch { /* tidak ada */ }
+try { BUILT_AT = Math.floor(fs.statSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'client', 'dist', 'bundle.js')).mtimeMs); } catch { /* belum dibangun */ }
+function hdInfo() { try { const m = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'assets', 'manifest.json'), 'utf8')); return { n: Object.keys(m.tex || {}).length, at: (m.v || 0) * 1000, model: String(m.model || '').slice(0, 60) }; } catch { return null; } }
 function kickPid(pid) { for (const r of rooms) for (const p of r.players.values()) if (!p.bot && p.pid === pid) { try { p.ws?.close(); } catch { /* sudah putus */ } } }
 function adminState() {
   const now = Date.now();
@@ -1146,6 +1151,14 @@ function adminState() {
   } catch { /* belum ada catatan */ }
   return {
     now, uptime: Math.round(process.uptime()), auth: AUTH, invite: !!INVITE, mail: mailOn,
+    sys: monitor.snapshot(),
+    info: {
+      version: PKG_VERSION, built: BUILT_AT, tickHz: TICK, roomCap: MAX_HUMANS, connections: wss.clients.size, roomsAll: rooms.length,
+      bots: rooms.reduce((n, r) => n + [...r.players.values()].filter((p) => p.bot && !p.monster).length, 0),
+      monsters: rooms.reduce((n, r) => n + [...r.players.values()].filter((p) => p.monster).length, 0),
+      projs: rooms.reduce((n, r) => n + r.projs.length, 0),
+      admins: [...ADMINS], hd: hdInfo(),
+    },
     rooms: rooms.map((r) => ({ code: r.code || '', kind: r.event ? 'event' : r.practice ? 'latihan' : r.code ? 'privat' : 'publik', mode: r.mode, map: r.map, wave: r.pve ? r.wave : null, humans: [...r.players.values()].filter((p) => !p.bot).map((p) => p.name), bots: [...r.players.values()].filter((p) => p.bot && !p.monster).length })).filter((r) => r.humans.length),
     accounts: accounts.list().map((a) => { const s = stats.get(a.pid); return { name: a.name, email: a.email, banned: a.banned, created: a.created, sessions: a.sessions, admin: ADMINS.has(a.name.toLowerCase()), matches: s?.matches || 0, kills: s?.kills || 0, deaths: s?.deaths || 0, wins: s?.wins || 0, wave: s?.bestWave || 0 }; }),
     events: events.list.map((e) => ({ id: e.id, type: e.type, name: e.name, start: e.start, end: e.end, target: e.target.text, state: e.start <= now && now < e.end ? 'berjalan' : e.start > now ? 'akan datang' : 'selesai', top: stats.eventTop(e.id, 3) })).sort((a, b) => b.start - a.start).slice(0, 12),
@@ -1379,15 +1392,24 @@ setInterval(() => {
   for (const r of rooms) for (const p of r.players.values()) if (p.ws && p.ws.readyState === 1) p.ws.send(msg);
 }, 1000);
 
+// beban server untuk halaman admin
+const monitor = new Monitor(DATA_DIR, TICK, () => {
+  let players = 0, netBytes = 0;
+  for (const r of rooms) players += r.humans();
+  for (const c of wss.clients) netBytes += (c._socket?.bytesWritten || 0);
+  return { players, netBytes };
+});
 let next = Date.now();
 function loop() {
   const now = Date.now();
   let n = 0;
   while (next <= now && n++ < 5) {
+    const t0 = performance.now();
     for (const r of rooms) {
       // satu bug di satu room tidak boleh mematikan seluruh server
       try { r.tick(); } catch (err) { console.error('tick gagal:', err); r.events = []; r.projs.length = 0; }
     }
+    monitor.tick(performance.now() - t0);
     next += 1000 / TICK;
   }
   if (next < now) next = now;

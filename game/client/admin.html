@@ -36,6 +36,21 @@ form.row label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:v
 #msg{position:sticky;top:0;z-index:5;margin-top:10px;padding:9px 12px;border-radius:9px;background:#2a1d3c;border:1px solid var(--line);min-height:38px}
 #msg.bad{color:var(--bad);border-color:var(--bad)} #msg.ok{color:var(--ok);border-color:var(--ok)}
 .empty{color:var(--dim);padding:6px 0}
+.meters{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.meter{border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.meter .top{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:var(--dim)}
+.meter .val{font:600 18px Georgia,serif;color:#fff;margin:2px 0 6px}
+.meter .bar{height:8px;border-radius:99px;background:#33254a;overflow:hidden}
+.meter .bar i{display:block;height:100%;border-radius:99px;background:var(--ok)}
+.meter.warn .bar i{background:var(--gold)} .meter.crit .bar i{background:var(--bad)}
+.meter small{display:block;margin-top:6px;font-size:11px;color:var(--dim)}
+.charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin-top:12px}
+.chart{border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.chart .top{display:flex;justify-content:space-between;font-size:12px;color:var(--dim)}
+.chart svg{display:block;width:100%;height:56px;margin-top:6px}
+.info{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:6px 18px}
+.info div{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.07)}
+.info span{color:var(--dim)} .info b{font-weight:600;text-align:right}
 #login{max-width:360px;margin:60px auto}
 #login label{display:block;margin-top:10px;font-size:13px;color:var(--dim)}
 #login input{display:block;width:100%;margin-top:4px;font-size:16px}
@@ -55,6 +70,11 @@ form.row label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:v
 <div id="app" class="hidden">
   <div id="msg" role="status" aria-live="polite"></div>
   <section><h2>Ringkasan</h2><div class="tiles" id="tiles"></div></section>
+  <section><h2>Beban server</h2>
+    <div class="meters" id="meters"></div>
+    <div class="charts" id="charts"></div>
+    <p class="empty" id="loadNote"></p>
+  </section>
   <section><h2>Sedang bermain</h2><div class="scroll" id="rooms"></div></section>
   <section><h2>Event</h2>
     <form class="row" id="evForm">
@@ -71,6 +91,7 @@ form.row label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:v
   </section>
   <section><h2>Akun</h2><div class="scroll" id="accounts"></div></section>
   <section><h2>Ronde terakhir</h2><div class="scroll" id="recent"></div></section>
+  <section><h2>Informasi server</h2><div class="info" id="info"></div><h2 style="margin-top:16px">Berkas data</h2><div class="scroll" id="files"></div></section>
   <section><h2>Email</h2><p id="mailInfo" class="empty"></p><button id="mailTest">Kirim email percobaan ke alamatku</button></section>
 </div>
 </main><script type="module" src="dist/admin.js"></script></body>
